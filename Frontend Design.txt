@@ -1,0 +1,345 @@
+Design specification for the GladAItors frontend. Written for Claude Code to implement. Every decision here is deliberate — don't deviate without updating this doc.
+
+---
+
+## Design Philosophy
+
+**Broadcast-first.** The pilot is a screen recording at 1920×1080. Every layout decision optimises for how it looks on YouTube and as a live stream — not how it works as a traditional web app. Legibility at a glance, at distance, on a monitor.
+
+**The game is the hero.** The Phaser canvas takes up the majority of the screen. Everything else — model panels, scoreboard, event log — is supporting information that enhances the game without competing with it.
+
+**Cinematic dark theme.** Deep backgrounds, vibrant model accent colours, clean sans-serif typography. Esports broadcast aesthetic, not a SaaS dashboard. The gladiatorial arena metaphor earns drama — use it.
+
+---
+
+## Brand
+
+### Name
+
+GladAItors — the AI capitalisation is the brand. In the UI, always render as: **GladAItors** or **gladAItors** for the wordmark. Never "Gladiators" or "GLADAITORS".
+
+### Colours
+
+**Background palette:**
+
+- `--bg-void: #0A0A0F` — near-black, primary background
+- `--bg-surface: #12121A` — card/panel backgrounds
+- `--bg-elevated: #1A1A26` — slightly lifted surfaces
+- `--border: #2A2A3A` — subtle borders
+
+**Model colours — these are identity, use consistently everywhere:**
+
+- Claude: `--claude: #7C3AED` (purple) — territory, charts, panels, all purple
+- GPT-4o: `--gpt: #10B981` (emerald) — all green
+- Gemini: `--gemini: #3B82F6` (blue) — all blue
+- Future/Grok: `--grok: #F59E0B` (amber) — all amber
+
+**UI colours:**
+
+- `--text-primary: #F0F0F5`
+- `--text-secondary: #8888A8`
+- `--text-muted: #4A4A6A`
+- `--success: #22C55E`
+- `--warning: #F59E0B`
+- `--danger: #EF4444`
+- `--gold: #FFD700` — used for winner highlights only
+
+### Typography
+
+- **UI font:** `Inter` (Google Fonts) — used for all panels, labels, scores
+- **Monospace:** `JetBrains Mono` — used for turn counters, coordinates, game data
+- **Display/logo:** Handled via CSS font-weight + letter-spacing, no custom font needed
+
+### Sizing scale
+
+- Game canvas: 70% viewport width
+- Model panels: 30% viewport width
+- Base font: 14px
+- Turn counter: 24px monospace
+- Score values: 28px bold
+
+---
+
+## Page Layout — Game View (`/game/[id]`)
+
+This is the primary view. Everything else is secondary.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  HEADER (48px height)                                   │
+│  ⚔️ GladAItors    [Episode title]    Turn 23/60   🕐 08:42│
+├───────────────────────────────────────┬─────────────────┤
+│                                       │                 │
+│                                       │  MODEL PANELS   │
+│                                       │  (30% width)    │
+│       PHASER GAME CANVAS              │                 │
+│       (70% width, fills height)       │  ┌───────────┐  │
+│                                       │  │  Claude   │  │
+│                                       │  ├───────────┤  │
+│                                       │  │  GPT-4o   │  │
+│                                       │  ├───────────┤  │
+│                                       │  │  Gemini   │  │
+│                                       │  └───────────┘  │
+├───────────────────────────────────────┴─────────────────┤
+│  EVENT LOG (80px height, scrolling horizontal ticker)   │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Heights:**
+
+- Header: 48px
+- Game area: `calc(100vh - 48px - 80px)`
+- Event log: 80px
+
+**The layout is fixed — no scrolling on the game view. Everything fits in the viewport.**
+
+---
+
+## Header Component
+
+```
+[ ⚔️ GladAItors ]  [ Episode 1 · Territory War ]  [ Turn 23 / 60 ]  [ 08:42 ]
+```
+
+- Logo left — `⚔️ GladAItors` in bold, `--text-primary`
+- Episode title centre — current challenge name
+- Turn counter right — monospace, updates each tick
+- Game clock right — elapsed time, monospace
+- Background: `--bg-surface`, bottom border `--border`
+- Subtle horizontal rule separating header from game area
+
+---
+
+## Model Panel Component
+
+One panel per model, stacked vertically. Equal height, fills the right column.
+
+Each panel contains:
+
+```
+┌─────────────────────────────┐
+│ ● CLAUDE          [ACTIVE] │  ← model name + status badge
+│                             │
+│   ████████░░░░  34%         │  ← primary metric bar (colour-coded)
+│   Territory                 │  ← metric label
+│                             │
+│   Ore: 45  Food: 30         │  ← secondary stats (game-specific)
+│   Units: 3  Forts: 1        │
+│                             │
+│   → Moved u1 north          │  ← last action (italic, muted)
+└─────────────────────────────┘
+```
+
+**Panel states:**
+
+- `ACTIVE` — green badge, normal opacity
+- `THINKING` — amber badge, subtle pulse animation
+- `⏱ TIMEOUT` — red badge, panel dims slightly
+- `⚠ RATE LIMITED` — orange badge
+- `✗ INVALID` — red badge
+- `WINNER` — gold border, gold badge, panel brightens
+- `ELIMINATED` — panel fades to 40% opacity, greyscale
+
+**The coloured dot and metric bar always use the model's assigned colour.** Claude's bar is always purple. GPT's is always green. This is the primary visual identifier — viewers learn to track colour, not read names.
+
+**Secondary stats are challenge-specific.** The component receives a `stats` object from game state and renders key-value pairs. Don't hardcode Trading Pit vs Territory War stats — make it data-driven.
+
+---
+
+## Phaser Game Canvas
+
+**The canvas fills its container exactly.** Use `Phaser.Scale.FIT` with `autoCenter: Phaser.Scale.CENTER_BOTH`.
+
+### Territory War Scene
+
+**Grid:** 20×20 tiles. Tile size calculated from canvas dimensions.
+
+**Tile types and colours:**
+
+- Unclaimed: `#1E1E2E` with subtle grid lines `#2A2A3A`
+- Claimed (per model): model colour at 25% opacity
+- Base: model colour at 80% opacity, castle icon
+- Fort: model colour at 60% opacity, shield icon
+- Resource (ore): `#8B6914` with ore icon
+- Resource (food): `#2D5A1B` with wheat icon
+- Contested: animated pulse between two model colours
+
+**Units:** Circular tokens, 60% of tile size, model colour fill, white border 2px. Show unit ID on hover.
+
+**Combat animation:** Brief red flash on attacked tile, HP indicator briefly visible.
+
+**Territory overlay:** Semi-transparent fill per model colour. Updates each tick.
+
+**Event animations:**
+
+- Barbarian spawn: dramatic red pulsing unit, enters from map edge
+- Resource reveal: golden glow radiates from tile
+- Trade offer: dotted line between bases, animated
+
+### Trading Pit Scene
+
+**Layout within canvas:**
+
+- Top 60%: 5 asset line charts side by side (or 2×3 grid)
+- Bottom 40%: portfolio value bars per model, updating in real time
+
+**Line charts (per asset):**
+
+- Dark background `--bg-void`
+- Price line: white `#F0F0F5`
+- X axis: time (ticks)
+- Y axis: price
+- Asset name label top-left of each chart
+- When a scripted event fires, a vertical dashed line marks the moment on all charts
+
+**Portfolio bars:**
+
+- Horizontal bar per model, model colour fill
+- Current value label at end of bar
+- Animate smoothly between values each tick
+- Leader bar has a subtle gold outline
+
+**Scripted event notification:**
+
+- Full-width banner slides in from top for 3 seconds
+- Dark red background, white bold text
+- e.g. "💥 TECH GIANT ANNOUNCES RECORD LOSSES"
+
+---
+
+## Event Log Component
+
+Horizontal scrolling ticker at the bottom. New events prepend left, old events scroll right and fade out.
+
+```
+[ Turn 23 ] Red attacked Blue at (7,8)  ·  [ Turn 22 ] Green built fort at (14,3)  ·  ...
+```
+
+- Monospace font, `--text-secondary`
+- Model references coloured in model colour: "**Red**" in Claude purple
+- Separator dot between events
+- Auto-scrolls — no manual scroll needed
+- Height: 80px, `--bg-surface` background, top border `--border`
+
+---
+
+## Status Badge Component
+
+Reusable badge used in model panels and potentially header.
+
+```tsx
+type BadgeStatus = 'active' | 'thinking' | 'timeout' | 'rate_limited' | 'invalid' | 'winner' | 'eliminated'
+```
+
+| Status | Label | Colour | Animation |
+| --- | --- | --- | --- |
+| active | ACTIVE | `--success` | none |
+| thinking | THINKING | `--warning` | pulse |
+| timeout | TIMED OUT | `--danger` | none |
+| rate_limited | RATE LIMITED | `#F97316` | none |
+| invalid | INVALID | `--danger` | none |
+| winner | WINNER | `--gold` | glow |
+| eliminated | ELIMINATED | `--text-muted` | none |
+
+---
+
+## WebSocket State → UI Mapping
+
+The backend sends a game state object each tick. The frontend maps it to UI as follows:
+
+```tsx
+type GameState = {
+  tick: number
+  max_ticks: number
+  elapsed_seconds: number
+  challenge: 'territory_war' | 'trading_pit'
+  models: ModelState[]
+  events: GameEvent[]        // events since last tick
+  canvas_data: object        // challenge-specific, passed directly to Phaser scene
+}
+
+type ModelState = {
+  id: string                 // 'claude' | 'gpt4o' | 'gemini'
+  name: string               // display name
+  colour: string             // hex, from config
+  status: BadgeStatus
+  primary_metric: number     // territory % or portfolio value
+  primary_metric_label: string
+  stats: Record<string, string | number>  // secondary stats, key-value
+  last_action: string        // human-readable last action
+}
+```
+
+Next.js client receives this → updates React state for panels/header/event log → fires Phaser EventEmitter event with `canvas_data` → Phaser Scene renders it.
+
+---
+
+## Other Pages (Minimal for Pilot)
+
+### Home (`/`)
+
+- Single page, dark background
+- GladAItors logo/wordmark centre
+- "Watch Episode 1" CTA button
+- Brief one-line description
+- No navigation, no complexity. Gets built last.
+
+### Episode Archive (`/episodes`) — Post-pilot
+
+- Grid of episode cards
+- Each card: episode number, challenge name, winner badge, thumbnail
+- Not needed for pilot
+
+### Leaderboard (`/leaderboard`) — Post-pilot
+
+- Elo rankings table per model
+- Per-challenge breakdown
+- Not needed for pilot
+
+---
+
+## Component File Structure
+
+```
+frontend/
+├── app/
+│   ├── page.tsx                    ← home page
+│   └── game/[id]/
+│       └── page.tsx                ← game view (server component shell)
+├── components/
+│   ├── GameContainer.tsx           ← 'use client', owns Phaser + WebSocket
+│   ├── ModelPanel.tsx              ← single model panel
+│   ├── ModelPanelList.tsx          ← right column, renders 3 panels
+│   ├── StatusBadge.tsx             ← reusable status badge
+│   ├── EventLog.tsx                ← bottom ticker
+│   ├── GameHeader.tsx              ← top bar
+│   └── EventBanner.tsx             ← full-width scripted event notification
+├── phaser/
+│   ├── game.ts                     ← Phaser game instance config + init
+│   ├── events.ts                   ← EventEmitter event name constants
+│   └── scenes/
+│       ├── TerritoryWarScene.ts
+│       └── TradingPitScene.ts
+├── lib/
+│   ├── websocket.ts                ← WebSocket client hook (useGameSocket)
+│   └── types.ts                    ← shared TypeScript types (GameState etc)
+└── styles/
+    └── globals.css                 ← CSS variables, base styles
+```
+
+---
+
+## Build Order for Frontend
+
+1. CSS variables + globals (30 min)
+2. `StatusBadge` component (30 min)
+3. `ModelPanel` + `ModelPanelList` with hardcoded mock data (1 hr)
+4. `GameHeader` and `EventLog` with mock data (1 hr)
+5. `GameContainer` with Phaser mounted, `TerritoryWarScene` rendering hardcoded state (2–3 hrs)
+6. `useGameSocket` hook — connects to backend WebSocket, pipes state to React (1 hr)
+7. Wire live state to panels, header, event log (1 hr)
+8. Wire live state to Phaser scene via EventEmitter (1 hr)
+9. `TradingPitScene` (2 hrs)
+10. Home page (30 min)
+
+**Total estimate: 1.5–2 days of focused coding.**

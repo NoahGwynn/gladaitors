@@ -1,0 +1,122 @@
+// ============================================================================
+// GLADAITORS — Global Styles
+// ============================================================================
+// Base reset, CSS custom properties, and app-wide defaults.
+// This file is imported once in layout.tsx.
+//
+// For component-specific styles, use CSS Modules (ComponentName.module.scss).
+// For design tokens, import _variables.scss.
+// For mixins, import _mixins.scss.
+// ============================================================================
+
+@use 'variables' as *;
+
+
+// ----------------------------------------------------------------------------
+// CSS CUSTOM PROPERTIES
+// Exposed as CSS variables so Phaser scenes and dynamic JS can access them.
+// SCSS variables are compile-time only — these bridge to runtime.
+// ----------------------------------------------------------------------------
+
+:root {
+  // Backgrounds
+  --bg-void: #{$ga-bg-void};
+  --bg-surface: #{$ga-bg-surface};
+  --bg-elevated: #{$ga-bg-elevated};
+  --border: #{$ga-border};
+
+  // Model identity colours
+  --claude: #{$ga-model-claude};
+  --gpt: #{$ga-model-gpt};
+  --gemini: #{$ga-model-gemini};
+  --grok: #{$ga-model-grok};
+
+  // Text
+  --text-primary: #{$ga-text-primary};
+  --text-secondary: #{$ga-text-secondary};
+  --text-muted: #{$ga-text-muted};
+
+  // UI status
+  --success: #{$ga-ui-success};
+  --warning: #{$ga-ui-warning};
+  --danger: #{$ga-ui-danger};
+  --gold: #{$ga-ui-gold};
+
+  // Fonts
+  --font-ui: #{$ga-font-ui};
+  --font-mono: #{$ga-font-mono};
+}
+
+
+// ----------------------------------------------------------------------------
+// RESET & BASE
+// Minimal reset — Next.js handles most defaults
+// ----------------------------------------------------------------------------
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;  // Game view is fixed — no page scroll
+  background: $ga-bg-void;
+  color: $ga-text-primary;
+  font-family: $ga-font-ui;
+  font-size: $ga-size-base;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+// ----------------------------------------------------------------------------
+// SCROLLBAR STYLING
+// Thin dark scrollbar for event log and any overflow areas
+// ----------------------------------------------------------------------------
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: $ga-bg-void;
+}
+
+::-webkit-scrollbar-thumb {
+  background: $ga-border;
+  border-radius: 3px;
+
+  &:hover {
+    background: $ga-text-muted;
+  }
+}
+
+
+// ----------------------------------------------------------------------------
+// UTILITY CLASSES
+// Minimal set of helpers — prefer component-scoped styles
+// ----------------------------------------------------------------------------
+
+// Monospace text for data values
+.ga-mono {
+  font-family: $ga-font-mono;
+}
+
+// Visually hidden but accessible to screen readers
+.ga-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}

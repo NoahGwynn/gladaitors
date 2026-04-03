@@ -1,0 +1,120 @@
+// ============================================================================
+// ModelPanel — single model info card in the right sidebar
+// ============================================================================
+
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.panel {
+  @include ga-surface;
+  @include ga-model-accent-left;
+  @include ga-flex-col($ga-space-sm);
+  border-radius: $ga-radius-md;
+  padding: $ga-space-lg;
+  transition: opacity $ga-transition-base, filter $ga-transition-base;
+
+  // Model colour classes — sets --model-colour CSS variable
+  @include ga-model-colour-classes;
+}
+
+// --- Panel states ---
+
+.eliminated {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+
+.winner {
+  border-color: $ga-ui-gold;
+  @include ga-glow-animation($ga-ui-gold);
+}
+
+
+// --- Header row: dot + name + badge ---
+
+.header {
+  @include ga-flex-row($ga-space-sm);
+  justify-content: space-between;
+}
+
+.identity {
+  @include ga-flex-row($ga-space-sm);
+}
+
+.dot {
+  @include ga-model-dot(10px);
+}
+
+.name {
+  @include ga-text-ui($ga-size-md);
+  font-weight: 700;
+}
+
+
+// --- Primary metric bar ---
+
+.metric {
+  @include ga-flex-col($ga-space-xs);
+}
+
+.metricBar {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba($ga-text-muted, 0.2);
+  overflow: hidden;
+}
+
+.metricFill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--model-colour);
+  transition: width $ga-transition-base;
+}
+
+.metricRow {
+  @include ga-flex-row($ga-space-sm);
+  justify-content: space-between;
+}
+
+.metricValue {
+  @include ga-text-mono($ga-size-lg);
+  font-weight: 700;
+}
+
+.metricLabel {
+  @include ga-text-label;
+}
+
+
+// --- Secondary stats ---
+
+.stats {
+  @include ga-flex-row($ga-space-lg);
+  flex-wrap: wrap;
+}
+
+.stat {
+  @include ga-flex-col(2px);
+}
+
+.statValue {
+  @include ga-text-mono($ga-size-sm);
+}
+
+.statLabel {
+  @include ga-text-muted;
+  font-size: $ga-size-xs;
+}
+
+
+// --- Last action ---
+
+.lastAction {
+  font-family: $ga-font-ui;
+  font-size: $ga-size-sm;
+  color: $ga-text-secondary;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

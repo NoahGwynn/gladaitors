@@ -1,0 +1,14 @@
+// ============================================================================
+// ModelPanelList — right sidebar containing all model panels
+// ============================================================================
+
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.sidebar {
+  @include ga-flex-col($ga-space-md);
+  width: $ga-layout-panel-width;
+  height: 100%;
+  padding: $ga-space-md;
+  overflow-y: auto;
+}

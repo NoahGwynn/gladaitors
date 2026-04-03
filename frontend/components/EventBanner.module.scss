@@ -1,0 +1,37 @@
+// ============================================================================
+// EventBanner — full-width notification for scripted events
+// ============================================================================
+// Slides in from top, displays for 3 seconds, then slides out.
+// Used for dramatic moments: crashes, surges, barbarian spawns.
+// ============================================================================
+
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.banner {
+  position: fixed;
+  top: $ga-layout-header-height;
+  left: 0;
+  right: 0;
+  z-index: $ga-z-banner;
+  background: rgba($ga-ui-danger, 0.9);
+  padding: $ga-space-lg $ga-space-xl;
+  text-align: center;
+  transform: translateY(-100%);
+  animation: slideInOut 3s ease forwards;
+}
+
+.text {
+  @include ga-text-ui($ga-size-lg);
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+@keyframes slideInOut {
+  0%   { transform: translateY(-100%); }
+  10%  { transform: translateY(0); }
+  85%  { transform: translateY(0); }
+  100% { transform: translateY(-100%); }
+}
