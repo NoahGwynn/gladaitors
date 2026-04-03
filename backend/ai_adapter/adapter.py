@@ -10,7 +10,8 @@ from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 from google import genai
 
-from ai_adapter.schemas import TradingPitResponse
+from pydantic import BaseModel
+from ai_adapter.schemas import TradingPitResponse, TerritoryWarResponse
 
 
 CALL_TIMEOUT = 8.0  # seconds (relaxed for PoC; tighten to 4s for live episodes)
@@ -97,8 +98,13 @@ You must include exactly one decision per asset. Amount must be 0 for hold actio
 class AIAdapter:
     """Calls multiple AI models simultaneously and collects structured responses."""
 
-    def __init__(self, models: list[ModelConfig] | None = None):
+    def __init__(
+        self,
+        models: list[ModelConfig] | None = None,
+        response_schema: type[BaseModel] = TradingPitResponse,
+    ):
         self.models = models or DEFAULT_MODELS
+        self.response_schema = response_schema
         self._anthropic = AsyncAnthropic()
         self._openai = AsyncOpenAI()
         self._google = genai.Client()
@@ -129,7 +135,7 @@ class AIAdapter:
 
             # Parse and validate response
             parsed = json.loads(content)
-            validated = TradingPitResponse.model_validate(parsed)
+            validated = self.response_schema.model_validate(parsed)
             result.response = validated.model_dump()
             result.input_tokens = raw.get("input_tokens", 0)
             result.output_tokens = raw.get("output_tokens", 0)
@@ -201,3 +207,68 @@ class AIAdapter:
             "input_tokens": response.usage_metadata.prompt_token_count,
             "output_tokens": response.usage_metadata.candidates_token_count,
         }
+
+
+def build_territory_war_prompt(state: dict[str, Any]) -> str:
+    """Build a structured prompt for the Territory War challenge.
+
+    Accepts the dict returned by TerritoryWarEngine.get_prompt_state().
+    The prompt includes the full map, unit positions, and resources —
+    but is built per-model so each model only sees its own units' IDs.
+    """
+    tick = state["tick"]
+    max_ticks = state["max_ticks"]
+    territory = state.get("territory", {})
+    units = state.get("units", [])
+    models = state.get("models", {})
+    events = state.get("event_log", [])
+
+    # Summarise map instead of sending full grid (saves tokens)
+    resource_tiles = []
+    for row in state.get("grid", []):
+        for tile in row:
+            if tile.get("type") in ("ore", "food"):
+                resource_tiles.append(tile)
+
+    return f"""You are an AI commander in a territory control game on a 20x20 grid.
+
+Turn {tick + 1} of {max_ticks}.
+
+TERRITORY CONTROL: {json.dumps(territory)}
+
+YOUR UNITS:
+{json.dumps(units, indent=2)}
+
+MODEL RESOURCES:
+{json.dumps(models, indent=2)}
+
+RESOURCE TILES ON MAP:
+{json.dumps(resource_tiles, indent=2)}
+
+RECENT EVENTS:
+{json.dumps(events, indent=2)}
+
+AVAILABLE ACTIONS (up to 3 per turn):
+- move: move a unit in a direction (up/down/left/right)
+- attack: attack an adjacent enemy unit (target_id required)
+- harvest: gather resources from the tile the unit stands on
+- build: build a fort on the current tile (costs 10 ore)
+- trade: send a trade offer to another model
+
+Respond ONLY with valid JSON:
+{{
+  "actions": [
+    {{
+      "unit_id": <int>,
+      "action": "move" | "attack" | "harvest" | "build" | "trade",
+      "direction": "up" | "down" | "left" | "right",
+      "target_id": <int or null>,
+      "target_model": "<name or null>",
+      "offer": {{"ore": <int>}} or null,
+      "request": {{"food": <int>}} or null,
+      "reasoning": "<brief reasoning, max 100 chars>"
+    }}
+  ]
+}}
+
+Only include fields relevant to the action. Maximum 3 actions per turn."""
