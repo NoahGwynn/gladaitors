@@ -12,8 +12,10 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from storage.db import init_db
-from ai_adapter.adapter import DEFAULT_MODELS, ModelResult, build_trading_pit_prompt
+from ai_adapter.adapter import DEFAULT_MODELS, ModelResult, build_trading_pit_prompt, build_territory_war_prompt
+from ai_adapter.schemas import TradingPitResponse, TerritoryWarResponse
 from game_engine.trading_pit import TradingPitEngine
+from game_engine.territory_war import TerritoryWarEngine
 from game_engine.runner import ChallengeRunner, RunnerConfig
 
 
@@ -104,6 +106,47 @@ async def start_trading_pit():
     )
 
     # Run in background so the endpoint returns immediately
+    asyncio.create_task(runner.run())
+
+    return {
+        "status": "started",
+        "episode_id": runner.episode_id,
+        "models": model_names,
+        "ticks": config.max_ticks,
+        "tick_interval": config.tick_interval,
+    }
+
+
+def parse_territory_war_response(result: ModelResult) -> list[dict]:
+    """Extract unit actions from a validated model response."""
+    if not result.response:
+        return []
+    return result.response.get("actions", [])
+
+
+@app.post("/games/territory-war")
+async def start_territory_war():
+    """Launch a Territory War challenge with the default models."""
+    model_names = [m.name for m in DEFAULT_MODELS]
+    engine = TerritoryWarEngine(model_names)
+
+    config = RunnerConfig(
+        challenge_name="territory_war",
+        models=DEFAULT_MODELS,
+        tick_interval=20.0,
+        max_ticks=60,
+        response_schema=TerritoryWarResponse,
+        engine_config={"grid_size": 20, "starting_units": 3},
+    )
+
+    runner = ChallengeRunner(
+        config=config,
+        engine=engine,
+        prompt_builder=build_territory_war_prompt,
+        response_parser=parse_territory_war_response,
+        broadcast=manager.broadcast,
+    )
+
     asyncio.create_task(runner.run())
 
     return {

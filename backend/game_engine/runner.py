@@ -9,7 +9,9 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Awaitable
 
+from pydantic import BaseModel
 from ai_adapter.adapter import AIAdapter, ModelConfig, ModelResult
+from ai_adapter.schemas import TradingPitResponse
 from storage.db import create_episode, store_tick, end_episode
 
 log = logging.getLogger(__name__)
@@ -22,6 +24,7 @@ class RunnerConfig:
     models: list[ModelConfig]
     tick_interval: float  # seconds between ticks
     max_ticks: int
+    response_schema: type[BaseModel] = TradingPitResponse
     # Engine-specific config passed through to storage
     engine_config: dict[str, Any] | None = None
 
@@ -46,7 +49,7 @@ class ChallengeRunner:
     ):
         self.config = config
         self.engine = engine
-        self.adapter = AIAdapter(config.models)
+        self.adapter = AIAdapter(config.models, response_schema=config.response_schema)
         self.prompt_builder = prompt_builder
         self.response_parser = response_parser
         self.broadcast = broadcast
