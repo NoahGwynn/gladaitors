@@ -1,0 +1,43 @@
+// ============================================================================
+// GameHeader — top bar with logo, episode title, turn counter, and clock
+// ============================================================================
+
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.header {
+  @include ga-bar($ga-layout-header-height);
+  justify-content: space-between;
+  border-bottom: 1px solid $ga-border;
+  z-index: $ga-z-panels;
+}
+
+.logo {
+  @include ga-text-ui($ga-size-lg);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+
+  // "AI" highlight — slightly different treatment
+  span {
+    color: $ga-text-primary;
+  }
+}
+
+.episodeTitle {
+  @include ga-text-ui($ga-size-base);
+  color: $ga-text-secondary;
+}
+
+.right {
+  @include ga-flex-row($ga-space-xl);
+}
+
+.turnCounter {
+  @include ga-text-mono($ga-size-xl);
+  font-weight: 600;
+}
+
+.clock {
+  @include ga-text-mono($ga-size-md);
+  color: $ga-text-secondary;
+}

@@ -1,0 +1,58 @@
+// ============================================================================
+// StatusBadge — status indicator used in ModelPanel and header
+// ============================================================================
+
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px $ga-space-sm;
+  border-radius: $ga-radius-sm;
+  font-family: $ga-font-mono;
+  font-size: $ga-size-xs;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  line-height: 1.4;
+}
+
+// --- Status variants ---
+
+.active {
+  background: rgba($ga-ui-success, 0.15);
+  color: $ga-ui-success;
+}
+
+.thinking {
+  background: rgba($ga-ui-warning, 0.15);
+  color: $ga-ui-warning;
+  @include ga-pulse-animation;
+}
+
+.timeout {
+  background: rgba($ga-ui-danger, 0.15);
+  color: $ga-ui-danger;
+}
+
+.rate_limited {
+  background: rgba($ga-ui-rate-limit, 0.15);
+  color: $ga-ui-rate-limit;
+}
+
+.invalid {
+  background: rgba($ga-ui-danger, 0.15);
+  color: $ga-ui-danger;
+}
+
+.winner {
+  background: rgba($ga-ui-gold, 0.2);
+  color: $ga-ui-gold;
+  @include ga-glow-animation($ga-ui-gold);
+}
+
+.eliminated {
+  background: rgba($ga-text-muted, 0.1);
+  color: $ga-text-muted;
+}

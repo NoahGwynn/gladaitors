@@ -1,0 +1,100 @@
+// ============================================================================
+// LowerThirds — transparent overlay components for OBS
+// ============================================================================
+// Rendered on /overlay route with transparent background.
+// OBS captures this as a second Browser Source layered over the game.
+// Only the lower-third elements are visible — everything else is transparent.
+// ============================================================================
+
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+// --- Model name bar — slides in from left ---
+
+.modelBar {
+  position: absolute;
+  bottom: 120px;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: $ga-space-md;
+  padding: $ga-space-md $ga-space-2xl $ga-space-md $ga-space-xl;
+  background: rgba($ga-bg-surface, 0.9);
+  border-right: 3px solid var(--model-colour, $ga-text-muted);
+  border-top: 1px solid $ga-border;
+  border-bottom: 1px solid $ga-border;
+  transform: translateX(-100%);
+  animation: slideIn 0.5s ease forwards;
+
+  @include ga-model-colour-classes;
+}
+
+.modelDot {
+  @include ga-model-dot(12px);
+}
+
+.modelName {
+  @include ga-text-ui($ga-size-lg);
+  font-weight: 700;
+}
+
+.modelStatus {
+  @include ga-text-mono($ga-size-sm);
+  color: $ga-text-secondary;
+}
+
+// --- Info bar — bottom strip ---
+
+.infoBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 $ga-space-2xl;
+  background: rgba($ga-bg-surface, 0.85);
+  border-top: 1px solid $ga-border;
+}
+
+.infoLeft {
+  @include ga-flex-row($ga-space-lg);
+}
+
+.infoRight {
+  @include ga-flex-row($ga-space-lg);
+}
+
+.infoLabel {
+  @include ga-text-label;
+}
+
+.infoValue {
+  @include ga-text-mono($ga-size-base);
+}
+
+// --- Animations ---
+
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes slideOut {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-100%); }
+}
+
+.modelBarHidden {
+  animation: slideOut 0.5s ease forwards;
+}

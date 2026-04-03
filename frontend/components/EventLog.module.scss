@@ -1,0 +1,50 @@
+// ============================================================================
+// EventLog — horizontal scrolling event ticker at the bottom
+// ============================================================================
+
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.eventLog {
+  @include ga-surface;
+  @include ga-flex-row($ga-space-lg);
+  height: $ga-layout-event-log-height;
+  padding: 0 $ga-space-xl;
+  border-top: 1px solid $ga-border;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  z-index: $ga-z-event-log;
+  flex-shrink: 0;
+}
+
+.event {
+  @include ga-text-mono($ga-size-sm);
+  color: $ga-text-secondary;
+  display: inline-flex;
+  align-items: center;
+  gap: $ga-space-sm;
+  flex-shrink: 0;
+}
+
+.eventTick {
+  @include ga-text-mono($ga-size-xs);
+  color: $ga-text-muted;
+}
+
+.separator {
+  color: $ga-text-muted;
+  margin: 0 $ga-space-sm;
+  user-select: none;
+}
+
+// Model name within an event — coloured with the model's identity colour
+.modelName {
+  font-weight: 600;
+
+  // Model-specific colours
+  &.claude  { color: $ga-model-claude; }
+  &.gpt4o   { color: $ga-model-gpt; }
+  &.gemini  { color: $ga-model-gemini; }
+  &.grok    { color: $ga-model-grok; }
+}
