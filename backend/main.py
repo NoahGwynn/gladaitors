@@ -58,6 +58,7 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+active_runner: ChallengeRunner | None = None
 
 
 @app.websocket("/ws")
@@ -105,7 +106,8 @@ async def start_trading_pit():
         broadcast=manager.broadcast,
     )
 
-    # Run in background so the endpoint returns immediately
+    global active_runner
+    active_runner = runner
     asyncio.create_task(runner.run())
 
     return {
@@ -115,6 +117,17 @@ async def start_trading_pit():
         "ticks": config.max_ticks,
         "tick_interval": config.tick_interval,
     }
+
+
+@app.post("/games/stop")
+async def stop_game():
+    """Stop the currently running game."""
+    global active_runner
+    if active_runner and not active_runner.stopped:
+        active_runner.stopped = True
+        active_runner = None
+        return {"status": "stopped"}
+    return {"status": "no active game"}
 
 
 def parse_territory_war_response(result: ModelResult) -> list[dict]:
@@ -147,6 +160,8 @@ async def start_territory_war():
         broadcast=manager.broadcast,
     )
 
+    global active_runner
+    active_runner = runner
     asyncio.create_task(runner.run())
 
     return {

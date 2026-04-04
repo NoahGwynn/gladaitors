@@ -6,6 +6,7 @@ Models never see each other's responses mid-turn.
 
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Awaitable
 
@@ -15,6 +16,22 @@ from ai_adapter.schemas import TradingPitResponse
 from storage.db import create_episode, store_tick, end_episode
 
 log = logging.getLogger(__name__)
+
+# Model identity colours — must match frontend/styles/_variables.scss
+MODEL_COLOURS: dict[str, str] = {
+    "Claude": "#7C3AED",
+    "ChatGPT": "#10B981",
+    "Gemini": "#3B82F6",
+    "Grok": "#F59E0B",
+}
+
+# Map model display names to frontend IDs
+MODEL_IDS: dict[str, str] = {
+    "Claude": "claude",
+    "ChatGPT": "gpt4o",
+    "Gemini": "gemini",
+    "Grok": "grok",
+}
 
 
 @dataclass
@@ -54,6 +71,9 @@ class ChallengeRunner:
         self.response_parser = response_parser
         self.broadcast = broadcast
         self.episode_id: int | None = None
+        self.stopped: bool = False
+        self._start_time: float = 0.0
+        self._last_results: dict[str, ModelResult] = {}  # model_name -> last result
 
     async def run(self) -> dict[str, Any]:
         """Run the full challenge. Returns final game state."""
@@ -64,13 +84,15 @@ class ChallengeRunner:
             config=self.config.engine_config or {},
         )
 
+        self._start_time = time.time()
+
         log.info(
             "Starting %s — episode %d — models: %s",
             self.config.challenge_name, self.episode_id, model_names,
         )
 
         tick = 0
-        while not self.engine.state.finished and tick < self.config.max_ticks:
+        while not self.engine.state.finished and tick < self.config.max_ticks and not self.stopped:
             await self._run_tick(tick)
             tick += 1
 
@@ -85,7 +107,10 @@ class ChallengeRunner:
         log.info("Episode %d finished — winner: %s", self.episode_id, winner)
 
         if self.broadcast:
-            await self.broadcast({"type": "game_over", "state": final_state})
+            # Use last known results for status mapping
+            last_results = list(self._last_results.values())
+            frontend_state = self._to_frontend_state(final_state, last_results)
+            await self.broadcast({"type": "game_over", "state": frontend_state})
 
         return final_state
 
@@ -131,12 +156,17 @@ class ChallengeRunner:
         ]
         store_tick(self.episode_id, tick, game_state, model_responses, events or None)
 
-        # Broadcast to WebSocket clients
+        # Track results for status mapping
+        for r in results:
+            self._last_results[r.model_name] = r
+
+        # Broadcast to WebSocket clients (transformed to frontend GameState shape)
         if self.broadcast:
+            frontend_state = self._to_frontend_state(game_state, results)
             await self.broadcast({
                 "type": "tick",
                 "tick": tick,
-                "state": game_state,
+                "state": frontend_state,
                 "results": model_responses,
             })
 
@@ -148,3 +178,106 @@ class ChallengeRunner:
                 for r in results
             ),
         )
+
+    def _to_frontend_state(
+        self,
+        game_state: dict[str, Any],
+        results: list[ModelResult],
+    ) -> dict[str, Any]:
+        """Transform raw engine state into the frontend GameState format."""
+        elapsed = int(time.time() - self._start_time)
+        challenge = self.config.challenge_name
+
+        # Build model states array
+        models_frontend = []
+        for r in results:
+            model_name = r.model_name
+            model_id = MODEL_IDS.get(model_name, model_name.lower())
+            colour = MODEL_COLOURS.get(model_name, "#FFFFFF")
+
+            # Determine status
+            if game_state.get("finished") and game_state.get("winner") == model_name:
+                status = "winner"
+            elif r.timed_out:
+                status = "timeout"
+            elif r.error and "rate" in r.error.lower():
+                status = "rate_limited"
+            elif r.error:
+                status = "invalid"
+            elif game_state.get("models", {}).get(model_name, {}).get("eliminated"):
+                status = "eliminated"
+            else:
+                status = "active"
+
+            # Challenge-specific metrics and stats
+            if challenge == "territory_war":
+                territory = game_state.get("territory", {})
+                total_tiles = 20 * 20
+                pct = round(territory.get(model_name, 0) / total_tiles * 100, 1)
+                model_data = game_state.get("models", {}).get(model_name, {})
+                primary_metric = pct
+                primary_metric_label = "Territory"
+                stats = {
+                    "Ore": model_data.get("ore", 0),
+                    "Food": model_data.get("food", 0),
+                    "Units": sum(
+                        1 for u in game_state.get("units", [])
+                        if u.get("model") == model_name
+                    ),
+                }
+            elif challenge == "trading_pit":
+                portfolio = game_state.get("portfolios", {}).get(model_name, {})
+                total_value = portfolio.get("total_value", 10000)
+                primary_metric = round(total_value)
+                primary_metric_label = "Portfolio"
+                stats = {
+                    "Cash": f"£{portfolio.get('cash', 0):,.0f}",
+                }
+            else:
+                primary_metric = 0
+                primary_metric_label = ""
+                stats = {}
+
+            # Last action summary
+            last_action = ""
+            if r.response:
+                if challenge == "territory_war":
+                    actions = r.response.get("actions", [])
+                    if actions:
+                        a = actions[0]
+                        last_action = f"{a.get('action', '?')} {a.get('direction', '')}".strip()
+                elif challenge == "trading_pit":
+                    decisions = r.response.get("decisions", [])
+                    active = [d for d in decisions if d.get("action") != "hold"]
+                    if active:
+                        d = active[0]
+                        last_action = f"{d['action']} {d['asset']}"
+
+            models_frontend.append({
+                "id": model_id,
+                "name": model_name,
+                "colour": colour,
+                "status": status,
+                "primary_metric": primary_metric,
+                "primary_metric_label": primary_metric_label,
+                "stats": stats,
+                "last_action": last_action,
+            })
+
+        # Build events array
+        events_frontend = []
+        for event in game_state.get("event_log", [])[-10:]:
+            events_frontend.append({
+                "tick": event.get("tick", 0),
+                "message": event.get("headline") or event.get("message") or event.get("event", ""),
+            })
+
+        return {
+            "tick": game_state.get("tick", 0),
+            "max_ticks": game_state.get("max_ticks", 0),
+            "elapsed_seconds": elapsed,
+            "challenge": challenge,
+            "models": models_frontend,
+            "events": events_frontend,
+            "canvas_data": game_state,
+        }
