@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from ai_adapter.schemas import TradingPitResponse, TerritoryWarResponse
 
 
-CALL_TIMEOUT = 8.0  # seconds (relaxed for PoC; tighten to 4s for live episodes)
+CALL_TIMEOUT = 60.0  # seconds — all episodes pre-recorded, latency not a constraint
 
 
 @dataclass

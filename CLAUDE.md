@@ -145,8 +145,9 @@ Runs locally during recording. Deployed to Railway for live broadcasts.
 - GPT: `gpt-4o-mini` (testing) / `gpt-4o` (recording)
 - Gemini: `gemini-flash` (both)
 - max_tokens: 150. Temperature: 0.3.
-- Hard timeout: 4 seconds. On failure: skip turn.
-- Extended thinking/reasoning modes: ALWAYS disabled.
+- Latency is not a constraint — all episodes pre-recorded. Tick rate can be 30–60s per turn.
+- Extended thinking: ALWAYS disabled (verbose output, not latency).
+- On failure: skip turn, emit badge, continue.
 
 ### Repo structure
 
