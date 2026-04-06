@@ -16,7 +16,7 @@ class TradeDecision(BaseModel):
         description="Amount in £ to buy or sell (0 if holding)",
     )
     reasoning: str = Field(
-        max_length=100,
+        max_length=300,
         description="Brief reasoning for this decision",
     )
 
@@ -30,10 +30,10 @@ class TradingPitResponse(BaseModel):
 
 # --- Territory War ---
 
-class UnitAction(BaseModel):
-    """A single action for one unit."""
-    unit_id: int = Field(description="ID of the unit to command")
-    action: Literal["move", "attack", "harvest", "build", "trade"] = Field(
+class PieceAction(BaseModel):
+    """A single action for one piece."""
+    unit_id: int = Field(description="ID of the piece to command")
+    action: Literal["move", "attack", "harvest", "build", "heal"] = Field(
         description="The action type",
     )
     direction: Literal["up", "down", "left", "right"] | None = Field(
@@ -42,29 +42,25 @@ class UnitAction(BaseModel):
     )
     target_id: int | None = Field(
         default=None,
-        description="Target unit ID for attack action",
+        description="Target piece ID for attack action",
     )
-    target_model: str | None = Field(
+    target_x: int | None = Field(
         default=None,
-        description="Target model name for trade action",
+        description="Target X coordinate for fort attack",
     )
-    offer: dict | None = Field(
+    target_y: int | None = Field(
         default=None,
-        description="Resources to offer in trade (e.g. {'ore': 5})",
-    )
-    request: dict | None = Field(
-        default=None,
-        description="Resources to request in trade (e.g. {'food': 3})",
+        description="Target Y coordinate for fort attack",
     )
     reasoning: str = Field(
-        max_length=100,
+        max_length=300,
         description="Brief reasoning for this action",
     )
 
 
 class TerritoryWarResponse(BaseModel):
     """Complete response from a model for one Territory War turn."""
-    actions: list[UnitAction] = Field(
+    actions: list[PieceAction] = Field(
         max_length=3,
-        description="Up to 3 unit actions per turn",
+        description="Up to 3 piece actions per turn",
     )

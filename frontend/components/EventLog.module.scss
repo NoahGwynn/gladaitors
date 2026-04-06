@@ -37,14 +37,3 @@
   margin: 0 $ga-space-sm;
   user-select: none;
 }
-
-// Model name within an event — coloured with the model's identity colour
-.modelName {
-  font-weight: 600;
-
-  // Model-specific colours
-  &.claude  { color: $ga-model-claude; }
-  &.gpt4o   { color: $ga-model-gpt; }
-  &.gemini  { color: $ga-model-gemini; }
-  &.grok    { color: $ga-model-grok; }
-}

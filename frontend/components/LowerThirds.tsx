@@ -14,7 +14,7 @@
 
 'use client';
 
-import type { GameState, ModelId } from '@/lib/types';
+import type { GameState } from '@/lib/types';
 import styles from './LowerThirds.module.scss';
 
 interface LowerThirdsProps {

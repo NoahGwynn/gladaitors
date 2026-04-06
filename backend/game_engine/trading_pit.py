@@ -78,12 +78,13 @@ class TradingPitEngine:
 
     def __init__(self, model_names: list[str]):
         self.state = TradingPitState()
-        # Initialise portfolios: split starting cash evenly across assets
+        # Initialise portfolios: half cash, half invested across assets
         for name in model_names:
-            portfolio = Portfolio(model_name=name, cash=0.0, holdings={})
-            per_asset = STARTING_CASH / len(ASSETS)
+            cash_reserve = STARTING_CASH / 2
+            invest_per_asset = (STARTING_CASH - cash_reserve) / len(ASSETS)
+            portfolio = Portfolio(model_name=name, cash=cash_reserve, holdings={})
             for asset in ASSETS:
-                units = per_asset / self.state.prices[asset]
+                units = invest_per_asset / self.state.prices[asset]
                 portfolio.holdings[asset] = units
             self.state.portfolios[name] = portfolio
 
@@ -98,12 +99,20 @@ class TradingPitEngine:
         return None
 
     def get_prompt_state(self) -> dict[str, Any]:
-        """State to send to models for decision-making (no other model info)."""
+        """State to send to models for decision-making."""
         return {
             "tick": self.state.tick,
             "max_ticks": self.state.max_ticks,
             "prices": dict(self.state.prices),
             "headline": self.current_headline or self._generate_noise_headline(),
+            "portfolios": {
+                name: {
+                    "cash": p.cash,
+                    "holdings": dict(p.holdings),
+                    "total_value": p.total_value(self.state.prices),
+                }
+                for name, p in self.state.portfolios.items()
+            },
         }
 
     def apply_actions(self, actions: dict[str, list[dict[str, Any]]]):
@@ -145,8 +154,6 @@ class TradingPitEngine:
         price = self.state.prices[asset]
 
         if action == "buy":
-            # Check if model has enough value in other assets to sell
-            # For simplicity, allow buying with cash from selling
             units = amount / price
             portfolio.holdings[asset] = portfolio.holdings.get(asset, 0) + units
             portfolio.cash -= amount
@@ -177,7 +184,7 @@ class TradingPitEngine:
     def _apply_market_drift(self):
         """Small random price movements each tick."""
         for asset in ASSETS:
-            drift = random.uniform(-0.03, 0.03)  # ±3%
+            drift = random.uniform(-0.03, 0.03)  # +/- 3%
             self.state.prices[asset] *= (1 + drift)
             self.state.prices[asset] = round(max(self.state.prices[asset], 0.01), 2)
 

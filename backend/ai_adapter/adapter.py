@@ -2,19 +2,27 @@
 
 import asyncio
 import json
+import logging
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
 from google import genai
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from ai_adapter.schemas import TradingPitResponse, TerritoryWarResponse
 
 
-CALL_TIMEOUT = 60.0  # seconds — all episodes pre-recorded, latency not a constraint
+log = logging.getLogger(__name__)
+
+CALL_TIMEOUT = 60.0  # seconds
+PROMPTS_DIR = Path(__file__).parent / "prompts"
+
+# Type alias: a prompt is either a plain string or a dict with "system" and "user" keys
+Prompt = str | dict[str, str]
 
 
 @dataclass
@@ -23,7 +31,7 @@ class ModelConfig:
     name: str
     provider: str  # "anthropic", "openai", "google"
     model_id: str
-    max_tokens: int = 300
+    max_tokens: int = 8000
     temperature: float = 0.3
 
 
@@ -39,60 +47,191 @@ class ModelResult:
     timed_out: bool = False
 
 
-# Default test models (cheap tier for PoC)
-DEFAULT_MODELS = [
-    ModelConfig(
-        name="Claude",
-        provider="anthropic",
-        model_id="claude-haiku-4-5-20251001",
-    ),
-    ModelConfig(
-        name="ChatGPT",
-        provider="openai",
-        model_id="gpt-4o-mini",
-    ),
-    ModelConfig(
-        name="Gemini",
-        provider="google",
-        model_id="gemini-2.5-flash",
-    ),
-]
+# Model tiers — grouped by capability/cost
+MODEL_TIERS: dict[int, list[ModelConfig]] = {
+    1: [
+        ModelConfig(name="Claude", provider="anthropic", model_id="claude-haiku-4-5-20251001"),
+        ModelConfig(name="ChatGPT", provider="openai", model_id="gpt-4o-mini"),
+        ModelConfig(name="Gemini", provider="google", model_id="gemini-2.0-flash"),
+    ],
+    2: [
+        # Tier 2: mid-range models — balanced cost and capability
+        ModelConfig(name="Claude", provider="anthropic", model_id="claude-sonnet-4-6"),
+        ModelConfig(name="ChatGPT", provider="openai", model_id="gpt-4o"),
+        ModelConfig(name="Gemini", provider="google", model_id="gemini-2.5-flash"),
+    ],
+    3: [
+        ModelConfig(name="Claude", provider="anthropic", model_id="claude-opus-4-6"),
+        ModelConfig(name="ChatGPT", provider="openai", model_id="gpt-4o", max_tokens=8000),
+        ModelConfig(name="Gemini", provider="google", model_id="gemini-2.5-pro", max_tokens=8000),
+    ],
+}
+
+DEFAULT_MODELS = MODEL_TIERS[2]
 
 
-def build_trading_pit_prompt(state: dict[str, Any]) -> str:
-    """Build a structured prompt for the Trading Pit challenge.
+def get_models_for_tier(tier: int) -> list[ModelConfig]:
+    """Return the models for a given tier (1-3). Defaults to tier 2."""
+    return MODEL_TIERS.get(tier, MODEL_TIERS[2])
 
-    Accepts the dict returned by TradingPitEngine.get_prompt_state().
+
+def get_prompt_template(name: str) -> str:
+    """Load a prompt template from the prompts directory."""
+    path = PROMPTS_DIR / f"{name}.txt"
+    return path.read_text(encoding="utf-8")
+
+
+def _extract_json(raw: str) -> str:
+    """Extract JSON from a model response that may contain markdown fences or prose."""
+    content = raw.strip()
+
+    # Handle markdown code fences
+    if content.startswith("```"):
+        content = content.split("\n", 1)[1]  # remove opening ```json
+        content = content.rsplit("```", 1)[0]  # remove closing ```
+        content = content.strip()
+        return content
+
+    # Handle JSON buried after prose — find the first { and match braces
+    brace_start = content.find("{")
+    if brace_start > 0:
+        depth = 0
+        for i in range(brace_start, len(content)):
+            if content[i] == "{":
+                depth += 1
+            elif content[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return content[brace_start:i + 1]
+
+    return content
+
+
+def build_trading_pit_prompts(state: dict[str, Any], model_names: list[str]) -> dict[str, Prompt]:
+    """Build per-model prompts for the Trading Pit challenge.
+
+    Returns a dict mapping model_name -> {"system": ..., "user": ...}.
     """
+    system_template = get_prompt_template("trading_pit_system")
+    user_template = get_prompt_template("trading_pit")
+
     prices = state["prices"]
     headline = state["headline"]
     tick = state["tick"]
     max_ticks = state["max_ticks"]
+    portfolios = state.get("portfolios", {})
 
-    return f"""You are an AI trader competing in a live trading game.
+    prompts: dict[str, Prompt] = {}
+    for name in model_names:
+        portfolio = portfolios.get(name, {})
+        cash = portfolio.get("cash", 0)
+        holdings = portfolio.get("holdings", {})
+        total_value = portfolio.get("total_value", 0)
 
-Turn {tick + 1} of {max_ticks}.
+        # Format holdings with current values
+        holdings_str = json.dumps(
+            {asset: {"units": round(units, 2), "value": round(units * prices.get(asset, 0), 2)}
+             for asset, units in holdings.items()},
+            indent=2,
+        )
 
-Current asset prices:
-{json.dumps(prices, indent=2)}
+        system = system_template.format(model_name=name, max_ticks=max_ticks)
+        user = user_template.format(
+            tick=tick + 1,
+            max_ticks=max_ticks,
+            headline=headline,
+            prices=json.dumps(prices, indent=2),
+            cash=f"{cash:,.2f}",
+            holdings=holdings_str,
+            total_value=f"{total_value:,.2f}",
+        )
+        prompts[name] = {"system": system, "user": user}
 
-Breaking news headline: "{headline}"
+    return prompts
 
-For each asset, decide whether to buy, sell, or hold, and specify an amount in £ (max 5000 per trade).
 
-Respond ONLY with valid JSON matching this exact schema:
-{{
-  "decisions": [
-    {{
-      "asset": "<asset name>",
-      "action": "buy" | "sell" | "hold",
-      "amount": <integer 0-5000>,
-      "reasoning": "<brief reasoning, max 100 chars>"
-    }}
-  ]
-}}
+def build_territory_war_prompts(state: dict[str, Any], model_names: list[str]) -> dict[str, Prompt]:
+    """Build per-model prompts for the Territory War challenge.
 
-You must include exactly one decision per asset. Amount must be 0 for hold actions."""
+    Each model sees its own pieces as 'Your pieces' and enemies as 'Enemy pieces'.
+    Returns a dict mapping model_name -> {"system": ..., "user": ...}.
+    """
+    system_template = get_prompt_template("territory_war_system")
+    user_template = get_prompt_template("territory_war")
+
+    tick = state["tick"]
+    max_ticks = state["max_ticks"]
+    territory = state.get("territory", {})
+    territory_score = state.get("territory_score", {})
+    units = state.get("units", [])
+    models = state.get("models", {})
+    events = state.get("event_log", [])
+    grid = state.get("grid", [])
+
+    # Build resource tile list
+    resource_tiles = []
+    for row in grid:
+        for tile in row:
+            if tile.get("type") in ("ore", "food"):
+                resource_tiles.append(tile)
+
+    prompts: dict[str, Prompt] = {}
+    for name in model_names:
+        model_data = models.get(name, {})
+        if model_data.get("eliminated"):
+            continue
+
+        # Split units into mine vs enemy
+        my_units = [u for u in units if u.get("model") == name]
+        enemy_units = [u for u in units if u.get("model") != name]
+
+        # Claimed tiles per model
+        my_territory = []
+        enemy_territory = {}
+        for row in grid:
+            for tile in row:
+                owner = tile.get("owner")
+                if owner == name:
+                    my_territory.append({"x": tile["x"], "y": tile["y"]})
+                elif owner and owner != name:
+                    if owner not in enemy_territory:
+                        enemy_territory[owner] = []
+                    enemy_territory[owner].append({"x": tile["x"], "y": tile["y"]})
+
+        config = state.get("config", {})
+        grid_size = state.get("grid_size", 20)
+        system = system_template.format(
+            model_name=name,
+            max_ticks=max_ticks,
+            grid_size=grid_size,
+            grid_max=grid_size - 1,
+            total_tiles=state.get("total_tiles", grid_size * grid_size),
+            win_score=state.get("win_score", int(grid_size * grid_size * 0.6)),
+            piece_hp=config.get("piece_hp", 3),
+            piece_attack=config.get("piece_attack", 1),
+            pieces_per_model=3,
+            fort_cost=config.get("fort_cost", 10),
+            fort_hp=config.get("fort_hp", 5),
+            heal_cost=config.get("heal_cost", 5),
+            heal_amount=1,
+            harvest_amount=config.get("harvest_amount", 3),
+        )
+        user = user_template.format(
+            tick=tick + 1,
+            max_ticks=max_ticks,
+            territory_score=json.dumps(territory_score),
+            territory=json.dumps(territory),
+            my_territory=json.dumps(my_territory),
+            enemy_territory=json.dumps(enemy_territory),
+            my_units=json.dumps(my_units, indent=2),
+            enemy_units=json.dumps(enemy_units, indent=2),
+            my_resources=json.dumps({"ore": model_data.get("ore", 0), "food": model_data.get("food", 0)}),
+            resource_tiles=json.dumps(resource_tiles, indent=2),
+            events=json.dumps(events[-10:], indent=2),
+        )
+        prompts[name] = {"system": system, "user": user}
+
+    return prompts
 
 
 class AIAdapter:
@@ -109,82 +248,118 @@ class AIAdapter:
         self._openai = AsyncOpenAI()
         self._google = genai.Client()
 
-    async def call_all(self, prompt: str) -> list[ModelResult]:
-        """Call all configured models simultaneously and return results."""
-        tasks = [self._call_model(model, prompt) for model in self.models]
+    async def call_all(self, prompts: dict[str, Prompt]) -> list[ModelResult]:
+        """Call all configured models simultaneously with per-model prompts."""
+        tasks = [self._call_model(model, prompts.get(model.name, "")) for model in self.models]
         return await asyncio.gather(*tasks)
 
-    async def _call_model(self, config: ModelConfig, prompt: str) -> ModelResult:
+    async def call_single(self, model: ModelConfig, prompt: Prompt) -> ModelResult:
+        """Call a single model and return the result."""
+        return await self._call_model(model, prompt)
+
+    async def _call_model(self, config: ModelConfig, prompt: Prompt) -> ModelResult:
         """Call a single model with timeout handling."""
         result = ModelResult(model_name=config.name)
         start = time.perf_counter()
+        raw = None
 
         try:
-            raw = await asyncio.wait_for(
+            raw_response = await asyncio.wait_for(
                 self._dispatch(config, prompt),
                 timeout=CALL_TIMEOUT,
             )
             result.latency_ms = (time.perf_counter() - start) * 1000
 
-            # Strip markdown code fences if present
-            content = raw["content"].strip()
-            if content.startswith("```"):
-                content = content.split("\n", 1)[1]  # remove opening ```json
-                content = content.rsplit("```", 1)[0]  # remove closing ```
-                content = content.strip()
+            raw = raw_response["content"].strip()
+            log.info(
+                "%s raw response (%d chars): %s",
+                config.name, len(raw), raw[:500],
+            )
+
+            # Extract JSON from response
+            content = _extract_json(raw)
 
             # Parse and validate response
             parsed = json.loads(content)
             validated = self.response_schema.model_validate(parsed)
             result.response = validated.model_dump()
-            result.input_tokens = raw.get("input_tokens", 0)
-            result.output_tokens = raw.get("output_tokens", 0)
+            result.input_tokens = raw_response.get("input_tokens", 0)
+            result.output_tokens = raw_response.get("output_tokens", 0)
 
         except asyncio.TimeoutError:
             result.latency_ms = (time.perf_counter() - start) * 1000
             result.timed_out = True
             result.error = f"Timed out after {CALL_TIMEOUT}s"
+            log.warning("%s timed out after %.1fs", config.name, CALL_TIMEOUT)
 
         except json.JSONDecodeError as e:
             result.latency_ms = (time.perf_counter() - start) * 1000
             result.error = f"Invalid JSON: {e}"
+            log.warning("%s invalid JSON: %s — raw: %s", config.name, e, raw[:500] if raw else "None")
+
+        except ValidationError as e:
+            result.latency_ms = (time.perf_counter() - start) * 1000
+            result.error = f"Validation error: {e}"
+            log.warning("%s validation error: %s — raw: %s", config.name, e, raw[:500] if raw else "None")
 
         except Exception as e:
             result.latency_ms = (time.perf_counter() - start) * 1000
             result.error = f"{type(e).__name__}: {e}"
+            log.warning("%s error: %s", config.name, e, exc_info=True)
 
         return result
 
-    async def _dispatch(self, config: ModelConfig, prompt: str) -> dict[str, Any]:
-        """Route to the correct provider API."""
+    async def _dispatch(self, config: ModelConfig, prompt: Prompt) -> dict[str, Any]:
+        """Route to the correct provider API. Normalises prompt to system + user."""
+        if isinstance(prompt, dict):
+            system = prompt.get("system", "")
+            user = prompt.get("user", "")
+        else:
+            system = ""
+            user = prompt
+
         if config.provider == "anthropic":
-            return await self._call_anthropic(config, prompt)
+            return await self._call_anthropic(config, system, user)
         elif config.provider == "openai":
-            return await self._call_openai(config, prompt)
+            return await self._call_openai(config, system, user)
         elif config.provider == "google":
-            return await self._call_google(config, prompt)
+            return await self._call_google(config, system, user)
         else:
             raise ValueError(f"Unknown provider: {config.provider}")
 
-    async def _call_anthropic(self, config: ModelConfig, prompt: str) -> dict[str, Any]:
-        response = await self._anthropic.messages.create(
-            model=config.model_id,
-            max_tokens=config.max_tokens,
-            temperature=config.temperature,
-            messages=[{"role": "user", "content": prompt}],
-        )
+    async def _call_anthropic(self, config: ModelConfig, system: str, user: str) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {
+            "model": config.model_id,
+            "max_tokens": config.max_tokens,
+            "temperature": config.temperature,
+            "messages": [{"role": "user", "content": user}],
+        }
+        if system:
+            kwargs["system"] = system
+
+        response = await self._anthropic.messages.create(**kwargs)
+        # Iterate content blocks to find text
+        text = ""
+        for block in response.content:
+            if hasattr(block, "text"):
+                text += block.text
         return {
-            "content": response.content[0].text,
+            "content": text,
             "input_tokens": response.usage.input_tokens,
             "output_tokens": response.usage.output_tokens,
         }
 
-    async def _call_openai(self, config: ModelConfig, prompt: str) -> dict[str, Any]:
+    async def _call_openai(self, config: ModelConfig, system: str, user: str) -> dict[str, Any]:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": user})
+
         response = await self._openai.chat.completions.create(
             model=config.model_id,
             max_tokens=config.max_tokens,
             temperature=config.temperature,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
         )
         return {
             "content": response.choices[0].message.content,
@@ -192,83 +367,24 @@ class AIAdapter:
             "output_tokens": response.usage.completion_tokens,
         }
 
-    async def _call_google(self, config: ModelConfig, prompt: str) -> dict[str, Any]:
+    async def _call_google(self, config: ModelConfig, system: str, user: str) -> dict[str, Any]:
+        gen_config = genai.types.GenerateContentConfig(
+            max_output_tokens=config.max_tokens,
+            temperature=config.temperature,
+            thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
+        )
+        if system:
+            gen_config.system_instruction = system
+
         response = await self._google.aio.models.generate_content(
             model=config.model_id,
-            contents=prompt,
-            config=genai.types.GenerateContentConfig(
-                max_output_tokens=config.max_tokens,
-                temperature=config.temperature,
-                thinking_config=genai.types.ThinkingConfig(thinking_budget=0),
-            ),
+            contents=user,
+            config=gen_config,
         )
+        # Handle None .text from thinking mode
+        text = response.text if response.text else ""
         return {
-            "content": response.text,
+            "content": text,
             "input_tokens": response.usage_metadata.prompt_token_count,
             "output_tokens": response.usage_metadata.candidates_token_count,
         }
-
-
-def build_territory_war_prompt(state: dict[str, Any]) -> str:
-    """Build a structured prompt for the Territory War challenge.
-
-    Accepts the dict returned by TerritoryWarEngine.get_prompt_state().
-    The prompt includes the full map, unit positions, and resources —
-    but is built per-model so each model only sees its own units' IDs.
-    """
-    tick = state["tick"]
-    max_ticks = state["max_ticks"]
-    territory = state.get("territory", {})
-    units = state.get("units", [])
-    models = state.get("models", {})
-    events = state.get("event_log", [])
-
-    # Summarise map instead of sending full grid (saves tokens)
-    resource_tiles = []
-    for row in state.get("grid", []):
-        for tile in row:
-            if tile.get("type") in ("ore", "food"):
-                resource_tiles.append(tile)
-
-    return f"""You are an AI commander in a territory control game on a 20x20 grid.
-
-Turn {tick + 1} of {max_ticks}.
-
-TERRITORY CONTROL: {json.dumps(territory)}
-
-YOUR UNITS:
-{json.dumps(units, indent=2)}
-
-MODEL RESOURCES:
-{json.dumps(models, indent=2)}
-
-RESOURCE TILES ON MAP:
-{json.dumps(resource_tiles, indent=2)}
-
-RECENT EVENTS:
-{json.dumps(events, indent=2)}
-
-AVAILABLE ACTIONS (up to 3 per turn):
-- move: move a unit in a direction (up/down/left/right)
-- attack: attack an adjacent enemy unit (target_id required)
-- harvest: gather resources from the tile the unit stands on
-- build: build a fort on the current tile (costs 10 ore)
-- trade: send a trade offer to another model
-
-Respond ONLY with valid JSON:
-{{
-  "actions": [
-    {{
-      "unit_id": <int>,
-      "action": "move" | "attack" | "harvest" | "build" | "trade",
-      "direction": "up" | "down" | "left" | "right",
-      "target_id": <int or null>,
-      "target_model": "<name or null>",
-      "offer": {{"ore": <int>}} or null,
-      "request": {{"food": <int>}} or null,
-      "reasoning": "<brief reasoning, max 100 chars>"
-    }}
-  ]
-}}
-
-Only include fields relevant to the action. Maximum 3 actions per turn."""

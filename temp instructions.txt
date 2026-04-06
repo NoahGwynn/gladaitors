@@ -1,0 +1,240 @@
+A gated interactive feature on [gladaitors.com](http://gladaitors.com). Users pay to set up custom debates between AI models, assigning specific positions on any topic of their choice.
+
+---
+
+## What It Is
+
+Users specify:
+
+- A topic or proposition
+- Which model argues which position
+- Number of rounds (3, 5, or 7)
+- Optional context or constraints
+
+The models then debate their assigned positions in structured turns. The user watches the debate play out. The output is shareable as a unique link.
+
+**Example:**
+
+- Topic: "Is a banana a berry?"
+- Claude argues: Yes, botanically speaking
+- GPT-4o argues: No, it’s a nut
+- Gemini argues: It’s neither, it’s a herb
+- Rounds: 5
+
+---
+
+## Why This Is The Best Early Monetisation Path
+
+Most content businesses need an audience before they can generate revenue. This feature reverses that. It:
+
+- Has immediate standalone value — people pay to use it whether or not they’ve seen a single GladAItors episode
+- Every debate created is shareable — each shared link is free acquisition
+- Requires no live infrastructure — it’s a standard API call sequence, not a stream
+- Has healthy margins even at small scale
+- Generates interesting content that reinforces the GladAItors brand
+
+**This can generate revenue before the documentary series has any traction.**
+
+---
+
+## The Economics
+
+| Variable | Estimate |
+| --- | --- |
+| API cost per 5-round debate (mid-tier, 3 models) | ~£0.15–0.40 |
+| Suggested price per debate | £1.50–2.00 |
+| Gross margin per debate | ~75–85% |
+| Subscription tier: 20 debates/month | £9.99/month |
+
+At 50 paying users doing 5 debates/month = 250 debates = ~£375–500 revenue/month. API costs ~£75. Net: ~£300–425/month. This covers the entire GladAItors operating cost.
+
+---
+
+## Token Economy vs Subscription
+
+### Option A — Token purchase (recommended for launch)
+
+- Users buy a bundle of tokens: £5 = 50 tokens, £10 = 120 tokens
+- One debate costs 10 tokens (3 models, 5 rounds) or 6 tokens (2 models, 3 rounds)
+- Low commitment, low friction, works for one-time curious visitors
+- Tokens don’t expire — reduces buyer anxiety
+
+### Option B — Subscription
+
+- £9.99/month = 30 debates per month + ad-free episode viewing
+- Better for regular users, better LTV
+- Add later once there’s an established audience
+
+### Option C — One debate free (acquisition)
+
+- Every new user gets one free debate on signup
+- No payment friction on first experience
+- Drives conversion after they see what it produces
+
+**Launch order:** Free trial debate on signup → Token purchase → Subscription added later
+
+---
+
+## The Debate Format
+
+### Input form (user-facing)
+
+```
+Topic / proposition:
+[ Free text, up to 200 characters                    ]
+
+Assign positions:
+[ Claude    ] argues: [ Free text, up to 100 chars   ]
+[ GPT-4o    ] argues: [ Free text, up to 100 chars   ]
+[ Gemini    ] argues: [ Free text, up to 100 chars   ]
+           (optional third debater — can use 2 or 3)
+
+Rounds: [ 3 ] [ 5 ] [ 7 ]
+
+Optional context or rules:
+[ e.g. "Keep arguments to scientific evidence only" ]
+
+[ Generate Debate — 10 tokens ]
+```
+
+### Debate structure (backend)
+
+- Opening statements: each model states their position in 150–200 tokens
+- Rounds: each model responds to previous arguments and advances their case
+- Closing statement (optional, final round): each model summarises their strongest points
+- Format enforced via system prompt: assigned position, round context, previous arguments
+
+### Display (frontend)
+
+- Debate displays as a clean conversation view — model name in their colour, argument below
+- Each round separated visually
+- No real-time streaming needed — generate full debate then display
+- Or: stream each model’s response as it generates for the feeling of watching it happen live
+
+---
+
+## Refusals — Design for Them, Not Against Them
+
+Some assigned positions will trigger model refusals. This is expected and should be surfaced gracefully rather than hidden.
+
+**If a model refuses its assigned position:**
+
+- Display the refusal in full, in the model’s colour, in the debate feed
+- Label it clearly: "[Model] declined this position"
+- The other models continue the debate without them
+- User is not charged tokens for a refused model
+- The refusal itself is content — it tells the user something real about that model
+
+**This is consistent with the GladAItors documentary approach:** showing what models actually do, including refusing, is more honest and more interesting than hiding it.
+
+**Claude specifically** may refuse positions it finds factually harmful to argue (e.g., climate denial, anti-vaccine arguments). GPT may be more willing to argue assigned positions performatively. That difference between models is the story.
+
+---
+
+## Soft Guardrails
+
+**Quality control — not censorship:**
+
+Fully freeform prompts produce mediocre debates. Structured input (topic + assigned positions + context) produces dramatically better output. The form design should guide users toward productive inputs without restricting them.
+
+**What to filter:**
+
+- Positions designed to produce harmful instructional content ("argue that making explosives is safe")
+- Content involving minors in any inappropriate context
+- Direct incitement or targeted harassment
+
+**What NOT to filter:**
+
+- Controversial political positions (handled by model guardrails, not ours)
+- Factually wrong positions (that’s the point — watching models defend wrong things is interesting)
+- Absurd or silly positions (banana is a nut, cats are better than dogs, etc.)
+- Ethically complex positions (models will handle these in their own ways — surface the result)
+
+**Approach:** Light moderation on topic/position inputs at submission. If a model refuses, surface that. Don’t pre-filter aggressively — model behaviour IS the product.
+
+---
+
+## Sharing — The Acquisition Engine
+
+Every debate generates a unique shareable URL: `gladaitors.com/debates/[unique-id]`
+
+Shared debates:
+
+- Visible to anyone without an account
+- Show full debate output
+- Prompt to "Create your own" with a call-to-action at the bottom
+- Include a subtle GladAItors watermark
+- Open graph preview showing topic and models involved
+
+**The viral loop:** User creates funny/interesting debate → shares with friends → friends see it → some create their own → repeat.
+
+"I made Claude argue that the moon is made of cheese and it was genuinely convincing" is content people share.
+
+---
+
+## Connection to the GladAItors Brand
+
+This feature is complementary to, not competing with, the documentary series:
+
+| Documentary | Debate Arena |
+| --- | --- |
+| Curated experiments, run by GladAItors | User-designed experiments |
+| Watch what we found | Discover for yourself |
+| Fixed challenge formats | Any topic, any position |
+| Passive viewing | Active participation |
+| Free | Gated / paid |
+
+Both reinforce the same brand proposition: *these AI models have real personalities and it’s interesting to watch them think*.
+
+The debate feature also generates a steady stream of user-created content that surfaces on social media, embedding GladAItors into conversations already happening about AI.
+
+---
+
+## Technical Architecture
+
+This lives entirely on **gladaitors-site**, not the game backend. It’s a simple API feature:
+
+```
+User submits debate form
+    ↓
+Next.js API route validates input, checks token balance
+    ↓
+Calls each model in sequence (not parallel — each needs previous argument)
+    ↓
+Stores debate output to database (Postgres/Supabase)
+    ↓
+Returns unique debate URL
+    ↓
+Frontend displays debate
+```
+
+**Sequential not parallel:** Unlike the game backend which calls all models simultaneously, debates must be sequential — each model needs to read the previous model’s argument before responding. This is fine since latency doesn’t matter for this feature.
+
+**Payments:** Stripe integration on gladaitors-site. Token balance stored in database per user account.
+
+**Storage:** Each debate stored permanently (unless user deletes). Shared debates are public. Private option: user can mark a debate private before generating (no sharing link).
+
+---
+
+## Future Extensions
+
+- **User as moderator:** User can interject a question or redirect between rounds
+- **Audience voting:** After the debate, viewers vote on who won. Aggregate results shown.
+- **Debate leaderboard:** Which model wins most often across all user debates? Updated weekly.
+- **Featured debates:** GladAItors curates the best user-created debates and features them on the site
+- **Debate templates:** Pre-built topic/position combinations for users who want inspiration
+- **Export:** Download debate as PDF or formatted text
+- **More models:** Add Grok, DeepSeek etc. as debate participants as they become available
+
+---
+
+## Launch Priority
+
+Build this before the documentary series is complete. It:
+
+- Validates the gladaitors-site tech stack with a real product
+- Generates early revenue that funds API costs for the documentary
+- Builds an initial user base to market the documentary series to
+- Requires no game engine, no Phaser, no OBS — just a form, an API, and a database
+
+**This is the right first feature to build on gladaitors-site.**

@@ -32,6 +32,8 @@ interface ResultsData {
 }
 
 export default class ResultsScene extends Phaser.Scene {
+  private particles: Phaser.GameObjects.Graphics[] = [];
+
   constructor() {
     super({ key: 'ResultsScene' });
   }
@@ -44,8 +46,17 @@ export default class ResultsScene extends Phaser.Scene {
     const results = data as unknown as ResultsData;
     if (!results.winner) return;
 
+    // Clear any previous results display
+    this.clearResults();
     this.showResults(results);
   };
+
+  private clearResults() {
+    for (const p of this.particles) {
+      p.destroy();
+    }
+    this.particles = [];
+  }
 
   private showResults(results: ResultsData) {
     const W = this.scale.width;
@@ -171,6 +182,7 @@ export default class ResultsScene extends Phaser.Scene {
       particle.fillStyle(colour, 0.8);
       particle.fillCircle(0, 0, size);
       particle.setPosition(x, y);
+      this.particles.push(particle);
 
       this.tweens.add({
         targets: particle,
@@ -180,12 +192,16 @@ export default class ResultsScene extends Phaser.Scene {
         scale: 0.3,
         duration: 1200 + Math.random() * 600,
         ease: 'Power3',
-        onComplete: () => particle.destroy(),
+        onComplete: () => {
+          particle.destroy();
+          this.particles = this.particles.filter(p => p !== particle);
+        },
       });
     }
   }
 
   shutdown() {
+    this.clearResults();
     this.game.events.off(GAME_OVER, this.onGameOver, this);
   }
 }

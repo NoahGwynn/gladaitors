@@ -1,0 +1,73 @@
+@use '../../../../styles/variables' as *;
+
+.page {
+  min-height: 100vh;
+  background: $ga-bg-void;
+  color: $ga-text-primary;
+  padding: $ga-space-2xl;
+  overflow-y: auto;
+}
+
+.header {
+  max-width: 900px;
+  margin: 0 auto $ga-space-2xl;
+}
+
+.title {
+  font-family: $ga-font-ui;
+  font-size: $ga-size-2xl;
+  font-weight: 700;
+  margin-bottom: $ga-space-sm;
+}
+
+.subtitle {
+  font-family: $ga-font-ui;
+  font-size: $ga-size-base;
+  color: $ga-text-secondary;
+  line-height: 1.6;
+}
+
+.variable {
+  font-family: $ga-font-mono;
+  color: $ga-model-claude;
+  background: rgba($ga-model-claude, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.content {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.sectionTitle {
+  font-family: $ga-font-ui;
+  font-size: $ga-size-lg;
+  font-weight: 600;
+  color: $ga-text-secondary;
+  margin: $ga-space-xl 0 $ga-space-md;
+}
+
+.template {
+  font-family: $ga-font-mono;
+  font-size: $ga-size-sm;
+  line-height: 1.6;
+  background: $ga-bg-surface;
+  border: 1px solid $ga-border;
+  border-radius: $ga-radius-md;
+  padding: $ga-space-xl;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: auto;
+}
+
+.error {
+  color: $ga-ui-danger;
+  font-family: $ga-font-mono;
+  font-size: $ga-size-base;
+}
+
+.loading {
+  color: $ga-text-muted;
+  font-family: $ga-font-ui;
+}

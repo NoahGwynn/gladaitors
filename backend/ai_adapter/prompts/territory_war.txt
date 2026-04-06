@@ -1,0 +1,24 @@
+Turn {tick} of {max_ticks}.
+
+Territory scores: {territory_score}
+Territory tile counts: {territory}
+
+Tiles you control: {my_territory}
+
+Tiles controlled by enemies: {enemy_territory}
+
+Your pieces:
+{my_units}
+
+Enemy pieces:
+{enemy_units}
+
+Your resources: {my_resources}
+
+Resource tiles on the map:
+{resource_tiles}
+
+Recent events:
+{events}
+
+Respond with your actions as JSON.

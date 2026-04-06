@@ -1,0 +1,16 @@
+{
+  "name": "gladaitors",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && python -Bc \"import pathlib,shutil;[shutil.rmtree(p) for p in pathlib.Path('.').rglob('__pycache__')]\" & uvicorn main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:frontend": "cd frontend && npm run dev",
+    "game": "node scripts/game-control.js",
+    "game:territory-war": "node scripts/game-control.js territory-war",
+    "game:trading-pit": "node scripts/game-control.js trading-pit"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  }
+}

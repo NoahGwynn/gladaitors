@@ -1,0 +1,85 @@
+// ============================================================================
+// ActionFeed — scrolling chat-style action history
+// ============================================================================
+
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.feed {
+  flex: 1;
+  overflow-y: auto;
+  padding: $ga-space-md;
+  display: flex;
+  flex-direction: column;
+  gap: $ga-space-xs;
+}
+
+.entry {
+  padding: $ga-space-sm $ga-space-md;
+  border-radius: $ga-radius-sm;
+  background: $ga-bg-surface;
+  border-left: 2px solid var(--entry-colour, $ga-text-muted);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.entryHeader {
+  @include ga-flex-row($ga-space-sm);
+  margin-bottom: 2px;
+}
+
+.modelName {
+  font-family: $ga-font-ui;
+  font-size: $ga-size-sm;
+  font-weight: 700;
+  color: var(--entry-colour, $ga-text-primary);
+}
+
+.turnLabel {
+  font-family: $ga-font-mono;
+  font-size: $ga-size-xs;
+  color: $ga-text-muted;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.action {
+  font-family: $ga-font-ui;
+  font-size: $ga-size-sm;
+  color: $ga-text-secondary;
+  line-height: 1.4;
+}
+
+.actionType {
+  font-weight: 600;
+  color: $ga-text-primary;
+  text-transform: uppercase;
+  font-size: $ga-size-xs;
+  margin-right: $ga-space-xs;
+}
+
+.reasoning {
+  font-style: italic;
+  color: $ga-text-secondary;
+}
+
+.skip {
+  font-family: $ga-font-ui;
+  font-size: $ga-size-sm;
+  color: $ga-ui-danger;
+  font-style: italic;
+}
+
+// Model colour classes
+.claude  { --entry-colour: #{$ga-model-claude}; }
+.gpt4o   { --entry-colour: #{$ga-model-gpt}; }
+.gemini  { --entry-colour: #{$ga-model-gemini}; }
+.grok    { --entry-colour: #{$ga-model-grok}; }

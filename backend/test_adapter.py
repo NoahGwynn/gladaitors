@@ -11,7 +11,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
-from ai_adapter.adapter import AIAdapter, build_trading_pit_prompt
+from ai_adapter.adapter import AIAdapter, build_trading_pit_prompts
 
 
 # Test scenario: a market tick with a news headline
@@ -26,6 +26,23 @@ TEST_STATE = {
         "Bonds": 98.40,
     },
     "headline": "Tech giant announces major AI partnership, shares expected to surge",
+    "portfolios": {
+        "Claude": {
+            "cash": 5000.0,
+            "holdings": {"Tech Stock": 7.02, "Energy": 11.47, "Gold": 4.93, "Crypto": 3.20, "Bonds": 10.16},
+            "total_value": 10000.0,
+        },
+        "ChatGPT": {
+            "cash": 5000.0,
+            "holdings": {"Tech Stock": 7.02, "Energy": 11.47, "Gold": 4.93, "Crypto": 3.20, "Bonds": 10.16},
+            "total_value": 10000.0,
+        },
+        "Gemini": {
+            "cash": 5000.0,
+            "holdings": {"Tech Stock": 7.02, "Energy": 11.47, "Gold": 4.93, "Crypto": 3.20, "Bonds": 10.16},
+            "total_value": 10000.0,
+        },
+    },
 }
 
 
@@ -47,9 +64,8 @@ def print_result(result, run_number: int | None = None):
             print(f"    {d['asset']:12s} -> {d['action']:4s}  {d['amount']:>5,}  ({d['reasoning']})")
 
 
-async def single_run(adapter: AIAdapter, run_number: int | None = None) -> list:
-    prompt = build_trading_pit_prompt(TEST_STATE)
-    results = await adapter.call_all(prompt)
+async def single_run(adapter: AIAdapter, prompts: dict, run_number: int | None = None) -> list:
+    results = await adapter.call_all(prompts)
     for r in results:
         print_result(r, run_number)
     return results
@@ -58,16 +74,18 @@ async def single_run(adapter: AIAdapter, run_number: int | None = None) -> list:
 async def main():
     num_runs = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     adapter = AIAdapter()
+    model_names = [m.name for m in adapter.models]
 
     print(f"gladAItors — AI Adapter PoC")
-    print(f"Models: {', '.join(m.name for m in adapter.models)}")
+    print(f"Models: {', '.join(model_names)}")
     print(f"Runs: {num_runs}")
-    print(f"Timeout: 4s per call")
+    print(f"Timeout: 60s per call")
 
     all_results = []
 
     for i in range(1, num_runs + 1):
-        results = await single_run(adapter, i if num_runs > 1 else None)
+        prompts = build_trading_pit_prompts(TEST_STATE, model_names)
+        results = await single_run(adapter, prompts, i if num_runs > 1 else None)
         all_results.extend(results)
 
         if i < num_runs:
