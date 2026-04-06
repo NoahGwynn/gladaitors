@@ -38,6 +38,9 @@ Thumbs.db
 *.db
 *.sqlite3
 
+# Game logs
+backend/game_logs/
+
 # Logs
 *.log
 npm-debug.log*

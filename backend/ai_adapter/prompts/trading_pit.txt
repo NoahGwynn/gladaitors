@@ -1,0 +1,13 @@
+Turn {tick} of {max_ticks}.
+
+NEWS: "{headline}"
+
+Current prices:
+{prices}
+
+Your portfolio:
+  Cash: £{cash}
+  Holdings: {holdings}
+  Total value: £{total_value}
+
+Respond with your decisions as JSON.

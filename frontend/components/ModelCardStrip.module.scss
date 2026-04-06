@@ -1,0 +1,79 @@
+// ============================================================================
+// ModelCardStrip — compact horizontal model cards for the right panel top
+// ============================================================================
+
+@use '../styles/variables' as *;
+@use '../styles/mixins' as *;
+
+.strip {
+  display: flex;
+  flex-direction: column;
+  gap: $ga-space-sm;
+  padding: $ga-space-md;
+  flex-shrink: 0;
+  border-bottom: 1px solid $ga-border;
+}
+
+.card {
+  @include ga-flex-row($ga-space-sm);
+  justify-content: space-between;
+  padding: $ga-space-sm $ga-space-md;
+  border-radius: $ga-radius-sm;
+  border-left: 3px solid var(--model-colour, $ga-text-muted);
+  background: $ga-bg-surface;
+  transition: opacity $ga-transition-base;
+}
+
+.claude  { --model-colour: #{$ga-model-claude}; }
+.gpt4o   { --model-colour: #{$ga-model-gpt}; }
+.gemini  { --model-colour: #{$ga-model-gemini}; }
+.grok    { --model-colour: #{$ga-model-grok}; }
+
+.eliminated {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+
+.winner {
+  border-color: $ga-ui-gold;
+}
+
+.left {
+  @include ga-flex-row($ga-space-sm);
+}
+
+.dot {
+  @include ga-model-dot(8px);
+}
+
+.name {
+  font-family: $ga-font-ui;
+  font-size: $ga-size-sm;
+  font-weight: 700;
+  color: var(--model-colour, $ga-text-primary);
+}
+
+.right {
+  @include ga-flex-row($ga-space-md);
+}
+
+.score {
+  font-family: $ga-font-mono;
+  font-size: $ga-size-sm;
+  font-weight: 700;
+  color: $ga-text-primary;
+}
+
+.scoreLabel {
+  font-family: $ga-font-ui;
+  font-size: $ga-size-xs;
+  color: $ga-text-muted;
+  margin-left: 2px;
+}
+
+.stats {
+  @include ga-flex-row($ga-space-sm);
+  font-family: $ga-font-mono;
+  font-size: $ga-size-xs;
+  color: $ga-text-secondary;
+}

@@ -26,7 +26,9 @@
 .canvasWrapper {
   width: $ga-layout-canvas-width;
   height: 100%;
+  min-height: 400px;
   position: relative;
+  overflow: hidden;
 }
 
 // Phaser injects a canvas inside this div — it should fill the space

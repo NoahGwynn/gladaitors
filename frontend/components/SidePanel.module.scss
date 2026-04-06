@@ -1,0 +1,15 @@
+// ============================================================================
+// SidePanel — right panel containing model cards + action feed
+// ============================================================================
+
+@use '../styles/variables' as *;
+
+.sidebar {
+  width: $ga-layout-panel-width;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: $ga-bg-void;
+  border-left: 1px solid $ga-border;
+  overflow: hidden;
+}

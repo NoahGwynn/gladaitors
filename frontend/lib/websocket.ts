@@ -2,17 +2,15 @@
 // useGameSocket — WebSocket hook for receiving live game state
 // ============================================================================
 // Connects to the backend WebSocket, parses incoming messages,
-// and updates React state. Components read from the returned gameState.
-// Phaser integration happens in GameContainer via EventEmitter.
-//
-// Usage:
-//   const { gameState, connected } = useGameSocket('ws://localhost:8000/ws');
+// and updates React state. Reconnects with exponential backoff.
 // ============================================================================
 
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { GameState, WSMessage } from '@/lib/types';
+
+const MAX_RECONNECT_DELAY = 10_000; // 10 seconds max
 
 interface UseGameSocketReturn {
   gameState: GameState | null;
@@ -23,37 +21,41 @@ export function useGameSocket(url: string): UseGameSocketReturn {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectDelayRef = useRef(1000);
+  const mountedRef = useRef(true);
 
   const connect = useCallback(() => {
-    // Don't create duplicate connections
+    if (!mountedRef.current) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     const ws = new WebSocket(url);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      if (!mountedRef.current) return;
       setConnected(true);
+      reconnectDelayRef.current = 1000; // Reset backoff on successful connect
     };
 
     ws.onmessage = (event) => {
+      if (!mountedRef.current) return;
       try {
         const message: WSMessage = JSON.parse(event.data);
-
-        if (message.type === 'tick' && message.state) {
-          setGameState(message.state);
-        } else if (message.type === 'game_over' && message.state) {
+        if ((message.type === 'tick' || message.type === 'game_over') && message.state) {
           setGameState(message.state);
         }
       } catch {
-        // Silently ignore malformed messages
+        // Ignore malformed messages
       }
     };
 
     ws.onclose = () => {
+      if (!mountedRef.current) return;
       setConnected(false);
-      // Reconnect after 2 seconds
-      reconnectTimeoutRef.current = setTimeout(connect, 2000);
+      // Exponential backoff: 1s, 2s, 4s, 8s, 10s (capped)
+      reconnectTimeoutRef.current = setTimeout(connect, reconnectDelayRef.current);
+      reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, MAX_RECONNECT_DELAY);
     };
 
     ws.onerror = () => {
@@ -62,14 +64,17 @@ export function useGameSocket(url: string): UseGameSocketReturn {
   }, [url]);
 
   useEffect(() => {
+    mountedRef.current = true;
     connect();
 
     return () => {
-      // Clean up on unmount
+      mountedRef.current = false;
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
       wsRef.current?.close();
+      wsRef.current = null;
     };
   }, [connect]);
 

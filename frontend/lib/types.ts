@@ -20,7 +20,7 @@ export type BadgeStatus =
   | 'winner'
   | 'eliminated';
 
-/** Model identifier — matches backend model names */
+/** Model identifier — matches backend MODEL_IDS values */
 export type ModelId = 'claude' | 'gpt4o' | 'gemini' | 'grok';
 
 /** Which challenge is currently running */
@@ -34,20 +34,19 @@ export type ChallengeType = 'territory_war' | 'trading_pit';
 /** Per-model state, rendered in ModelPanel components */
 export interface ModelState {
   id: ModelId;
-  name: string;                              // Display name (e.g. "Claude")
-  colour: string;                            // Hex colour from config
+  name: string;
+  colour: string;
   status: BadgeStatus;
-  primary_metric: number;                    // Territory % or portfolio value
-  primary_metric_label: string;              // "Territory" or "Portfolio"
-  stats: Record<string, string | number>;    // Secondary stats (challenge-specific)
-  last_action: string;                       // Human-readable last action
+  primary_metric: number;
+  primary_metric_label: string;
+  stats: Record<string, string | number>;
+  last_action: string;
 }
 
 /** A single game event for the event log */
 export interface GameEvent {
   tick: number;
   message: string;
-  model_id?: ModelId;                        // Optional — for colour-coding
 }
 
 /** Complete game state received from backend each tick */
@@ -58,7 +57,7 @@ export interface GameState {
   challenge: ChallengeType;
   models: ModelState[];
   events: GameEvent[];
-  canvas_data: Record<string, unknown>;      // Passed directly to Phaser scene
+  canvas_data: Record<string, unknown>;
 }
 
 
@@ -66,13 +65,10 @@ export interface GameState {
 // WEBSOCKET MESSAGES
 // ----------------------------------------------------------------------------
 
-/** Message types sent by the backend */
 export type WSMessageType = 'tick' | 'game_over';
 
-/** WebSocket message envelope */
 export interface WSMessage {
   type: WSMessageType;
   tick?: number;
   state?: GameState;
-  results?: unknown[];
 }

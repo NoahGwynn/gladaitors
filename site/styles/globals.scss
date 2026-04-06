@@ -1,0 +1,57 @@
+@use 'variables' as *;
+
+:root {
+  --bg-void: #{$bg-void};
+  --bg-surface: #{$bg-surface};
+  --bg-elevated: #{$bg-elevated};
+  --border: #{$border};
+  --text-primary: #{$text-primary};
+  --text-secondary: #{$text-secondary};
+  --ui-accent: #{$ui-accent};
+  --claude: #{$model-claude};
+  --gpt: #{$model-gpt};
+  --gemini: #{$model-gemini};
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  background: $bg-void;
+  color: $text-primary;
+  font-family: $font-ui;
+  font-size: $size-base;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: $ui-accent;
+  text-decoration: none;
+  &:hover { text-decoration: underline; }
+}
+
+button {
+  font-family: $font-ui;
+  cursor: pointer;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: $bg-void;
+}
+
+::-webkit-scrollbar-thumb {
+  background: $border;
+  border-radius: 3px;
+}

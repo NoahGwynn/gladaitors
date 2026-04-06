@@ -9,7 +9,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
-from ai_adapter.adapter import AIAdapter, build_territory_war_prompt
+from ai_adapter.adapter import AIAdapter, build_territory_war_prompts
 from ai_adapter.schemas import TerritoryWarResponse
 from game_engine.territory_war import TerritoryWarEngine
 
@@ -28,7 +28,7 @@ def print_result(result):
 
     if result.response:
         for a in result.response.get("actions", []):
-            parts = [f"Unit {a['unit_id']}: {a['action']}"]
+            parts = [f"Piece {a['unit_id']}: {a['action']}"]
             if a.get("direction"):
                 parts.append(a["direction"])
             if a.get("target_id"):
@@ -38,20 +38,20 @@ def print_result(result):
 
 
 async def main():
-    engine = TerritoryWarEngine(["Claude", "ChatGPT", "Gemini"])
+    model_names = ["Claude", "ChatGPT", "Gemini"]
+    engine = TerritoryWarEngine(model_names)
     adapter = AIAdapter(response_schema=TerritoryWarResponse)
 
     print("gladAItors -- Territory War Adapter Test")
     print(f"Models: {', '.join(m.name for m in adapter.models)}")
-    print(f"Grid: 20x20, Units per model: 3")
+    print(f"Grid: 20x20, Pieces per model: 3")
 
     state = engine.get_prompt_state()
-    prompt = build_territory_war_prompt(state)
+    prompts = build_territory_war_prompts(state, model_names)
 
-    print(f"\nPrompt length: {len(prompt)} chars")
-    print("Calling all models...")
+    print(f"\nCalling all models...")
 
-    results = await adapter.call_all(prompt)
+    results = await adapter.call_all(prompts)
     for r in results:
         print_result(r)
 

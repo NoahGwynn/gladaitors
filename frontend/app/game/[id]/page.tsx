@@ -1,22 +1,24 @@
 // ============================================================================
-// Game View — server component shell for /game/[id]
+// Game View — dynamic route at /game/[id]
 // ============================================================================
-// Renders the GameContainer client component.
-// The [id] param will eventually map to episode configs.
-// For the pilot, all routes use the same default config.
+// Supports /game/territory-war and /game/trading-pit.
+// 'use client' with SSR disabled — localhost producer tool.
 // ============================================================================
 
-import GameContainer from '@/components/GameContainer';
+'use client';
 
-interface GamePageProps {
-  params: Promise<{ id: string }>;
-}
+import { useParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
 
-export default async function GamePage({ params }: GamePageProps) {
-  const { id } = await params;
+const GameContainer = dynamic(
+  () => import('@/components/GameContainer'),
+  { ssr: false },
+);
 
-  // Default to territory_war for the pilot
-  // Eventually this will look up episode config by ID
+export default function GamePage() {
+  const params = useParams();
+  const id = params.id as string;
+
   const challengeType = id === 'trading-pit' ? 'trading_pit' as const : 'territory_war' as const;
   const episodeTitle = challengeType === 'territory_war'
     ? 'Episode 1 \u00B7 Territory War'

@@ -44,7 +44,7 @@ export default function GameHeader({
 
       <div className={styles.right}>
         <div className={styles.turnCounter}>
-          Turn {tick} / {maxTicks}
+          Round {tick + 1} / {maxTicks}
         </div>
         <div className={styles.clock}>
           {formatTime(elapsedSeconds)}

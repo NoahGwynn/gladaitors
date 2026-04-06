@@ -1,0 +1,300 @@
+@use '../../../styles/variables' as *;
+
+.page {
+  max-width: $max-width;
+  margin: 0 auto;
+  padding: $space-xl $space-lg;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: $space-2xl;
+}
+
+.title {
+  font-size: $size-3xl;
+  font-weight: 800;
+  margin-bottom: $space-sm;
+}
+
+.subtitle {
+  font-size: $size-md;
+  color: $text-secondary;
+}
+
+// --- Form ---
+
+.form {
+  max-width: 700px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.label {
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-secondary;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.input {
+  font-family: $font-ui;
+  font-size: $size-base;
+  padding: $space-md;
+  border-radius: $radius-md;
+  border: 1px solid $border;
+  background: $bg-surface;
+  color: $text-primary;
+  outline: none;
+  transition: border-color $transition-fast;
+
+  &:focus {
+    border-color: $ui-accent;
+  }
+
+  &::placeholder {
+    color: $text-muted;
+  }
+}
+
+.textarea {
+  @extend .input;
+  resize: vertical;
+  min-height: 80px;
+}
+
+// --- Model position assignments ---
+
+.positions {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+}
+
+.positionRow {
+  display: flex;
+  gap: $space-md;
+  align-items: center;
+}
+
+.modelSelect {
+  @extend .input;
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.positionInput {
+  @extend .input;
+  flex: 1;
+}
+
+.modelDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.removeButton {
+  font-size: $size-sm;
+  color: $text-muted;
+  background: none;
+  border: none;
+  padding: $space-xs;
+  &:hover { color: $ui-danger; }
+}
+
+.addModel {
+  font-size: $size-sm;
+  color: $ui-accent;
+  background: none;
+  border: 1px dashed $border;
+  border-radius: $radius-sm;
+  padding: $space-sm $space-md;
+  align-self: flex-start;
+  &:hover { border-color: $ui-accent; }
+}
+
+// --- Round selector ---
+
+.roundSelector {
+  display: flex;
+  gap: $space-sm;
+}
+
+.roundOption {
+  font-family: $font-mono;
+  font-size: $size-base;
+  font-weight: 600;
+  padding: $space-sm $space-lg;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-surface;
+  color: $text-secondary;
+  transition: all $transition-fast;
+
+  &:hover {
+    border-color: $ui-accent;
+    color: $text-primary;
+  }
+}
+
+.roundOptionActive {
+  border-color: $ui-accent;
+  background: rgba($ui-accent, 0.15);
+  color: $text-primary;
+}
+
+// --- Submit ---
+
+.submitRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: $space-md;
+}
+
+.cost {
+  font-family: $font-mono;
+  font-size: $size-sm;
+  color: $ui-gold;
+}
+
+.submitButton {
+  font-size: $size-md;
+  font-weight: 600;
+  padding: $space-md $space-2xl;
+  border-radius: $radius-md;
+  border: none;
+  background: $ui-accent;
+  color: white;
+  transition: opacity $transition-fast;
+
+  &:hover { opacity: 0.9; }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+// --- Debate display ---
+
+.debateContainer {
+  max-width: 700px;
+  margin: $space-2xl auto 0;
+}
+
+.roundLabel {
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: $space-xl 0 $space-md;
+  text-align: center;
+}
+
+.argument {
+  padding: $space-lg;
+  margin-bottom: $space-md;
+  border-radius: $radius-md;
+  background: $bg-card;
+  border-left: 3px solid var(--model-colour, $text-muted);
+}
+
+.argumentHeader {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  margin-bottom: $space-sm;
+}
+
+.argumentModel {
+  font-weight: 700;
+  font-size: $size-md;
+  color: var(--model-colour, $text-primary);
+}
+
+.argumentPosition {
+  font-size: $size-sm;
+  color: $text-secondary;
+  font-style: italic;
+}
+
+.argumentContent {
+  font-size: $size-base;
+  color: $text-primary;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.refusal {
+  color: $ui-warning;
+  font-style: italic;
+}
+
+.generating {
+  text-align: center;
+  padding: $space-2xl;
+  color: $text-secondary;
+  font-size: $size-md;
+}
+
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid $border;
+  border-top-color: $ui-accent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: $space-sm;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+// --- Share ---
+
+.shareRow {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+  margin-top: $space-xl;
+  padding: $space-md;
+  border-radius: $radius-md;
+  background: $bg-surface;
+  border: 1px solid $border;
+}
+
+.shareLink {
+  flex: 1;
+  font-family: $font-mono;
+  font-size: $size-sm;
+  color: $text-secondary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.copyButton {
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-sm $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-primary;
+  &:hover { background: $bg-surface; }
+}

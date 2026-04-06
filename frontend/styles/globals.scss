@@ -64,7 +64,7 @@
 html,
 body {
   height: 100%;
-  overflow: hidden;  // Game view is fixed — no page scroll
+  overflow: auto;
   background: $ga-bg-void;
   color: $ga-text-primary;
   font-family: $ga-font-ui;
