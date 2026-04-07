@@ -1,0 +1,96 @@
+@use '../styles/variables' as *;
+
+.wrapper {
+  position: relative;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: $text-muted;
+  cursor: pointer;
+  transition: all $transition-fast;
+  &:hover {
+    color: $text-primary;
+  }
+}
+
+// Primary share button variant (full width, accent)
+.triggerPrimary {
+  width: 100%;
+  font-size: $size-md;
+  font-weight: 600;
+  padding: $space-md;
+  border-radius: $radius-md;
+  border: none;
+  background: $ui-accent;
+  color: white;
+  cursor: pointer;
+  transition: opacity $transition-fast;
+  &:hover { opacity: 0.9; }
+}
+
+// Icon-only variant
+.triggerIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-sm;
+  &:hover { background: $bg-elevated; }
+}
+
+.dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  min-width: 200px;
+  background: $bg-surface;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  padding: $space-xs 0;
+  animation: dropIn 0.15s ease;
+}
+
+// For primary button, dropdown appears above
+.dropdownAbove {
+  bottom: calc(100% + 6px);
+  top: auto;
+}
+
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  width: 100%;
+  padding: $space-sm $space-md;
+  border: none;
+  background: transparent;
+  color: $text-primary;
+  font-family: $font-ui;
+  font-size: $size-sm;
+  cursor: pointer;
+  text-align: left;
+  transition: background $transition-fast;
+  &:hover { background: $bg-elevated; }
+}
+
+.optionIcon {
+  color: $text-muted;
+  flex-shrink: 0;
+}
+
+.copied {
+  font-size: $size-xs;
+  font-weight: 600;
+  color: $ui-success;
+  padding: $space-sm $space-md;
+  text-align: center;
+}

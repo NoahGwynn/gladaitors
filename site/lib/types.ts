@@ -12,18 +12,20 @@ export interface DebateArgument {
   refusal_reason?: string;
 }
 
-/** A complete stored debate */
+/** A stored debate */
 export interface Debate {
   id: string;
-  user_id: string;
+  creator_user_id?: string;
+  creator_session_id?: string;
   topic: string;
-  positions: Record<string, string>;  // model_id → assigned position
-  models: string[];                   // model_ids used
+  positions: Record<string, string>;
+  models: string[];
   rounds: number;
   context?: string;
   arguments: DebateArgument[];
+  is_complete: boolean;
   created_at: string;
-  is_public: boolean;
+  expires_at?: string;
 }
 
 /** User profile with token balance */

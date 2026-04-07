@@ -1,35 +1,69 @@
-@use '../../../styles/variables' as *;
+@use "../../../styles/variables" as *;
+
+// ============================================================================
+// Two-panel layout: form (left) + debate (right)
+// ============================================================================
 
 .page {
-  max-width: $max-width;
-  margin: 0 auto;
-  padding: $space-xl $space-lg;
+  display: flex;
+  height: calc(100vh - $nav-height);
+  overflow: hidden;
 }
 
-.header {
-  text-align: center;
-  margin-bottom: $space-2xl;
-}
+// --- Left panel: form ---
 
-.title {
-  font-size: $size-3xl;
-  font-weight: 800;
-  margin-bottom: $space-sm;
-}
-
-.subtitle {
-  font-size: $size-md;
-  color: $text-secondary;
-}
-
-// --- Form ---
-
-.form {
-  max-width: 700px;
-  margin: 0 auto;
+.formPanel {
+  width: 360px;
+  flex-shrink: 0;
+  border-right: 1px solid $border;
+  background: $bg-surface;
+  overflow-y: auto;
+  padding: $space-lg;
   display: flex;
   flex-direction: column;
-  gap: $space-lg;
+  gap: $space-md;
+
+  @media (max-width: 900px) {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid $border;
+    max-height: 50vh;
+  }
+}
+
+.formHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $space-sm;
+}
+
+.formTitle {
+  font-size: $size-xl;
+  font-weight: 800;
+}
+
+.newDebateButton {
+  font-size: $size-xs;
+  font-weight: 600;
+  padding: $space-xs $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-secondary;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all $transition-fast;
+  &:hover {
+    color: $text-primary;
+    border-color: rgba($ui-accent, 0.4);
+  }
+}
+
+.formSubtitle {
+  font-size: $size-sm;
+  color: $text-secondary;
+  margin-bottom: $space-sm;
 }
 
 .field {
@@ -38,63 +72,155 @@
   gap: $space-sm;
 }
 
+.fieldRow {
+  display: flex;
+  gap: $space-md;
+}
+
 .label {
   font-size: $size-sm;
   font-weight: 600;
   color: $text-secondary;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
-.input {
+.topicInput {
   font-family: $font-ui;
   font-size: $size-base;
   padding: $space-md;
   border-radius: $radius-md;
   border: 1px solid $border;
-  background: $bg-surface;
+  background: $bg-elevated;
   color: $text-primary;
   outline: none;
   transition: border-color $transition-fast;
+  &:focus { border-color: rgba($ui-accent, 0.7); }
+  &::placeholder { color: $text-muted; }
+  &:disabled { opacity: 0.5; }
+}
 
-  &:focus {
-    border-color: $ui-accent;
-  }
-
-  &::placeholder {
-    color: $text-muted;
-  }
+.input {
+  font-family: $font-ui;
+  font-size: $size-sm;
+  padding: $space-sm $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-primary;
+  outline: none;
+  transition: border-color $transition-fast;
+  &:focus { border-color: rgba($ui-accent, 0.7); }
+  &::placeholder { color: $text-muted; }
+  &:disabled { opacity: 0.5; }
 }
 
 .textarea {
-  @extend .input;
+  font-family: $font-ui;
+  font-size: $size-sm;
+  padding: $space-sm $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-primary;
+  outline: none;
   resize: vertical;
-  min-height: 80px;
+  min-height: 60px;
+  margin-top: $space-sm;
+  &:focus { border-color: rgba($ui-accent, 0.7); }
+  &::placeholder { color: $text-muted; }
+  &:disabled { opacity: 0.5; }
 }
 
-// --- Model position assignments ---
+// --- Optional section ---
 
-.positions {
-  display: flex;
-  flex-direction: column;
-  gap: $space-md;
+.optionalSection {
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  padding: $space-md;
+  background: $bg-elevated;
+
+  .textarea {
+    width: 100%;
+    margin-top: $space-sm;
+    box-sizing: border-box;
+  }
 }
 
-.positionRow {
+.optionalSummary {
+  font-size: $size-sm;
+  color: $text-muted;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
   display: flex;
-  gap: $space-md;
   align-items: center;
+  gap: $space-xs;
+  &::-webkit-details-marker { display: none; }
+  &:hover { color: $text-secondary; }
 }
 
-.modelSelect {
-  @extend .input;
-  width: 140px;
+.detailsChevron {
+  transition: transform $transition-fast;
   flex-shrink: 0;
 }
 
-.positionInput {
-  @extend .input;
+details[open] > .optionalSummary > .detailsChevron {
+  transform: rotate(90deg);
+}
+
+// --- Debater cards ---
+
+.debaterCards {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.debaterCard {
+  padding: $space-md;
+  border-radius: $radius-md;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-left: 3px solid var(--debater-colour, $text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.debaterHeader {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+}
+
+.modelSelect {
+  font-family: $font-ui;
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-xs $space-sm;
+  border-radius: $radius-sm;
+  border: 1px solid transparent;
+  background: transparent;
+  color: $text-primary;
+  outline: none;
+  cursor: pointer;
   flex: 1;
+  &:focus { border-color: $border; }
+  &:disabled { opacity: 0.5; }
+}
+
+.positionInput {
+  font-family: $font-ui;
+  font-size: $size-sm;
+  padding: $space-sm $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-surface;
+  color: $text-primary;
+  outline: none;
+  width: 100%;
+  &:focus { border-color: rgba($ui-accent, 0.7); }
+  &::placeholder { color: $text-muted; }
+  &:disabled { opacity: 0.5; }
 }
 
 .modelDot {
@@ -109,8 +235,10 @@
   color: $text-muted;
   background: none;
   border: none;
-  padding: $space-xs;
-  &:hover { color: $ui-danger; }
+  padding: 2px 6px;
+  margin-left: auto;
+  border-radius: 3px;
+  &:hover { color: $ui-danger; background: rgba($ui-danger, 0.1); }
 }
 
 .addModel {
@@ -119,39 +247,89 @@
   background: none;
   border: 1px dashed $border;
   border-radius: $radius-sm;
-  padding: $space-sm $space-md;
-  align-self: flex-start;
-  &:hover { border-color: $ui-accent; }
+  padding: $space-sm;
+  width: 100%;
+  text-align: center;
+  &:hover {
+    border-color: $ui-accent;
+    background: rgba($ui-accent, 0.05);
+  }
+}
+
+.lockedOption {
+  font-size: $size-sm;
+  color: $text-muted;
+  background: none;
+  border: 1px dashed $border;
+  border-radius: $radius-sm;
+  padding: $space-sm;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-sm;
+  &:hover {
+    border-color: $ui-accent;
+    color: $text-secondary;
+    background: rgba($ui-accent, 0.05);
+  }
+}
+
+.lockedBadge {
+  font-size: 10px;
+  font-weight: 600;
+  color: $ui-accent;
+  background: rgba($ui-accent, 0.15);
+  padding: 1px 6px;
+  border-radius: 3px;
 }
 
 // --- Round selector ---
 
 .roundSelector {
   display: flex;
-  gap: $space-sm;
+  gap: $space-xs;
 }
 
 .roundOption {
   font-family: $font-mono;
-  font-size: $size-base;
+  font-size: $size-sm;
   font-weight: 600;
-  padding: $space-sm $space-lg;
+  padding: $space-xs $space-md;
   border-radius: $radius-sm;
   border: 1px solid $border;
-  background: $bg-surface;
-  color: $text-secondary;
+  background: $bg-elevated;
+  color: $text-muted;
   transition: all $transition-fast;
-
   &:hover {
-    border-color: $ui-accent;
+    border-color: rgba($ui-accent, 0.6);
     color: $text-primary;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 }
 
 .roundOptionActive {
-  border-color: $ui-accent;
-  background: rgba($ui-accent, 0.15);
+  border-color: rgba($ui-accent, 0.6);
+  background: rgba($ui-accent, 0.12);
   color: $text-primary;
+}
+
+.roundOptionLocked {
+  position: relative;
+  color: $text-muted;
+  opacity: 0.6;
+  &:hover {
+    opacity: 0.8;
+    border-color: rgba($ui-accent, 0.4);
+  }
+}
+
+.lockIcon {
+  margin-left: 3px;
+  opacity: 0.6;
 }
 
 // --- Submit ---
@@ -160,48 +338,167 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: $space-md;
+  margin-top: $space-sm;
 }
 
 .cost {
   font-family: $font-mono;
-  font-size: $size-sm;
+  font-size: $size-xs;
   color: $ui-gold;
 }
 
 .submitButton {
-  font-size: $size-md;
+  font-size: $size-sm;
   font-weight: 600;
-  padding: $space-md $space-2xl;
-  border-radius: $radius-md;
+  padding: $space-sm $space-lg;
+  border-radius: $radius-sm;
   border: none;
   background: $ui-accent;
   color: white;
   transition: opacity $transition-fast;
-
-  &:hover { opacity: 0.9; }
+  &:hover {
+    opacity: 0.9;
+  }
   &:disabled {
     opacity: 0.4;
     cursor: not-allowed;
   }
 }
 
-// --- Debate display ---
+// ============================================================================
+// Right panel: debate thread
+// ============================================================================
 
-.debateContainer {
-  max-width: 700px;
-  margin: $space-2xl auto 0;
+.debatePanel {
+  flex: 1;
+  overflow-y: auto;
+  padding: $space-xl;
+  display: flex;
+  flex-direction: column;
+
+  @media (max-width: 900px) {
+    padding: $space-md;
+  }
+}
+
+.debateEmpty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: $text-muted;
+  gap: $space-md;
+  text-align: center;
+}
+
+.emptyIcon {
+  width: 80px;
+  height: auto;
+  opacity: 0.2;
+}
+
+.emptyText {
+  font-size: $size-md;
+  max-width: 300px;
+  line-height: 1.5;
+}
+
+.threadHeader {
+  display: flex;
+  justify-content: flex-end;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.threadShareIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-sm;
+  border: none;
+  background: transparent;
+  color: $text-muted;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    color: $text-primary;
+    background: $bg-elevated;
+  }
+}
+
+.copiedLabel {
+  font-size: $size-xs;
+  font-weight: 600;
+  color: $ui-success;
+}
+
+.debateHeader {
+  max-width: 720px;
+  margin: 0 auto $space-md;
+  text-align: center;
+  position: relative;
+}
+
+.headerShareIcon {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.debateTitle {
+  font-size: $size-xl;
+  font-weight: 700;
+  margin-bottom: $space-sm;
+}
+
+.debatePositions {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.debatePosition {
+  font-size: $size-sm;
+  font-weight: 500;
+}
+
+.debateThread {
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+// --- Round divider ---
+
+.roundDivider {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+  margin: $space-xl 0 $space-lg;
+
+  &::before,
+  &::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: $border;
+  }
 }
 
 .roundLabel {
-  font-size: $size-sm;
+  font-size: $size-xs;
   font-weight: 600;
   color: $text-muted;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  margin: $space-xl 0 $space-md;
-  text-align: center;
+  white-space: nowrap;
 }
+
+// --- Argument card ---
 
 .argument {
   padding: $space-lg;
@@ -209,6 +506,22 @@
   border-radius: $radius-md;
   background: $bg-card;
   border-left: 3px solid var(--model-colour, $text-muted);
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.streaming {
+  border-left-style: solid;
 }
 
 .argumentHeader {
@@ -225,16 +538,62 @@
 }
 
 .argumentPosition {
-  font-size: $size-sm;
-  color: $text-secondary;
+  font-size: $size-xs;
+  color: $text-muted;
   font-style: italic;
+}
+
+.streamingDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--model-colour, $ui-accent);
+  animation: pulse 1s ease-in-out infinite;
+  margin-left: auto;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
 }
 
 .argumentContent {
   font-size: $size-base;
   color: $text-primary;
   line-height: 1.7;
-  white-space: pre-wrap;
+
+  p {
+    margin: 0 0 $space-sm;
+  }
+  p:last-child {
+    margin-bottom: 0;
+  }
+  strong {
+    font-weight: 700;
+  }
+  em {
+    font-style: italic;
+  }
+  ul,
+  ol {
+    margin: $space-sm 0;
+    padding-left: $space-lg;
+  }
+  li {
+    margin-bottom: $space-xs;
+  }
+  blockquote {
+    margin: $space-sm 0;
+    padding-left: $space-md;
+    border-left: 2px solid $border;
+    color: $text-secondary;
+  }
 }
 
 .refusal {
@@ -242,53 +601,75 @@
   font-style: italic;
 }
 
-.generating {
-  text-align: center;
-  padding: $space-2xl;
+// --- Thinking indicator ---
+
+.thinkingIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-sm;
+  padding: $space-lg;
   color: $text-secondary;
-  font-size: $size-md;
+  font-size: $size-sm;
 }
 
 .spinner {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border: 2px solid $border;
-  border-top-color: $ui-accent;
-  border-radius: 50%;
+  color: $ui-accent;
   animation: spin 0.8s linear infinite;
-  margin-right: $space-sm;
-  vertical-align: middle;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-// --- Share ---
+// --- Post-debate ---
 
-.shareRow {
-  display: flex;
-  align-items: center;
-  gap: $space-md;
-  margin-top: $space-xl;
-  padding: $space-md;
+.postDebate {
+  max-width: 720px;
+  width: 100%;
+  margin: $space-xl auto 0;
+  padding: $space-lg;
   border-radius: $radius-md;
   background: $bg-surface;
   border: 1px solid $border;
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
 }
 
-.shareLink {
-  flex: 1;
-  font-family: $font-mono;
+.postDebateText {
   font-size: $size-sm;
   color: $text-secondary;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.copyButton {
+.shareButton {
+  width: 100%;
+  font-size: $size-md;
+  font-weight: 600;
+  padding: $space-md;
+  border-radius: $radius-md;
+  border: none;
+  background: $ui-accent;
+  color: white;
+  cursor: pointer;
+  transition: opacity $transition-fast;
+  &:hover { opacity: 0.9; }
+}
+
+.postDebateActions {
+  display: flex;
+  gap: $space-sm;
+  width: 100%;
+
+  > * {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+.secondaryButton {
   font-size: $size-sm;
   font-weight: 600;
   padding: $space-sm $space-md;
@@ -296,5 +677,191 @@
   border: 1px solid $border;
   background: $bg-elevated;
   color: $text-primary;
-  &:hover { background: $bg-surface; }
+  transition: background $transition-fast;
+  &:hover {
+    background: $bg-surface;
+  }
+}
+
+.savePrompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-md;
+  padding: $space-md;
+  border-radius: $radius-sm;
+  background: rgba($ui-accent, 0.08);
+  border: 1px solid rgba($ui-accent, 0.25);
+  font-size: $size-sm;
+  color: $text-secondary;
+}
+
+.postDebateActions {
+  display: flex;
+  gap: $space-sm;
+  flex-wrap: wrap;
+}
+
+.saveButton {
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-xs $space-md;
+  border-radius: $radius-sm;
+  border: none;
+  background: $ui-accent;
+  color: white;
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+// --- Debate history ---
+
+.historySection {
+  margin-top: $space-lg;
+  padding-top: $space-lg;
+  border-top: 1px solid $border;
+}
+
+.historyHeader {
+  margin-bottom: $space-sm;
+}
+
+.historyList {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.historyItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: $space-sm $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid transparent;
+  background: $bg-elevated;
+  text-align: left;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    border-color: $border;
+    background: $bg-card;
+  }
+}
+
+.historyItemDisabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.historyItemActive {
+  border-color: rgba($ui-accent, 0.5);
+  background: rgba($ui-accent, 0.08);
+}
+
+.historyItemRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-xs;
+}
+
+.historyTopic {
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-primary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.historyDelete {
+  font-size: $size-xs;
+  color: transparent;
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all $transition-fast;
+
+  .historyItem:hover & {
+    color: $text-muted;
+  }
+
+  &:hover {
+    color: $ui-danger !important;
+    background: rgba($ui-danger, 0.1);
+  }
+}
+
+.historyMeta {
+  font-size: $size-xs;
+  color: $text-muted;
+}
+
+.confirmDelete {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  font-size: $size-sm;
+  color: $text-secondary;
+}
+
+.confirmDeleteActions {
+  display: flex;
+  gap: $space-xs;
+}
+
+.confirmYes {
+  font-size: $size-xs;
+  font-weight: 600;
+  padding: $space-xs $space-sm;
+  border-radius: 3px;
+  border: none;
+  background: $ui-danger;
+  color: white;
+  &:hover {
+    opacity: 0.9;
+  }
+}
+
+.confirmNo {
+  font-size: $size-xs;
+  padding: $space-xs $space-sm;
+  border-radius: 3px;
+  border: 1px solid $border;
+  background: none;
+  color: $text-secondary;
+  &:hover {
+    background: $bg-elevated;
+  }
+}
+
+.continueDebate {
+  max-width: 720px;
+  width: 100%;
+  margin: $space-xl auto 0;
+  padding: $space-lg;
+  border-radius: $radius-md;
+  background: $bg-surface;
+  border: 1px solid $border;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-md;
+  text-align: center;
+}
+
+.continueText {
+  font-size: $size-sm;
+  color: $text-secondary;
+}
+
+.error {
+  color: $ui-danger;
+  font-size: $size-sm;
+  margin-top: $space-sm;
 }

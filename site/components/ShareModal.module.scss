@@ -1,0 +1,139 @@
+@use '../styles/variables' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: $bg-surface;
+  border: 1px solid $border;
+  border-radius: $radius-lg;
+  padding: $space-xl;
+  width: 100%;
+  max-width: 440px;
+  position: relative;
+}
+
+.close {
+  position: absolute;
+  top: $space-md;
+  right: $space-md;
+  background: none;
+  border: none;
+  color: $text-muted;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: $radius-sm;
+  &:hover { color: $text-primary; background: $bg-elevated; }
+}
+
+.title {
+  font-size: $size-lg;
+  font-weight: 700;
+  margin-bottom: $space-lg;
+  text-align: center;
+}
+
+// --- Preview card ---
+
+.preview {
+  padding: $space-md;
+  border-radius: $radius-md;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  margin-bottom: $space-xl;
+  text-align: center;
+}
+
+.previewTopic {
+  font-size: $size-md;
+  font-weight: 600;
+  color: $text-primary;
+  margin-bottom: $space-xs;
+}
+
+.previewModels {
+  font-size: $size-sm;
+  color: $text-secondary;
+}
+
+// --- Share options grid ---
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: $space-sm;
+  margin-bottom: $space-lg;
+}
+
+.option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-xs;
+  padding: $space-md $space-sm;
+  border-radius: $radius-md;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-primary;
+  font-family: $font-ui;
+  font-size: $size-xs;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    border-color: rgba($ui-accent, 0.4);
+    background: $bg-card;
+  }
+}
+
+.optionIcon {
+  color: $text-secondary;
+  font-size: 20px;
+}
+
+// --- Copy link bar ---
+
+.copyBar {
+  display: flex;
+  gap: $space-sm;
+  align-items: center;
+}
+
+.linkInput {
+  flex: 1;
+  font-family: $font-mono;
+  font-size: $size-xs;
+  padding: $space-sm $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-secondary;
+  outline: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.copyButton {
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-sm $space-md;
+  border-radius: $radius-sm;
+  border: none;
+  background: $ui-accent;
+  color: white;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity $transition-fast;
+  &:hover { opacity: 0.9; }
+}
+
+.copiedButton {
+  background: $ui-success;
+}
