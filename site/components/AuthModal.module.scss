@@ -1,0 +1,101 @@
+@use '../styles/variables' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: $bg-surface;
+  border: 1px solid $border;
+  border-radius: $radius-lg;
+  padding: $space-xl;
+  width: 100%;
+  max-width: 400px;
+}
+
+.title {
+  font-size: $size-lg;
+  font-weight: 700;
+  margin-bottom: $space-lg;
+  text-align: center;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+}
+
+.input {
+  font-family: $font-ui;
+  font-size: $size-base;
+  padding: $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-primary;
+  outline: none;
+  &:focus { border-color: $ui-accent; }
+  &::placeholder { color: $text-muted; }
+}
+
+.submitButton {
+  font-size: $size-base;
+  font-weight: 600;
+  padding: $space-md;
+  border-radius: $radius-sm;
+  border: none;
+  background: $ui-accent;
+  color: white;
+  &:hover { opacity: 0.9; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+.switchMode {
+  font-size: $size-sm;
+  color: $text-secondary;
+  text-align: center;
+  margin-top: $space-md;
+
+  button {
+    color: $ui-accent;
+    background: none;
+    border: none;
+    font-size: $size-sm;
+    text-decoration: underline;
+  }
+}
+
+.message {
+  font-size: $size-sm;
+  color: $text-secondary;
+  text-align: center;
+  margin-bottom: $space-sm;
+}
+
+.error {
+  font-size: $size-sm;
+  color: $ui-danger;
+  text-align: center;
+}
+
+.inputError {
+  border-color: $ui-danger;
+}
+
+.close {
+  position: absolute;
+  top: $space-md;
+  right: $space-md;
+  background: none;
+  border: none;
+  color: $text-muted;
+  font-size: $size-lg;
+  &:hover { color: $text-primary; }
+}

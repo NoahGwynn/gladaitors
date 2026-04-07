@@ -1,0 +1,101 @@
+@use '../styles/variables' as *;
+
+.wrapper {
+  position: relative;
+  flex: 1;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  width: 100%;
+  padding: $space-xs $space-sm;
+  border-radius: $radius-sm;
+  border: 1px solid transparent;
+  background: transparent;
+  color: $text-primary;
+  font-family: $font-ui;
+  font-size: $size-sm;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: all $transition-fast;
+
+  &:hover {
+    border-color: $border;
+    background: $bg-surface;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.arrow {
+  margin-left: auto;
+  font-size: 14px;
+  color: $text-muted;
+  transition: transform $transition-fast;
+}
+
+.arrowOpen {
+  transform: rotate(180deg);
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: $bg-surface;
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+  overflow: hidden;
+  animation: dropIn 0.15s ease;
+}
+
+@keyframes dropIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  width: 100%;
+  padding: $space-sm $space-md;
+  border: none;
+  background: transparent;
+  color: $text-primary;
+  font-family: $font-ui;
+  font-size: $size-sm;
+  cursor: pointer;
+  text-align: left;
+  transition: background $transition-fast;
+
+  &:hover {
+    background: $bg-elevated;
+  }
+}
+
+.optionDisabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  &:hover { background: transparent; }
+}
+
+.optionActive {
+  background: $bg-elevated;
+  font-weight: 600;
+}
+
+.optionDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}

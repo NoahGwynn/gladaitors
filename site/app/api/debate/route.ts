@@ -1,11 +1,20 @@
 // ============================================================================
-// POST /api/debate — Generate a debate between AI models
+// POST /api/debate — Generate a debate between AI models (streaming)
 // ============================================================================
-// Calls each model sequentially (each needs to see previous arguments).
-// Returns the full debate as an array of arguments.
+// Calls models sequentially — each sees all previous arguments.
+// Streams events via SSE so the frontend can display responses in real time.
+// Turn order rotates each round so no model always goes first/last.
+//
+// SSE event types:
+//   thinking  — a model is about to respond
+//   token     — a chunk of text from the current model
+//   argument  — a completed argument (full text + metadata)
+//   round     — a round has completed
+//   done      — debate is finished
+//   error     — something went wrong
 // ============================================================================
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
@@ -20,6 +29,9 @@ interface DebateRequest {
   debaters: DebaterInput[];
   rounds: number;
   context?: string;
+  existingArguments?: DebateArgument[];
+  startRound?: number;
+  skipModels?: number;
 }
 
 interface DebateArgument {
@@ -101,123 +113,206 @@ function buildTurnPrompt(
   return prompt;
 }
 
-async function callModel(
-  modelId: string,
+// --- Streaming model calls ---
+
+async function* streamClaude(
   systemPrompt: string,
   turnPrompt: string,
-): Promise<string> {
-  if (modelId === 'claude') {
-    const client = new Anthropic();
-    const response = await client.messages.create({
-      model: MODEL_IDS.claude,
-      max_tokens: 500,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: turnPrompt }],
-    });
-    for (const block of response.content) {
-      if (block.type === 'text' && block.text) return block.text;
+): AsyncGenerator<string> {
+  const client = new Anthropic();
+  const stream = client.messages.stream({
+    model: MODEL_IDS.claude,
+    max_tokens: 8000,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: turnPrompt }],
+  });
+
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+      yield event.delta.text;
     }
-    return '';
   }
+}
 
-  if (modelId === 'gpt4o') {
-    const client = new OpenAI();
-    const response = await client.chat.completions.create({
-      model: MODEL_IDS.gpt4o,
-      max_tokens: 500,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: turnPrompt },
-      ],
-    });
-    return response.choices[0]?.message?.content || '';
+async function* streamGPT(
+  systemPrompt: string,
+  turnPrompt: string,
+): AsyncGenerator<string> {
+  const client = new OpenAI();
+  const stream = await client.chat.completions.create({
+    model: MODEL_IDS.gpt4o,
+    max_tokens: 8000,
+    stream: true,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: turnPrompt },
+    ],
+  });
+
+  for await (const chunk of stream) {
+    const text = chunk.choices[0]?.delta?.content;
+    if (text) yield text;
   }
+}
 
-  if (modelId === 'gemini') {
-    const client = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
-    const response = await client.models.generateContent({
-      model: MODEL_IDS.gemini,
-      contents: turnPrompt,
-      config: {
-        systemInstruction: systemPrompt,
-        maxOutputTokens: 500,
-      },
-    });
-    return response.text || '';
+async function* streamGemini(
+  systemPrompt: string,
+  turnPrompt: string,
+): AsyncGenerator<string> {
+  const client = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY! });
+  // Gemini streaming
+  const response = await client.models.generateContentStream({
+    model: MODEL_IDS.gemini,
+    contents: turnPrompt,
+    config: {
+      systemInstruction: systemPrompt,
+      maxOutputTokens: 8000,
+    },
+  });
+
+  for await (const chunk of response) {
+    const text = chunk.text;
+    if (text) yield text;
   }
+}
 
+function getStreamer(modelId: string) {
+  if (modelId === 'claude') return streamClaude;
+  if (modelId === 'gpt4o') return streamGPT;
+  if (modelId === 'gemini') return streamGemini;
   throw new Error(`Unknown model: ${modelId}`);
 }
 
+// --- Refusal detection ---
+
+const REFUSAL_PATTERNS = [
+  'i cannot argue',
+  "i'm not able to argue",
+  'i must decline',
+  "i can't advocate",
+  "i'm unable to take this position",
+];
+
+function isRefusal(content: string): boolean {
+  const lower = content.toLowerCase();
+  return REFUSAL_PATTERNS.some(p => lower.includes(p));
+}
+
+// --- SSE helpers ---
+
+function sseEvent(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+// --- Main handler ---
+
 export async function POST(request: NextRequest) {
-  try {
-    const body: DebateRequest = await request.json();
-    const { topic, debaters, rounds, context } = body;
+  const body: DebateRequest = await request.json();
+  const { topic, debaters, rounds, context, existingArguments, startRound, skipModels } = body;
 
-    // Validate
-    if (!topic || topic.length > 200) {
-      return NextResponse.json({ error: 'Topic is required (max 200 chars)' }, { status: 400 });
-    }
-    if (!debaters || debaters.length < 2 || debaters.length > 3) {
-      return NextResponse.json({ error: '2 or 3 debaters required' }, { status: 400 });
-    }
-    if (![3, 5, 7].includes(rounds)) {
-      return NextResponse.json({ error: 'Rounds must be 3, 5, or 7' }, { status: 400 });
-    }
-
-    const allArguments: DebateArgument[] = [];
-
-    // Run each round sequentially
-    for (let round = 1; round <= rounds; round++) {
-      // Each model argues in sequence within the round
-      for (const debater of debaters) {
-        const modelName = MODEL_NAMES[debater.modelId] || debater.modelId;
-        const systemPrompt = buildSystemPrompt(
-          modelName, debater.position, topic, rounds, context,
-        );
-        const turnPrompt = buildTurnPrompt(round, rounds, allArguments);
-
-        try {
-          const content = await callModel(debater.modelId, systemPrompt, turnPrompt);
-
-          // Check for refusal patterns
-          const refusalPatterns = [
-            'I cannot argue',
-            'I\'m not able to argue',
-            'I must decline',
-            'I can\'t advocate',
-            'I\'m unable to take this position',
-          ];
-          const isRefusal = refusalPatterns.some(p =>
-            content.toLowerCase().includes(p.toLowerCase())
-          );
-
-          allArguments.push({
-            model_id: debater.modelId,
-            model_name: modelName,
-            round,
-            content,
-            refused: isRefusal,
-            refusal_reason: isRefusal ? content : undefined,
-          });
-        } catch (err) {
-          allArguments.push({
-            model_id: debater.modelId,
-            model_name: modelName,
-            round,
-            content: '',
-            refused: true,
-            refusal_reason: `API error: ${err instanceof Error ? err.message : 'unknown'}`,
-          });
-        }
-      }
-    }
-
-    return NextResponse.json({ arguments: allArguments });
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Internal error' },
-      { status: 500 },
-    );
+  // Validate
+  if (!topic || topic.length > 200) {
+    return new Response(JSON.stringify({ error: 'Topic is required (max 200 chars)' }), {
+      status: 400, headers: { 'Content-Type': 'application/json' },
+    });
   }
+  if (!debaters || debaters.length < 2 || debaters.length > 3) {
+    return new Response(JSON.stringify({ error: '2 or 3 debaters required' }), {
+      status: 400, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  if (![3, 5, 7].includes(rounds)) {
+    return new Response(JSON.stringify({ error: 'Rounds must be 3, 5, or 7' }), {
+      status: 400, headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      // Seed with existing arguments if resuming
+      const allArguments: DebateArgument[] = existingArguments ? [...existingArguments] : [];
+      const effectiveStartRound = startRound || 1;
+      const effectiveSkipModels = skipModels || 0;
+
+      try {
+        for (let round = effectiveStartRound; round <= rounds; round++) {
+          // Same order every round — as the user configured them
+          for (let di = 0; di < debaters.length; di++) {
+            // Skip models already completed in the resumed round
+            if (round === effectiveStartRound && di < effectiveSkipModels) continue;
+            const debater = debaters[di];
+            const modelName = MODEL_NAMES[debater.modelId] || debater.modelId;
+            const systemPrompt = buildSystemPrompt(modelName, debater.position, topic, rounds, context);
+            const turnPrompt = buildTurnPrompt(round, rounds, allArguments);
+
+            // Signal: model is thinking
+            controller.enqueue(encoder.encode(sseEvent('thinking', {
+              model_id: debater.modelId,
+              model_name: modelName,
+              round,
+            })));
+
+            let fullContent = '';
+
+            try {
+              const streamer = getStreamer(debater.modelId);
+              for await (const token of streamer(systemPrompt, turnPrompt)) {
+                fullContent += token;
+                controller.enqueue(encoder.encode(sseEvent('token', {
+                  model_id: debater.modelId,
+                  token,
+                })));
+              }
+            } catch (err) {
+              fullContent = '';
+              controller.enqueue(encoder.encode(sseEvent('error', {
+                model_id: debater.modelId,
+                model_name: modelName,
+                round,
+                message: err instanceof Error ? err.message : 'API error',
+              })));
+            }
+
+            const refused = isRefusal(fullContent);
+            const argument: DebateArgument = {
+              model_id: debater.modelId,
+              model_name: modelName,
+              round,
+              content: fullContent,
+              refused,
+              refusal_reason: refused ? fullContent : undefined,
+            };
+            allArguments.push(argument);
+
+            // Signal: argument complete
+            controller.enqueue(encoder.encode(sseEvent('argument', argument)));
+          }
+
+          // Signal: round complete
+          controller.enqueue(encoder.encode(sseEvent('round', { round })));
+        }
+
+        // Signal: debate complete
+        controller.enqueue(encoder.encode(sseEvent('done', {
+          total_arguments: allArguments.length,
+        })));
+
+      } catch (err) {
+        controller.enqueue(encoder.encode(sseEvent('error', {
+          message: err instanceof Error ? err.message : 'Internal error',
+        })));
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
 }

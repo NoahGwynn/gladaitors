@@ -15,12 +15,10 @@
 }
 
 .logo {
-  font-size: $size-lg;
-  font-weight: 800;
-  color: $text-primary;
-  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
   text-decoration: none;
-  &:hover { text-decoration: none; }
+  &:hover { text-decoration: none; opacity: 0.9; }
 }
 
 .links {
