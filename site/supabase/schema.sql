@@ -218,6 +218,32 @@ begin
 end;
 $$ language plpgsql security definer;
 
+-- Credit tokens back to a session balance (used for refunds — see refundTokens
+-- in app/api/debate/route.ts when a model is pre-deducted then refuses to engage).
+-- Returns the new balance, or 0 if the session row doesn't exist.
+create or replace function public.credit_session_tokens(
+  p_session_id text,
+  p_amount int
+)
+returns int as $$
+declare
+  new_balance int;
+begin
+  if p_amount <= 0 then
+    select token_balance into new_balance from public.sessions where id = p_session_id;
+    return coalesce(new_balance, 0);
+  end if;
+
+  update public.sessions
+  set token_balance = token_balance + p_amount,
+      last_used_at = now()
+  where id = p_session_id
+  returning token_balance into new_balance;
+
+  return coalesce(new_balance, 0);
+end;
+$$ language plpgsql security definer;
+
 -- Coupons
 create table if not exists public.coupons (
   code text primary key,

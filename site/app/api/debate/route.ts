@@ -877,6 +877,18 @@ export async function POST(request: NextRequest) {
     return data === true;
   }
 
+  // Refund N tokens. Used when we pre-deducted before calling a model and the
+  // model then refused to engage (or errored out). Refusals are rare and a
+  // failed refund is not catastrophic — log and continue rather than throwing
+  // mid-stream and aborting the whole round.
+  async function refundTokens(amount: number): Promise<void> {
+    if (amount <= 0) return;
+    const { error } = user
+      ? await supabase.rpc('credit_user_tokens', { p_user_id: user.id, p_amount: amount })
+      : await supabase.rpc('credit_session_tokens', { p_session_id: sessionId, p_amount: amount });
+    if (error) console.error('[TOKEN REFUND] RPC error:', error);
+  }
+
   // -------------------------------------------------------------------------
   // Persistence helpers — server is now the source of truth for the debate
   // row's `arguments` and orchestrator status fields. The orchestrator client
@@ -1024,6 +1036,24 @@ export async function POST(request: NextRequest) {
             currentRound, rounds, di, allArguments, displayNames, revealIdentities,
           );
 
+          // Pre-deduct BEFORE calling the model. Two reasons:
+          //   1. If the user is out of tokens, we never call the model — no
+          //      wasted API spend, no "we generated an argument but couldn't
+          //      bill for it" leak.
+          //   2. Concurrent debates can't double-spend the same balance: the
+          //      deduct RPC is atomic (SQL UPDATE ... WHERE balance >= amount).
+          //
+          // If the model then refuses or errors, we refund via refundTokens
+          // below — refusals are rare so the refund path is cheap.
+          const deducted = await deductTokens(model.tokenCost);
+          if (!deducted) {
+            // Out of tokens — stop the round here. No model call, no argument.
+            controller.enqueue(encoder.encode(sseEvent('insufficient_tokens', {
+              message: 'You ran out of tokens. Top up to continue debating.',
+            })));
+            return; // finally block closes the controller
+          }
+
           // Signal: model is thinking
           controller.enqueue(encoder.encode(sseEvent('thinking', {
             debater_index: di,
@@ -1058,31 +1088,12 @@ export async function POST(request: NextRequest) {
             })));
           }
 
-          // Detect refusal BEFORE deducting tokens. The user shouldn't pay for
-          // an argument that's just the model declining to engage.
+          // Detect refusal AFTER generation. If the model refused or errored,
+          // refund the pre-deducted tokens — the user shouldn't pay for an
+          // argument the model declined to engage with.
           const refused = !modelSucceeded || isRefusal(fullContent);
-
-          // Deduct tokens only when the model produced a real argument (not refused).
-          if (modelSucceeded && !refused) {
-            const deducted = await deductTokens(model.tokenCost);
-            if (!deducted) {
-              // Out of tokens mid-round — emit the argument that was generated, then stop
-              const argument: DebateArgument = {
-                debater_index: di,
-                model_id: debater.modelId,
-                model_name: displayName,
-                round: currentRound,
-                content: fullContent,
-                refused: false,
-              };
-              allArguments.push(argument);
-              await persistArguments(allArguments);
-              controller.enqueue(encoder.encode(sseEvent('argument', argument)));
-              controller.enqueue(encoder.encode(sseEvent('insufficient_tokens', {
-                message: 'You ran out of tokens. Top up to continue debating.',
-              })));
-              return; // finally block closes the controller
-            }
+          if (refused) {
+            await refundTokens(model.tokenCost);
           }
 
           const argument: DebateArgument = {
