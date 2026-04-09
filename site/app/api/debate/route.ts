@@ -674,11 +674,13 @@ Say NO only if the topic asks for:
 - Step-by-step instructions to build weapons, bombs, drugs, or poisons
 - Content sexualising minors
 - How to carry out specific acts of violence or terrorism
-- Doxxing or targeted harassment of named real people
+- Doxxing of real people: revealing private information such as home addresses, phone numbers, workplaces, or personal contact details. NOT including criticism, opinion, or unflattering claims about public figures.
+- Sustained personal attacks intended to harass a specific individual. NOT including disagreement with their work, opinions, products, or public actions.
 
 Say YES for everything else, including:
 - Policy debates about weapons, drugs, war, nuclear deterrence, etc.
 - Controversial opinions on religion, politics, ethics, race, gender
+- Criticism of public figures, politicians, celebrities, brands, companies, platforms, products, or their policies — even harshly worded, one-sided, or unfair
 - Dark humour, taboo subjects, hypothetical scenarios
 - Anything that is a legitimate discussion topic even if uncomfortable
 

@@ -31,11 +31,13 @@ Say NO only if the argument:
 - Provides step-by-step instructions to build weapons, bombs, drugs, or poisons
 - Contains content sexualising minors
 - Provides instructions to carry out specific acts of violence or terrorism
-- Doxxes or targets specific real people for harassment
+- Doxxes a real person: reveals private information such as home addresses, phone numbers, workplaces, or personal contact details. NOT including criticism, opinion, or unflattering claims about public figures.
+- Sustained personal attacks intended to harass a specific individual. NOT including disagreement with their work, opinions, products, or public actions.
 
 Say YES for everything else, including:
 - Provocative or controversial opinions
 - Religious, political, or ethical positions you disagree with
+- Criticism of public figures, politicians, celebrities, brands, companies, platforms, products, or their policies — even harshly worded, one-sided, or unfair
 - Dark humour, taboo subjects, hypothetical scenarios
 - Bad arguments, incoherent text, single-word replies
 - Anything that is a legitimate (if uncomfortable) thing to say in a debate
