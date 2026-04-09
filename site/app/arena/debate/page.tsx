@@ -250,14 +250,42 @@ function DebateArenaContent() {
     return () => panel.removeEventListener('scroll', onScroll);
   }, []);
 
+  // Auto-scroll to keep the cursor visible during token streaming.
+  //
+  // Two distinct scroll triggers:
+  //   - New argument or thinking indicator → smooth scroll to bottom
+  //     (one-shot, cosmetic animation as the next slot announces itself).
+  //   - Token streaming inside the current argument → instant scroll to
+  //     bottom on every token update. Instant avoids smooth-animation
+  //     jank at ~30 token-updates/sec, and matches the natural "follow
+  //     the cursor" feel.
+  //
+  // Both gated by isNearBottomRef so scrolling up to read history is not
+  // interrupted by auto-scroll.
+  //
+  // We track the streaming arg's content length as an effect dependency
+  // so the effect re-runs as the arg grows — without it, the effect only
+  // fires when liveArguments.length changes (per-argument, not per-token).
+  const streamingContentLength = liveArguments[liveArguments.length - 1]?.streaming
+    ? liveArguments[liveArguments.length - 1].content.length
+    : 0;
+
   useEffect(() => {
+    const panel = debatePanelRef.current;
+    if (!panel || !isNearBottomRef.current) return;
+
     const newCount = liveArguments.length;
     const isNew = newCount !== argCountRef.current;
     argCountRef.current = newCount;
-    if ((isNew || currentThinking) && isNearBottomRef.current && debateEndRef.current) {
-      debateEndRef.current.scrollIntoView({ behavior: 'smooth' });
+
+    if (isNew || currentThinking) {
+      // Smooth scroll for the cosmetic case (new bubble appearing).
+      panel.scrollTo({ top: panel.scrollHeight, behavior: 'smooth' });
+    } else if (streamingContentLength > 0) {
+      // Instant scroll to keep the cursor visible during streaming.
+      panel.scrollTop = panel.scrollHeight;
     }
-  }, [liveArguments.length, currentThinking]);
+  }, [liveArguments.length, currentThinking, streamingContentLength]);
 
   // ========================================================================
   // React to orchestrator state transitions
