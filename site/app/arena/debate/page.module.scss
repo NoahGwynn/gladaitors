@@ -1336,11 +1336,16 @@ details[open] > .optionalSummary > .detailsChevron {
 // here for layout consistency with the in-arena debate view.
 // ============================================================================
 
+// Top nav row above the debate header — fills the full wrapper width so
+// the back link sits at the page-content edge, not centered on a narrow
+// strip. (Earlier version constrained this to 720px which made the link
+// visually float in the middle on wide viewports.)
 .sharedTopNav {
-  max-width: 720px;
-  margin: 0 auto $space-md;
+  width: 100%;
+  margin-bottom: $space-md;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
 }
 
 .sharedBackLink {
@@ -1351,7 +1356,7 @@ details[open] > .optionalSummary > .detailsChevron {
   font-weight: 500;
   color: $text-secondary;
   text-decoration: none;
-  padding: $space-xs $space-sm;
+  padding: $space-xs $space-sm $space-xs 4px;
   border-radius: $radius-sm;
   transition: all $transition-fast;
 

@@ -74,7 +74,8 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '40px 24px' }}>
-      {/* Top navigation — back to explore */}
+      {/* Top nav row — back link sits at the actual page-content edge,
+          NOT centered on a narrow strip. Width: fill the wrapper. */}
       <div className={styles.sharedTopNav}>
         <Link href="/explore" className={styles.sharedBackLink}>
           <ChevronLeft size={16} />
