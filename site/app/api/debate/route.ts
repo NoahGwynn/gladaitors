@@ -816,6 +816,19 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Premium models are gated to logged-in users. Anonymous (session-only)
+  // users can only run debates with standard-tier models. The client-side
+  // ModelSelect already prevents picking locked premium options visually,
+  // but we re-enforce here so a crafted request can't bypass the UI.
+  if (!user) {
+    const premiumDebater = debaterModels.find(m => m.tier === 'premium');
+    if (premiumDebater) {
+      return new Response(JSON.stringify({
+        error: `${premiumDebater.name} is only available to signed-in users. Sign up for free to unlock premium models.`,
+      }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
   const priorArguments: DebateArgument[] = existingArguments ? [...existingArguments] : [];
 
   // Auto-assign positions — runs ONCE on the very first call of a new debate.

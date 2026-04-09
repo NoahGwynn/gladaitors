@@ -115,6 +115,35 @@
   white-space: nowrap;
 }
 
+// Locked premium models for anonymous users — visually muted with a
+// "Sign up" lock badge in place of the token cost. Click handler still
+// fires (intercepted in the component) so we can prompt for auth.
+.optionLocked {
+  .optionName {
+    color: $text-muted;
+  }
+
+  .optionDot {
+    opacity: 0.5;
+  }
+}
+
+.optionLockBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba($ui-accent, 0.12);
+  border: 1px solid rgba($ui-accent, 0.3);
+  color: $ui-accent;
+  white-space: nowrap;
+}
+
 .triggerLabel {
   flex: 1;
   white-space: nowrap;

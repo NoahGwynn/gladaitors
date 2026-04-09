@@ -493,6 +493,8 @@ function DebateArenaContent() {
                     value={debater.modelId}
                     onChange={id => updateDebater(i, 'modelId', id)}
                     disabled={generating}
+                    isLoggedIn={isLoggedIn}
+                    onPremiumLocked={() => setShowAuth(true)}
                   />
                   {debaters.length > 2 && !generating && (
                     <button className={styles.removeButton} onClick={() => removeDebater(i)}>

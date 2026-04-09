@@ -8,7 +8,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, LockKeyhole } from 'lucide-react';
 import { MODELS, getModel, getModelColour } from '@/lib/models';
 import styles from './ModelSelect.module.scss';
 
@@ -16,9 +16,17 @@ interface ModelSelectProps {
   value: string;
   onChange: (id: string) => void;
   disabled?: boolean;
+  /** Whether the current viewer is signed in. Premium-tier models are
+   *  locked for anonymous users. */
+  isLoggedIn?: boolean;
+  /** Called when an anonymous user clicks a locked premium option.
+   *  The page typically opens its auth modal in response. */
+  onPremiumLocked?: () => void;
 }
 
-export default function ModelSelect({ value, onChange, disabled }: ModelSelectProps) {
+export default function ModelSelect({
+  value, onChange, disabled, isLoggedIn = true, onPremiumLocked,
+}: ModelSelectProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -55,11 +63,17 @@ export default function ModelSelect({ value, onChange, disabled }: ModelSelectPr
         <div className={styles.dropdown}>
           {MODELS.map(model => {
             const isActive = model.id === value;
+            const isLocked = !isLoggedIn && model.tier === 'premium';
             return (
               <button
                 key={model.id}
-                className={`${styles.option} ${isActive ? styles.optionActive : ''}`}
+                className={`${styles.option} ${isActive ? styles.optionActive : ''} ${isLocked ? styles.optionLocked : ''}`}
                 onClick={() => {
+                  if (isLocked) {
+                    setOpen(false);
+                    onPremiumLocked?.();
+                    return;
+                  }
                   onChange(model.id);
                   setOpen(false);
                 }}
@@ -73,9 +87,16 @@ export default function ModelSelect({ value, onChange, disabled }: ModelSelectPr
                   {model.name}
                   {model.version && <span className={styles.optionVersion}> {model.version}</span>}
                 </span>
-                <span className={styles.optionCost}>
-                  {model.tokenCost} {model.tokenCost === 1 ? 'token' : 'tokens'}
-                </span>
+                {isLocked ? (
+                  <span className={styles.optionLockBadge}>
+                    <LockKeyhole size={11} />
+                    Sign up
+                  </span>
+                ) : (
+                  <span className={styles.optionCost}>
+                    {model.tokenCost} {model.tokenCost === 1 ? 'token' : 'tokens'}
+                  </span>
+                )}
               </button>
             );
           })}
