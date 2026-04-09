@@ -1329,3 +1329,102 @@ details[open] > .optionalSummary > .detailsChevron {
   font-size: $size-sm;
   margin-top: $space-sm;
 }
+
+// ============================================================================
+// Shared debate view (/arena/debate/[id]) — additional styles used only by
+// SharedDebateView. Lives in this file because the component imports from
+// here for layout consistency with the in-arena debate view.
+// ============================================================================
+
+.sharedTopNav {
+  max-width: 720px;
+  margin: 0 auto $space-md;
+  display: flex;
+  align-items: center;
+}
+
+.sharedBackLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: $size-sm;
+  font-weight: 500;
+  color: $text-secondary;
+  text-decoration: none;
+  padding: $space-xs $space-sm;
+  border-radius: $radius-sm;
+  transition: all $transition-fast;
+
+  &:hover {
+    color: $text-primary;
+    background: $bg-elevated;
+    text-decoration: none;
+  }
+}
+
+// Big "Claude × GPT-4o" line under the topic on the shared view.
+// Reinforces the AI-vs-AI hook on the page that gets shared most.
+.sharedVsLine {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: $space-xs $space-sm;
+  margin: $space-sm 0 $space-md;
+  font-size: $size-md;
+  font-weight: 700;
+}
+
+.sharedVsLineItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: $space-xs $space-sm;
+}
+
+.sharedVsName {
+  // Colour set inline from the model brand colour
+}
+
+.sharedVsGlyph {
+  font-size: $size-sm;
+  color: $text-muted;
+  font-weight: 500;
+  margin: 0 $space-xs;
+}
+
+// Inline "self-chosen" marker on positions where auto_assigned is true
+.sharedSelfChosen {
+  font-size: $size-xs;
+  color: $text-muted;
+  font-style: italic;
+  font-weight: 500;
+}
+
+// "Anonymous mode" banner — only shown when reveal_identities is explicitly false
+.sharedAnonymousBanner {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  margin-top: $space-sm;
+  padding: $space-xs $space-md;
+  border-radius: $radius-sm;
+  background: rgba($ui-accent, 0.08);
+  border: 1px solid rgba($ui-accent, 0.25);
+  font-size: $size-xs;
+  color: $text-secondary;
+}
+
+// Secondary footer link sitting under the primary "Create Your Own" CTA
+.sharedBrowseMoreLink {
+  font-size: $size-sm;
+  color: $text-secondary;
+  text-decoration: none;
+  margin-top: $space-xs;
+  transition: color $transition-fast;
+
+  &:hover {
+    color: $text-primary;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}

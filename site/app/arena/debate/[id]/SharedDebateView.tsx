@@ -6,6 +6,7 @@
 
 import ReactMarkdown from 'react-markdown';
 import Link from 'next/link';
+import { ChevronLeft, EyeOff } from 'lucide-react';
 import ShareMenu from '@/components/ShareMenu';
 import VotingPanel, { type VoteOption } from '@/components/VotingPanel';
 import { findModel, getModelColour, getModelName } from '@/lib/models';
@@ -49,8 +50,12 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
 
   const positions = debate.positions as Record<string, string>;
   const displayNames = getDisplayNames(debate.models);
+  const autoAssigned = debate.auto_assigned ?? null;
+  const wasAnonymous = debate.reveal_identities === false;
 
   const getPosition = (index: number) => positions[String(index)] || '';
+  const isAuto = (index: number) =>
+    Array.isArray(autoAssigned) && autoAssigned[index] === true;
 
   const args = debate.arguments as Array<{
     debater_index: number;
@@ -69,6 +74,14 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '40px 24px' }}>
+      {/* Top navigation — back to explore */}
+      <div className={styles.sharedTopNav}>
+        <Link href="/explore" className={styles.sharedBackLink}>
+          <ChevronLeft size={16} />
+          <span>Explore</span>
+        </Link>
+      </div>
+
       {/* Header */}
       <div className={styles.debateHeader}>
         {shareUrl && (
@@ -82,22 +95,53 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
           </div>
         )}
         <h1 className={styles.debateTitle}>{debate.topic}</h1>
+
+        {/* Model "vs" treatment — reinforces the AI-vs-AI hook on the
+            most-shared page. Renders as e.g. "Claude × GPT-4o" with the
+            × glyph in the muted text colour. */}
+        <div className={styles.sharedVsLine}>
+          {displayNames.map((name, i) => {
+            const modelId = debate.models[i];
+            const colour = getModelColour(modelId);
+            const version = findModel(modelId)?.version;
+            return (
+              <span key={i} className={styles.sharedVsLineItem}>
+                {i > 0 && <span className={styles.sharedVsGlyph}>×</span>}
+                <span className={styles.sharedVsName} style={{ color: colour }}>
+                  {name}
+                  {version && <span className={styles.debaterVersion}> {version}</span>}
+                </span>
+              </span>
+            );
+          })}
+        </div>
+
         <div className={styles.debatePositions}>
           {debate.models.map((modelId, i) => {
-            const version = findModel(modelId)?.version;
             return (
               <span
                 key={i}
                 className={styles.debatePosition}
                 style={{ color: getModelColour(modelId) }}
               >
-                {displayNames[i]}
-                {version && <span className={styles.debaterVersion}> {version}</span>}
-                : {getPosition(i)}
+                {getPosition(i)}
+                {isAuto(i) && (
+                  <span className={styles.sharedSelfChosen}> · self-chosen</span>
+                )}
               </span>
             );
           })}
         </div>
+
+        {/* Anonymous mode banner — runs only when reveal_identities is
+            explicitly false. Legacy rows where the field is null skip
+            the banner. */}
+        {wasAnonymous && (
+          <div className={styles.sharedAnonymousBanner}>
+            <EyeOff size={14} />
+            <span>Anonymous mode — the models didn&apos;t know who they were debating.</span>
+          </div>
+        )}
       </div>
 
       {/* Debate thread */}
@@ -171,7 +215,9 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
         </div>
       )}
 
-      {/* Footer */}
+      {/* Footer — two routes out: convert (create your own) or
+          discover more debates. Create stays the primary CTA because
+          it's the conversion goal; Browse is the secondary text link. */}
       <div className={styles.postDebate} style={{ marginTop: 40 }}>
         <span className={styles.postDebateText}>
           {args.every(a => a.refused)
@@ -180,6 +226,9 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
         </span>
         <Link href="/arena/debate" className={styles.submitButton} style={{ textDecoration: 'none', textAlign: 'center' }}>
           Create Your Own Debate
+        </Link>
+        <Link href="/explore" className={styles.sharedBrowseMoreLink}>
+          or browse more debates →
         </Link>
       </div>
     </div>
