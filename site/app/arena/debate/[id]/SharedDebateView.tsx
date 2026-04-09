@@ -73,63 +73,53 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
   const maxRound = args.length > 0 ? Math.max(...args.map(a => a.round)) : 0;
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '40px 24px' }}>
-      {/* Top nav row — back link sits at the actual page-content edge,
-          NOT centered on a narrow strip. Width: fill the wrapper. */}
+    <>
+      {/* Top nav row holds the back link on the left and the share icon
+          on the right — a balanced pair in their own wider container so
+          they sit at the page-content edges, not floating above the
+          centered debate body. */}
       <div className={styles.sharedTopNav}>
         <Link href="/explore" className={styles.sharedBackLink}>
           <ChevronLeft size={16} />
           <span>Explore</span>
         </Link>
+        {shareUrl && (
+          <ShareMenu
+            url={shareUrl}
+            title={`AI Debate: ${debate.topic}`}
+            text={`Watch ${displayNames.join(' vs ')} debate: "${debate.topic}"`}
+            variant="icon"
+          />
+        )}
       </div>
 
+      <div className={styles.sharedContentWrapper}>
       {/* Header */}
-      <div className={styles.debateHeader}>
-        {shareUrl && (
-          <div className={styles.headerShareIcon}>
-            <ShareMenu
-              url={shareUrl}
-              title={`AI Debate: ${debate.topic}`}
-              text={`Watch ${displayNames.join(' vs ')} debate: "${debate.topic}"`}
-              variant="icon"
-            />
-          </div>
-        )}
+      <div className={`${styles.debateHeader} ${styles.sharedDebateHeader}`}>
         <h1 className={styles.debateTitle}>{debate.topic}</h1>
 
-        {/* Model "vs" treatment — reinforces the AI-vs-AI hook on the
-            most-shared page. Renders as e.g. "Claude × GPT-4o" with the
-            × glyph in the muted text colour. */}
-        <div className={styles.sharedVsLine}>
-          {displayNames.map((name, i) => {
-            const modelId = debate.models[i];
+        {/* Stacked debater list — name on its own line in brand colour
+            (bold, same weight as the title-tier text), stance directly
+            beneath in the same brand colour at lighter weight. Cleaner
+            than the previous "× vs line + separate positions block"
+            stack which read as noisy. */}
+        <div className={styles.sharedDebatersList}>
+          {debate.models.map((modelId, i) => {
             const colour = getModelColour(modelId);
             const version = findModel(modelId)?.version;
             return (
-              <span key={i} className={styles.sharedVsLineItem}>
-                {i > 0 && <span className={styles.sharedVsGlyph}>×</span>}
-                <span className={styles.sharedVsName} style={{ color: colour }}>
-                  {name}
+              <div key={i} className={styles.sharedDebaterEntry}>
+                <div className={styles.sharedDebaterName} style={{ color: colour }}>
+                  {displayNames[i]}
                   {version && <span className={styles.debaterVersion}> {version}</span>}
-                </span>
-              </span>
-            );
-          })}
-        </div>
-
-        <div className={styles.debatePositions}>
-          {debate.models.map((modelId, i) => {
-            return (
-              <span
-                key={i}
-                className={styles.debatePosition}
-                style={{ color: getModelColour(modelId) }}
-              >
-                {getPosition(i)}
-                {isAuto(i) && (
-                  <span className={styles.sharedSelfChosen}> · self-chosen</span>
-                )}
-              </span>
+                </div>
+                <div className={styles.sharedDebaterStance} style={{ color: colour }}>
+                  {getPosition(i)}
+                  {isAuto(i) && (
+                    <span className={styles.sharedSelfChosen}> · chosen by the model</span>
+                  )}
+                </div>
+              </div>
             );
           })}
         </div>
@@ -232,6 +222,7 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
           or browse more debates →
         </Link>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

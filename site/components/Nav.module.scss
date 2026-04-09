@@ -137,8 +137,8 @@
   align-items: center;
   gap: $space-sm;
   width: 100%;
-  padding: $space-md;
-  font-size: $size-md;
+  padding: $space-sm $space-md;
+  font-size: $size-sm;
   font-weight: 500;
   color: $text-primary;
   background: none;
@@ -163,8 +163,8 @@
 
 .mobileSignIn {
   width: 100%;
-  padding: $space-md;
-  font-size: $size-md;
+  padding: $space-sm $space-md;
+  font-size: $size-sm;
   font-weight: 600;
   color: white;
   background: $ui-accent;

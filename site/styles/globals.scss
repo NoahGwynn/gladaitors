@@ -21,9 +21,22 @@
   padding: 0;
 }
 
-html,
+html {
+  background: $bg-void;
+  color: $text-primary;
+  font-family: $font-ui;
+  font-size: $size-base;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
 body {
-  height: 100%;
+  // 100vh (viewport units, not percent) so we don't depend on a parent
+  // height. min-height not height: lets body grow with content. Fixed
+  // height: 100% was causing position: sticky on the Nav to unstick
+  // when scrolling past viewport height because the Nav's parent block
+  // was only viewport-tall and sticky is bounded by its parent.
+  min-height: 100vh;
   background: $bg-void;
   color: $text-primary;
   font-family: $font-ui;

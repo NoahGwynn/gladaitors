@@ -665,7 +665,9 @@ details[open] > .optionalSummary > .detailsChevron {
   line-height: 1.25;
 
   @media (max-width: 600px) {
-    font-size: $size-lg;
+    font-size: $size-md;
+    margin-bottom: $space-xs;
+    line-height: 1.3;
   }
 }
 
@@ -1336,16 +1338,49 @@ details[open] > .optionalSummary > .detailsChevron {
 // here for layout consistency with the in-arena debate view.
 // ============================================================================
 
-// Top nav row above the debate header — fills the full wrapper width so
-// the back link sits at the page-content edge, not centered on a narrow
-// strip. (Earlier version constrained this to 720px which made the link
-// visually float in the middle on wide viewports.)
+// Top nav row above the debate header. Lives in its own wider container
+// (max-width 1100px) so the back link and share icon sit at the page-
+// content edges rather than floating above the centered debate body.
+// Holds the back link on the left and the share icon on the right.
 .sharedTopNav {
-  width: 100%;
-  margin-bottom: $space-md;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: $space-xl $space-lg 0;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+
+  @media (max-width: 600px) {
+    padding: $space-md $space-md 0;
+  }
+}
+
+// Main content wrapper for the shared view (the centered 800px column
+// that holds the header, debate thread, voting, and footer).
+.sharedContentWrapper {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: $space-sm $space-lg $space-2xl;
+
+  @media (max-width: 600px) {
+    padding: $space-xs $space-md $space-xl;
+  }
+}
+
+// Override .debateHeader's asymmetric padding for the shared view. The
+// in-arena view reserves padding-right for an absolutely-positioned share
+// icon — the SharedDebateView moved that share icon up to the top nav
+// row, so the reserved right padding is no longer needed and was making
+// the centered title visually drift left, especially on mobile where
+// padding-left collapses to 0.
+.sharedDebateHeader {
+  padding-left: 0;
+  padding-right: 0;
+
+  @media (max-width: 600px) {
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
 
 .sharedBackLink {
@@ -1367,34 +1402,51 @@ details[open] > .optionalSummary > .detailsChevron {
   }
 }
 
-// Big "Claude × GPT-4o" line under the topic on the shared view.
-// Reinforces the AI-vs-AI hook on the page that gets shared most.
-.sharedVsLine {
+// Stacked debater list under the topic on the shared view. Each entry
+// is a name-on-top, stance-below pair in the model's brand colour. Reads
+// cleanly as "Claude / claim / GPT / claim / ..." top to bottom.
+.sharedDebatersList {
   display: flex;
-  align-items: baseline;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: $space-xs $space-sm;
-  margin: $space-sm 0 $space-md;
+  flex-direction: column;
+  gap: $space-md;
+  margin: $space-md 0 0;
+  align-items: center;
+
+  // Tighten everything on mobile so the header doesn't consume the
+  // whole viewport before the user reaches the actual debate content.
+  @media (max-width: 600px) {
+    gap: $space-sm;
+    margin-top: $space-sm;
+  }
+}
+
+.sharedDebaterEntry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.sharedDebaterName {
   font-size: $size-md;
   font-weight: 700;
-}
-
-.sharedVsLineItem {
-  display: inline-flex;
-  align-items: baseline;
-  gap: $space-xs $space-sm;
-}
-
-.sharedVsName {
   // Colour set inline from the model brand colour
+
+  @media (max-width: 600px) {
+    font-size: $size-sm;
+  }
 }
 
-.sharedVsGlyph {
+.sharedDebaterStance {
   font-size: $size-sm;
-  color: $text-muted;
   font-weight: 500;
-  margin: 0 $space-xs;
+  // Colour set inline (slightly muted via opacity by the parent if needed)
+  opacity: 0.85;
+
+  @media (max-width: 600px) {
+    font-size: $size-xs;
+    line-height: 1.4;
+  }
 }
 
 // Inline "self-chosen" marker on positions where auto_assigned is true
