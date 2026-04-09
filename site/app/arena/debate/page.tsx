@@ -843,6 +843,21 @@ function DebateArenaContent() {
               </div>
             )}
 
+            {/* Pre-first-event indicator. Between submitting the round POST
+                and the first SSE event arriving, the server is doing
+                potentially-slow setup work — auto-assigning positions for
+                'auto' debaters (one model API call each) and the topic
+                safety check. Without this, the debate area sits silent for
+                several seconds. */}
+            {generating && !currentThinking && liveArguments.length === 0 && (
+              <div className={styles.thinkingIndicator}>
+                <Loader2 size={16} className={styles.spinner} />
+                {activeDebate?.debaters.some(d => d.assignmentMode === 'auto')
+                  ? 'Choosing positions...'
+                  : 'Preparing debate...'}
+              </div>
+            )}
+
             {/* User-turn input — appears when THIS tab's orchestrator hit a
                 human-turn pause. Hidden in follower mode (the driver tab
                 shows the input; this tab is read-only). */}
