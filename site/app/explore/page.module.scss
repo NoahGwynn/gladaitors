@@ -8,21 +8,49 @@
 
 .header {
   text-align: center;
-  margin-bottom: $space-xl;
+  margin-bottom: $space-2xl;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-md;
 }
 
 .title {
   font-size: $size-2xl;
   font-weight: 800;
-  margin-bottom: $space-xs;
+  margin: 0;
+  letter-spacing: -0.01em;
 }
 
 .subtitle {
-  font-size: $size-sm;
+  font-size: $size-md;
   color: $text-secondary;
-  max-width: 540px;
-  margin: 0 auto;
-  line-height: 1.6;
+  max-width: 560px;
+  margin: 0;
+  line-height: 1.55;
+}
+
+// Primary CTA in the header — invites first-time visitors to convert
+// from "browsing other people's debates" to "making my own"
+.headerCta {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-sm $space-lg;
+  border-radius: $radius-md;
+  background: $ui-accent;
+  color: white;
+  text-decoration: none;
+  transition: opacity $transition-fast, transform $transition-fast;
+  margin-top: $space-xs;
+
+  &:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+    text-decoration: none;
+  }
 }
 
 .sortBar {

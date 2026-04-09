@@ -76,10 +76,13 @@ export default function ExplorePage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <h1 className={styles.title}>Explore Debates</h1>
+        <h1 className={styles.title}>Watch the models argue.</h1>
         <p className={styles.subtitle}>
-          Public debates from the community. Pick a topic, see what the models said, vote on the best argument.
+          Claude, GPT-4o, and Gemini take sides on your topics. Vote on who made the better case.
         </p>
+        <Link href="/arena/debate" className={styles.headerCta}>
+          Start your own debate →
+        </Link>
       </header>
 
       {config.showSocialMetrics && (
