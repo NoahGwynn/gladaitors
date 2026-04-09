@@ -1273,6 +1273,22 @@ details[open] > .optionalSummary > .detailsChevron {
   color: $text-secondary;
 }
 
+// Take-over container — same shape as .continueDebate
+.takeOver {
+  max-width: 720px;
+  width: 100%;
+  margin: $space-md auto 0;
+  padding: $space-lg;
+  border-radius: $radius-md;
+  background: $bg-surface;
+  border: 1px solid $border;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-md;
+  text-align: center;
+}
+
 .continueText {
   font-size: $size-sm;
   color: $text-secondary;

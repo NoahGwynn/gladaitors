@@ -128,12 +128,12 @@ function DebateArenaContent() {
   // (history sidebar, /explore, etc.) without killing the running debate.
   const {
     activeDebate, generating, error, errorReason, justCompleted,
-    dbAwaitingHuman, isFollowing,
+    dbAwaitingHuman, isFollowing, dbDriverStale, canTakeOver,
   } = useDebateStatus();
   const { liveArguments, currentThinking, pendingUserTurn } = useDebateStream();
   const {
     startDebate, continueDebate, extendActiveDebate,
-    loadDebate, resetDebate,
+    loadDebate, resetDebate, takeOverDebate,
     submitUserTurn, updateActiveDebate,
     acknowledgeJustCompleted,
   } = useDebateActions();
@@ -833,6 +833,34 @@ function DebateArenaContent() {
                     ? 'Live — another tab is on a human turn.'
                     : 'Live — driven from another tab.'}
                 </span>
+              </div>
+            )}
+
+            {/* Take-over button. Visibility is governed by canTakeOver from
+                the provider — true only when status is awaiting_human (any
+                time) OR the driver lease has gone stale. Hidden during active
+                streaming with a fresh heartbeat per Q1 of the refactor plan. */}
+            {canTakeOver && (
+              <div className={styles.takeOver}>
+                <p className={styles.continueText}>
+                  {dbDriverStale
+                    ? "The other tab isn't responding."
+                    : dbAwaitingHuman
+                      ? "It's your turn — currently awaiting input in another tab."
+                      : 'Take over this debate.'}
+                </p>
+                <button
+                  className={styles.submitButton}
+                  onClick={async () => {
+                    const result = await takeOverDebate();
+                    if (!result.ok) {
+                      // Error already surfaced via the provider's error state.
+                    }
+                  }}
+                >
+                  {dbDriverStale ? 'Take over' : 'Take over'}
+                </button>
+                {error && <p className={styles.error}>{error}</p>}
               </div>
             )}
 

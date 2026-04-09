@@ -45,6 +45,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -193,6 +194,16 @@ interface StatusContextValue {
    *  is being driven by another live tab (driver_session_id is set, isn't us,
    *  and status is running or awaiting_human). */
   isFollowing: boolean;
+  /** True when the recorded driver lease has gone stale — no heartbeat in
+   *  more than STALE_LEASE_THRESHOLD_SECS. Drives the "other tab isn't
+   *  responding" take-over button label. */
+  dbDriverStale: boolean;
+  /** Derived: should the take-over button be visible right now?
+   *  Per Q1 of REALTIME_ORCHESTRATOR_REFACTOR.md, true when:
+   *    - We're not the driver, AND there's a debate loaded, AND
+   *    - dbStatus is 'awaiting_human' (always allowed), OR
+   *    - the driver lease is stale (dead tab fallback). */
+  canTakeOver: boolean;
 }
 
 interface StreamContextValue {
@@ -212,6 +223,10 @@ interface ActionsContextValue {
   loadDebate(debate: Debate): void;
   /** Clear the active debate, return to the empty form. */
   resetDebate(): void;
+  /** Force-claim the lease from another tab and resume from the persisted
+   *  state. Used by the take-over button in follower mode. Only valid when
+   *  canTakeOver is true. */
+  takeOverDebate(): Promise<SubmitResult>;
 
   /** Submit the user's argument for a pending human turn. Returns ok or an error message. */
   submitUserTurn(text: string, intent: 'continue' | 'end'): Promise<SubmitResult>;
@@ -272,6 +287,11 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   const [dbCurrentRound, setDbCurrentRound] = useState(0);
   const [dbAwaitingHuman, setDbAwaitingHuman] = useState(false);
   const [dbDriverSessionId, setDbDriverSessionId] = useState<string | null>(null);
+  const [dbDriverHeartbeatAt, setDbDriverHeartbeatAt] = useState<string | null>(null);
+  /** Trick to force re-evaluation of the stale-heartbeat derived flag every
+   *  few seconds without spamming React state. We bump this on a setInterval
+   *  whenever a driver lease is set; the dbDriverStale useMemo depends on it. */
+  const [staleTick, setStaleTick] = useState(0);
 
   // --- Refs (closure-stable across re-renders) ---
   const debateIdRef = useRef<string | null>(null);
@@ -503,20 +523,27 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   const reconcileRealtimeUpdate = useCallback((row: Debate) => {
     // 1. Driver-change detection. If the row says someone else owns the
     //    lease but our local isDriver flag is true, we just got kicked.
-    //    Tear down our heartbeat so we stop pretending we're driving.
+    //    Tear down our heartbeat AND cancel any pending user-turn so the
+    //    in-flight runDebate loop unwinds cleanly.
     const newDriver = row.driver_session_id ?? null;
     if (newDriver && newDriver !== tabIdRef.current && isDriver) {
       stopHeartbeat();
       setIsDriver(false);
-      // Note: any in-flight runDebate fetch will keep streaming until it
-      // hits its next yield, then its claim refresh on the next round will
-      // see it's no longer the driver. Commit 6 will add explicit AbortController
-      // teardown when take-over is implemented.
+      // If the orchestrator is paused awaiting human input, resolve the
+      // pending Promise with null so runDebate returns and runs its
+      // finally block (which clears generating, releases the lease ref,
+      // etc). Without this the orchestrator would sit forever awaiting
+      // input that the user is now typing in another tab.
+      const resolver = userTurnResolverRef.current;
+      if (resolver) {
+        userTurnResolverRef.current = null;
+        setPendingUserTurn(null);
+        resolver(null);
+      }
     }
     if (newDriver === tabIdRef.current && !isDriver) {
       // Edge case: a forced takeover from another tab could have flipped
-      // the driver back to us. Re-flag as driver. (This codepath becomes
-      // more relevant in commit 6.)
+      // the driver back to us. Re-flag as driver.
       setIsDriver(true);
     }
 
@@ -525,6 +552,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     if (row.current_round !== undefined) setDbCurrentRound(row.current_round);
     setDbAwaitingHuman(row.status === 'awaiting_human');
     setDbDriverSessionId(row.driver_session_id ?? null);
+    setDbDriverHeartbeatAt(row.driver_heartbeat_at ?? null);
 
     // 3. is_complete — followers learn the debate is done from here
     if (row.is_complete) {
@@ -1047,6 +1075,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     setDbCurrentRound(debate.current_round ?? 0);
     setDbAwaitingHuman(debate.status === 'awaiting_human');
     setDbDriverSessionId(debate.driver_session_id ?? null);
+    setDbDriverHeartbeatAt(debate.driver_heartbeat_at ?? null);
   }, [isDriver, stopHeartbeat, releaseLease]);
 
   const resetDebate = useCallback(() => {
@@ -1069,6 +1098,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     setDbCurrentRound(0);
     setDbAwaitingHuman(false);
     setDbDriverSessionId(null);
+    setDbDriverHeartbeatAt(null);
   }, [isDriver, stopHeartbeat, releaseLease]);
 
   const submitUserTurn = useCallback(async (
@@ -1117,6 +1147,34 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     if (resolver) resolver(null);
   }, []);
 
+  /** Force-claim the lease from another tab and resume from the persisted
+   *  state. The page should only call this when canTakeOver is true (the
+   *  button is hidden otherwise). */
+  const takeOverDebate = useCallback(async (): Promise<SubmitResult> => {
+    if (!activeDebate) return { ok: false, error: 'No active debate' };
+    if (isDriver) return { ok: false, error: 'You already control this debate' };
+
+    // Force-claim regardless of heartbeat freshness — explicit user action.
+    // The button visibility rules upstream (canTakeOver) already enforce
+    // that this is only called when it's safe (awaiting_human or stale).
+    const claim = await claimLease(0);
+    if (!claim.claimed) {
+      return {
+        ok: false,
+        error: claim.reason === 'rpc_error'
+          ? 'Could not take over (database error).'
+          : 'Could not take over the debate.',
+      };
+    }
+
+    // We now hold the lease. Resume from the persisted DB state — this
+    // will hit the same user_turn_needed event the previous tab was paused
+    // on (if any), and the orchestrator will set pendingUserTurn for us.
+    await continueDebate();
+
+    return { ok: true };
+  }, [activeDebate, isDriver, claimLease, continueDebate]);
+
   const updateActiveDebate = useCallback((patch: Partial<ActiveDebate>) => {
     setActiveDebate(prev => prev ? { ...prev, ...patch } : prev);
   }, []);
@@ -1159,6 +1217,39 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     dbDriverSessionId !== tabIdRef.current &&
     (dbStatus === 'running' || dbStatus === 'awaiting_human');
 
+  // Periodically re-evaluate whether the current driver lease is stale.
+  // The DB heartbeat updates every 5s under normal operation, so a 5s
+  // tick here gives a worst-case ~5s detection latency on top of the 15s
+  // staleness threshold (total ~20s before take-over becomes available).
+  useEffect(() => {
+    if (!dbDriverHeartbeatAt) return;
+    const id = setInterval(() => setStaleTick(t => t + 1), 5_000);
+    return () => clearInterval(id);
+  }, [dbDriverHeartbeatAt]);
+
+  const dbDriverStale = useMemo(() => {
+    if (!dbDriverSessionId || !dbDriverHeartbeatAt) return false;
+    // Don't show "stale" for our own lease — we know we're alive.
+    if (dbDriverSessionId === tabIdRef.current) return false;
+    const ageMs = Date.now() - new Date(dbDriverHeartbeatAt).getTime();
+    return ageMs > STALE_LEASE_THRESHOLD_SECS * 1000;
+    // staleTick intentionally in deps so the memo re-evaluates on each tick
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbDriverSessionId, dbDriverHeartbeatAt, staleTick]);
+
+  /** Should the take-over button be visible right now? Per Q1: only when
+   *  the row is paused on a human turn (always allowed) OR the existing
+   *  driver lease has gone stale. Hidden during active streaming with a
+   *  fresh heartbeat — explicit interruption isn't worth the token cost
+   *  of re-running the in-progress argument. */
+  const canTakeOver = !!activeDebate
+    && !isDriver
+    && !generating
+    && (
+      (isFollowing && dbStatus === 'awaiting_human') ||
+      dbDriverStale
+    );
+
   const statusValue: StatusContextValue = {
     activeDebate,
     generating,
@@ -1170,6 +1261,8 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     dbCurrentRound,
     dbAwaitingHuman,
     isFollowing,
+    dbDriverStale,
+    canTakeOver,
   };
 
   const streamValue: StreamContextValue = {
@@ -1184,6 +1277,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     extendActiveDebate,
     loadDebate,
     resetDebate,
+    takeOverDebate,
     submitUserTurn,
     cancelUserTurn,
     updateActiveDebate,
