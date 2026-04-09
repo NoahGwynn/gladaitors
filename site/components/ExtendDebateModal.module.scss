@@ -1,0 +1,170 @@
+@use '../styles/variables' as *;
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $space-lg;
+}
+
+.modal {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  background: $bg-surface;
+  border: 1px solid $border;
+  border-radius: $radius-lg;
+  padding: $space-xl;
+}
+
+.close {
+  position: absolute;
+  top: $space-md;
+  right: $space-md;
+  background: none;
+  border: none;
+  color: $text-muted;
+  cursor: pointer;
+  padding: $space-xs;
+  border-radius: $radius-sm;
+  &:hover { color: $text-primary; background: $bg-elevated; }
+}
+
+.title {
+  font-size: $size-xl;
+  font-weight: 700;
+  margin-bottom: $space-xs;
+}
+
+.subtitle {
+  font-size: $size-sm;
+  color: $text-secondary;
+  margin-bottom: $space-lg;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  margin-bottom: $space-lg;
+}
+
+.label {
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+.roundButtons {
+  display: flex;
+  gap: $space-sm;
+}
+
+.roundButton {
+  font-family: $font-mono;
+  font-size: $size-md;
+  font-weight: 700;
+  padding: $space-md $space-lg;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover:not(:disabled) {
+    color: $text-primary;
+    border-color: rgba($ui-accent, 0.4);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.roundButtonActive {
+  color: $text-primary;
+  background: rgba($ui-accent, 0.12);
+  border-color: rgba($ui-accent, 0.5);
+
+  &:hover:not(:disabled) {
+    border-color: rgba($ui-accent, 0.7);
+  }
+}
+
+.textarea {
+  width: 100%;
+  font-family: $font-ui;
+  font-size: $size-sm;
+  line-height: 1.6;
+  padding: $space-sm $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-primary;
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+
+  &:focus { border-color: rgba($ui-accent, 0.5); }
+  &::placeholder { color: $text-muted; }
+  &:disabled { opacity: 0.6; }
+}
+
+.helperText {
+  font-size: $size-xs;
+  color: $text-muted;
+  line-height: 1.5;
+}
+
+.cap {
+  font-size: $size-xs;
+  color: $text-muted;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-md;
+  margin-top: $space-md;
+}
+
+.cost {
+  font-family: $font-mono;
+  font-size: $size-sm;
+  color: $ui-gold;
+}
+
+.extendButton {
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-sm $space-xl;
+  border-radius: $radius-sm;
+  border: none;
+  background: $ui-accent;
+  color: white;
+  cursor: pointer;
+  transition: opacity $transition-fast;
+
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.error {
+  margin-top: $space-sm;
+  font-size: $size-sm;
+  color: $ui-danger;
+  text-align: center;
+}

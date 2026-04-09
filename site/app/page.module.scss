@@ -1,36 +1,78 @@
 @use '../styles/variables' as *;
 
+.page {
+  display: flex;
+  flex-direction: column;
+}
+
+// ============================================================================
+// Hero
+// ============================================================================
+
 .hero {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
   min-height: calc(100vh - $nav-height);
-  padding: $space-2xl $space-lg;
+  padding: $space-3xl $space-lg;
   gap: $space-lg;
-}
+  overflow: hidden;
 
-.heroLogo {
-  width: 280px;
-  height: auto;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      // Slightly cooler orange (peach-leaning) for the Claude glow
+      radial-gradient(ellipse 600px 400px at 30% 44%, rgba(217, 119, 119, 0.105) 0%, transparent 70%),
+      radial-gradient(ellipse 600px 400px at 70% 34%, rgba($model-gpt, 0.085) 0%, transparent 70%),
+      radial-gradient(ellipse 500px 350px at 50% 59%, rgba($model-gemini, 0.075) 0%, transparent 70%);
+    pointer-events: none;
+  }
 
-  @media (max-width: 768px) {
-    width: 200px;
+  // Fade out the bottom edge into the next section
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 200px;
+    background: linear-gradient(transparent, $bg-void);
+    pointer-events: none;
+  }
+
+  // Ensure content sits above the background
+  > * {
+    position: relative;
+    z-index: 1;
   }
 }
 
-.subtitle {
-  font-size: $size-lg;
-  color: $text-secondary;
-  max-width: 600px;
-  line-height: 1.5;
+.headline {
+  font-size: $size-3xl;
+  font-weight: 800;
+  line-height: 1.15;
+  color: $text-primary;
+  max-width: 700px;
+
+  @media (max-width: 768px) {
+    font-size: $size-2xl;
+  }
 }
 
-.ctas {
-  display: flex;
-  gap: $space-md;
-  margin-top: $space-md;
+.headlineAccent {
+  color: $ui-accent;
+}
+
+.subtitle {
+  font-size: $size-md;
+  color: $text-secondary;
+  max-width: 500px;
+  line-height: 1.6;
 }
 
 .ctaPrimary {
@@ -50,17 +92,251 @@
 }
 
 .ctaSecondary {
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-secondary;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color $transition-fast;
+  &:hover {
+    color: $text-primary;
+  }
+}
+
+// ============================================================================
+// Sample debate
+// ============================================================================
+
+.sample {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-lg;
+  padding: $space-3xl $space-lg;
+  background: $bg-surface;
+  border-top: 1px solid $border;
+  border-bottom: 1px solid $border;
+}
+
+.sampleLabel {
+  font-size: $size-xs;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $text-muted;
+}
+
+// Second sample debate ("Or watch them turn on each other") — reuses the
+// .sample card layout but lives on a different background so the page has
+// visual rhythm rather than two identical-looking blocks.
+.metaSample {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-lg;
+  padding: $space-3xl $space-lg;
+  background: $bg-void;
+  border-top: 1px solid $border;
+  border-bottom: 1px solid $border;
+}
+
+.metaSampleIntro {
+  font-size: $size-md;
+  color: $text-secondary;
+  max-width: 560px;
+  text-align: center;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.sampleTopic {
+  font-size: $size-xl;
+  font-weight: 700;
+  color: $text-primary;
+  text-align: center;
+  max-width: 500px;
+}
+
+.sampleCards {
+  display: flex;
+  gap: $space-lg;
+  max-width: 1000px;
+  width: 100%;
+
+  @media (max-width: 900px) {
+    flex-direction: column;
+    max-width: 600px;
+  }
+}
+
+.sampleCard {
+  flex: 1;
+  padding: $space-xl $space-lg;
+  border-radius: $radius-md;
+  background: $bg-card;
+  border-left: 3px solid var(--model-colour, $text-muted);
+}
+
+.sampleCardHeader {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  margin-bottom: $space-sm;
+}
+
+.sampleCardModel {
+  font-weight: 700;
+  font-size: $size-md;
+  color: var(--model-colour, $text-primary);
+}
+
+.sampleCardPosition {
+  font-size: $size-xs;
+  color: $text-muted;
+  font-style: italic;
+}
+
+.sampleCardText {
+  font-size: $size-base;
+  color: $text-secondary;
+  line-height: 1.7;
+}
+
+// ============================================================================
+// How it works
+// ============================================================================
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-xl;
+  padding: $space-3xl $space-lg;
+}
+
+.sectionTitle {
+  font-size: $size-xl;
+  font-weight: 700;
+  color: $text-primary;
+  text-align: center;
+}
+
+.stepGrid {
+  display: flex;
+  gap: $space-xl;
+  max-width: 800px;
+  width: 100%;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: $space-lg;
+  }
+}
+
+.step {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: $space-sm;
+}
+
+.stepNumber {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba($ui-accent, 0.15);
+  color: $ui-accent;
+  font-family: $font-mono;
+  font-size: $size-md;
+  font-weight: 700;
+  margin-bottom: $space-xs;
+}
+
+.stepTitle {
   font-size: $size-md;
   font-weight: 600;
-  padding: $space-md $space-xl;
-  border-radius: $radius-md;
-  border: 1px solid $border;
-  background: transparent;
   color: $text-primary;
+}
+
+.stepText {
+  font-size: $size-sm;
+  color: $text-muted;
+  line-height: 1.5;
+  max-width: 220px;
+}
+
+// ============================================================================
+// Topic ideas
+// ============================================================================
+
+.ideas {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-xl;
+  padding: $space-3xl $space-lg;
+  background: $bg-surface;
+  border-top: 1px solid $border;
+}
+
+.topicGrid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: $space-sm;
+  max-width: 700px;
+}
+
+.topicChip {
+  font-size: $size-sm;
+  font-weight: 500;
+  color: $text-secondary;
+  padding: $space-sm $space-md;
+  border-radius: $radius-xl;
+  border: 1px solid $border;
+  background: $bg-elevated;
   text-decoration: none;
-  transition: background $transition-fast;
+  transition: all $transition-fast;
+  white-space: nowrap;
+
   &:hover {
-    background: $bg-elevated;
+    color: $text-primary;
+    border-color: rgba($ui-accent, 0.5);
+    background: rgba($ui-accent, 0.08);
     text-decoration: none;
   }
+}
+
+// ============================================================================
+// Footer
+// ============================================================================
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $space-lg;
+  border-top: 1px solid $border;
+}
+
+.footerText {
+  font-size: $size-xs;
+  color: $text-muted;
+}
+
+.footerLinks {
+  display: flex;
+  gap: $space-md;
+}
+
+.footerLink {
+  font-size: $size-xs;
+  color: $text-muted;
+  text-decoration: none;
+  &:hover { color: $text-secondary; }
 }

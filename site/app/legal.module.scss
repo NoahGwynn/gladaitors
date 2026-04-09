@@ -1,0 +1,87 @@
+@use '../styles/variables' as *;
+
+.page {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: $space-xl $space-lg $space-3xl;
+}
+
+.title {
+  font-size: $size-2xl;
+  font-weight: 800;
+  margin-bottom: $space-xs;
+}
+
+.updated {
+  font-size: $size-sm;
+  color: $text-muted;
+  margin-bottom: $space-xl;
+}
+
+.section {
+  margin-bottom: $space-xl;
+
+  h2 {
+    font-size: $size-md;
+    font-weight: 700;
+    color: $text-primary;
+    margin-bottom: $space-sm;
+  }
+
+  p {
+    font-size: $size-base;
+    color: $text-secondary;
+    line-height: 1.7;
+    margin-bottom: $space-sm;
+  }
+
+  ul {
+    margin: $space-sm 0;
+    padding-left: $space-lg;
+  }
+
+  li {
+    font-size: $size-base;
+    color: $text-secondary;
+    line-height: 1.7;
+    margin-bottom: $space-sm;
+  }
+
+  a {
+    color: $ui-accent;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    &:hover { opacity: 0.8; }
+  }
+
+  strong {
+    color: $text-primary;
+    font-weight: 600;
+  }
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: $space-lg 0;
+  margin-top: $space-xl;
+  border-top: 1px solid $border;
+}
+
+.footerText {
+  font-size: $size-xs;
+  color: $text-muted;
+}
+
+.footerLinks {
+  display: flex;
+  gap: $space-md;
+}
+
+.footerLink {
+  font-size: $size-xs;
+  color: $text-muted;
+  text-decoration: none;
+  &:hover { color: $text-secondary; }
+}

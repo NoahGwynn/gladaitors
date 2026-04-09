@@ -12,22 +12,23 @@ $bg-card:      #16161F;
 $border:       #2A2A3A;
 
 // Model identity colours
-$model-claude:  #7C3AED;
-$model-gpt:     #10B981;
-$model-gemini:  #3B82F6;
+// Model identity colours — must match FAMILY_COLOURS in lib/models.ts
+$model-claude:  #D97757;  // Anthropic orange
+$model-gpt:     #10A37F;  // ChatGPT teal
+$model-gemini:  #4285F4;  // Google blue
 $model-grok:    #F59E0B;
 
 // Text
 $text-primary:    #F0F0F5;
-$text-secondary:  #8888A8;
-$text-muted:      #4A4A6A;
+$text-secondary:  #B8B8D0;  // was #9A9AB8 — bumped for stronger contrast
+$text-muted:      #8E8EAE;  // was #6A6A8A — bumped from failing AA to passing
 
 // UI
 $ui-success:    #22C55E;
 $ui-warning:    #F59E0B;
 $ui-danger:     #EF4444;
 $ui-gold:       #FFD700;
-$ui-accent:     #C8102E;  // brand red — matches "AI" in logo
+$ui-accent:     #E5253F;  // brand red — middle ground: brighter than the original crimson, less aggressive than vivid
 
 // Typography
 $font-ui:    'Inter', sans-serif;

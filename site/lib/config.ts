@@ -6,22 +6,18 @@ export const config = {
   /** Show the series/episodes section of the site. Disable before episodes are ready. */
   seriesEnabled: false,
 
+  /** Show vote counts and view counts publicly (explore feed cards, voting panel
+   *  results bar chart). Hide until traffic is meaningful — empty metrics
+   *  ("0 votes · 1 view") read as anti-social-proof. Flip to true once the
+   *  feed has enough activity that the numbers feel like community signal.
+   *  When false:
+   *    - Explore cards hide vote/view counts (keep argument count + age)
+   *    - Voting panel shows "Thanks for voting" instead of bar chart after voting
+   */
+  showSocialMetrics: false,
+
   /** Starting token balance for new users */
   startingTokens: 20,
-
-  /** Token cost per debate by round count */
-  debateCost: {
-    3: 6,   // 2 or 3 models, 3 rounds
-    5: 10,  // 2 or 3 models, 5 rounds
-    7: 14,  // 2 or 3 models, 7 rounds
-  } as Record<number, number>,
-
-  /** Available AI models for debates */
-  debateModels: [
-    { id: 'claude', name: 'Claude', provider: 'anthropic' },
-    { id: 'gpt4o', name: 'GPT-4o', provider: 'openai' },
-    { id: 'gemini', name: 'Gemini', provider: 'google' },
-  ],
 
   /** Max character limits */
   maxTopicLength: 200,

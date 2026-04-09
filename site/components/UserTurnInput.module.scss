@@ -1,0 +1,146 @@
+@use '../styles/variables' as *;
+
+.card {
+  padding: $space-lg;
+  margin-bottom: $space-md;
+  border-radius: $radius-md;
+  background: $bg-card;
+  border-left: 3px solid var(--user-colour, $ui-gold);
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  margin-bottom: $space-sm;
+}
+
+.headerName {
+  font-weight: 700;
+  font-size: $size-md;
+  color: var(--user-colour, $ui-gold);
+}
+
+.headerPosition {
+  font-size: $size-xs;
+  color: $text-muted;
+  font-style: italic;
+}
+
+.textarea {
+  width: 100%;
+  font-family: $font-ui;
+  font-size: $size-base;
+  line-height: 1.6;
+  padding: $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-surface;
+  color: $text-primary;
+  outline: none;
+  resize: vertical;
+  min-height: 140px;
+  transition: border-color $transition-fast;
+
+  &:focus {
+    border-color: rgba($ui-gold, 0.5);
+  }
+
+  &::placeholder {
+    color: $text-muted;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+  }
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-md;
+  margin-top: $space-md;
+}
+
+.wordCount {
+  font-family: $font-mono;
+  font-size: $size-xs;
+  color: $text-muted;
+}
+
+.wordCountOver {
+  color: $ui-warning;
+}
+
+.buttons {
+  display: flex;
+  gap: $space-sm;
+  align-items: center;
+}
+
+.submit {
+  display: flex;
+  align-items: center;
+  gap: $space-xs;
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-sm $space-lg;
+  border-radius: $radius-sm;
+  border: none;
+  background: $ui-gold;
+  color: $bg-void;
+  cursor: pointer;
+  transition: opacity $transition-fast;
+
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.endButton {
+  font-size: $size-sm;
+  font-weight: 500;
+  padding: $space-sm $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: transparent;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover:not(:disabled) {
+    color: $text-primary;
+    border-color: $text-muted;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.error {
+  margin-top: $space-sm;
+  font-size: $size-sm;
+  color: $ui-danger;
+}

@@ -73,6 +73,25 @@ export async function completeDebate(id: string): Promise<void> {
     .eq('id', id);
 }
 
+/** Extend a completed debate: bump the rounds, append the args (which now
+ *  may include a moderator note), and mark it incomplete so the orchestrator
+ *  can resume. */
+export async function extendDebate(
+  id: string,
+  newTotalRounds: number,
+  args: DebateArgument[],
+): Promise<void> {
+  const supabase = createClient();
+  await supabase
+    .from('debates')
+    .update({
+      rounds: newTotalRounds,
+      arguments: args,
+      is_complete: false,
+    })
+    .eq('id', id);
+}
+
 /** Save a completed debate in one step (legacy, used for non-streaming saves) */
 export async function saveDebate(params: {
   topic: string;

@@ -1,0 +1,110 @@
+@use '../styles/variables' as *;
+
+.wrapper {
+  position: relative;
+}
+
+.bell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    color: $text-primary;
+    border-color: $text-muted;
+  }
+}
+
+.badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: $ui-accent;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid $bg-void;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + $space-xs);
+  right: 0;
+  min-width: 320px;
+  max-width: 380px;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 110;
+  overflow: hidden;
+}
+
+.dropdownHeader {
+  padding: $space-sm $space-md;
+  font-size: $size-xs;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: $text-muted;
+  border-bottom: 1px solid $border;
+}
+
+.empty {
+  padding: $space-lg;
+  text-align: center;
+  font-size: $size-sm;
+  color: $text-muted;
+}
+
+.list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+  padding: $space-sm $space-md;
+  text-decoration: none;
+  border-bottom: 1px solid $border;
+  transition: background $transition-fast;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: $bg-card;
+    text-decoration: none;
+  }
+}
+
+.itemText {
+  font-size: $size-sm;
+  color: $text-primary;
+  line-height: 1.4;
+}
+
+.itemTime {
+  font-family: $font-mono;
+  font-size: $size-xs;
+  color: $text-muted;
+}

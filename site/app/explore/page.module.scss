@@ -1,0 +1,127 @@
+@use '../../styles/variables' as *;
+
+.page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: $space-xl $space-lg $space-3xl;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: $space-xl;
+}
+
+.title {
+  font-size: $size-2xl;
+  font-weight: 800;
+  margin-bottom: $space-xs;
+}
+
+.subtitle {
+  font-size: $size-sm;
+  color: $text-secondary;
+  max-width: 540px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+.sortBar {
+  display: flex;
+  gap: $space-sm;
+  justify-content: center;
+  margin-bottom: $space-xl;
+  flex-wrap: wrap;
+}
+
+.sortButton {
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-sm $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    color: $text-primary;
+    border-color: $text-muted;
+  }
+}
+
+.sortButtonActive {
+  color: $text-primary;
+  background: rgba($ui-accent, 0.12);
+  border-color: rgba($ui-accent, 0.5);
+}
+
+.empty {
+  padding: $space-3xl $space-lg;
+  text-align: center;
+  font-size: $size-md;
+  color: $text-muted;
+
+  a {
+    color: $ui-accent;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: $space-md;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  padding: $space-lg;
+  border-radius: $radius-md;
+  background: $bg-card;
+  border: 1px solid $border;
+  text-decoration: none;
+  transition: all $transition-fast;
+
+  &:hover {
+    border-color: $text-muted;
+    background: $bg-elevated;
+    text-decoration: none;
+  }
+}
+
+.cardTopic {
+  font-size: $size-md;
+  font-weight: 700;
+  color: $text-primary;
+  line-height: 1.3;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.cardDebaters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-xs $space-sm;
+  font-size: $size-xs;
+  font-weight: 600;
+}
+
+.cardDebater {
+  display: inline-block;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-xs;
+  font-size: $size-xs;
+  color: $text-muted;
+  margin-top: auto;
+}

@@ -1,39 +1,28 @@
 // ============================================================================
-// ModelSelect — custom dropdown for selecting AI models
+// ModelSelect — custom dropdown for selecting AI model variants
 // ============================================================================
-// Replaces the native <select> to match the dark theme.
+// Reads from the central model registry. Shows family colour, name, tier,
+// and token cost for each option.
 // ============================================================================
 
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { ChevronDown } from 'lucide-react';
+import { MODELS, getModel, getModelColour } from '@/lib/models';
 import styles from './ModelSelect.module.scss';
-
-const MODEL_COLOURS: Record<string, string> = {
-  claude: '#7C3AED',
-  gpt4o: '#10B981',
-  gemini: '#3B82F6',
-};
-
-interface ModelOption {
-  id: string;
-  name: string;
-}
 
 interface ModelSelectProps {
   value: string;
-  options: ModelOption[];
-  disabledIds: Set<string>;
   onChange: (id: string) => void;
   disabled?: boolean;
 }
 
-export default function ModelSelect({ value, options, disabledIds, onChange, disabled }: ModelSelectProps) {
+export default function ModelSelect({ value, onChange, disabled }: ModelSelectProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  const selected = options.find(o => o.id === value);
+  const selected = MODELS.find(m => m.id === value);
 
   // Close on click outside
   useEffect(() => {
@@ -55,31 +44,38 @@ export default function ModelSelect({ value, options, disabledIds, onChange, dis
         disabled={disabled}
         type="button"
       >
-        {selected?.name || 'Select model'}
+        <span className={styles.triggerLabel}>
+          {selected?.name || 'Select model'}
+          {selected?.version && <span className={styles.optionVersion}> {selected.version}</span>}
+        </span>
         <ChevronDown size={16} className={`${styles.arrow} ${open ? styles.arrowOpen : ''}`} />
       </button>
 
       {open && (
         <div className={styles.dropdown}>
-          {options.map(option => {
-            const isDisabled = disabledIds.has(option.id) && option.id !== value;
+          {MODELS.map(model => {
+            const isActive = model.id === value;
             return (
               <button
-                key={option.id}
-                className={`${styles.option} ${isDisabled ? styles.optionDisabled : ''} ${option.id === value ? styles.optionActive : ''}`}
+                key={model.id}
+                className={`${styles.option} ${isActive ? styles.optionActive : ''}`}
                 onClick={() => {
-                  if (!isDisabled) {
-                    onChange(option.id);
-                    setOpen(false);
-                  }
+                  onChange(model.id);
+                  setOpen(false);
                 }}
                 type="button"
               >
                 <span
                   className={styles.optionDot}
-                  style={{ background: MODEL_COLOURS[option.id] || '#888' }}
+                  style={{ background: getModelColour(model.id) }}
                 />
-                {option.name}
+                <span className={styles.optionName}>
+                  {model.name}
+                  {model.version && <span className={styles.optionVersion}> {model.version}</span>}
+                </span>
+                <span className={styles.optionCost}>
+                  {model.tokenCost} {model.tokenCost === 1 ? 'token' : 'tokens'}
+                </span>
               </button>
             );
           })}
@@ -88,3 +84,6 @@ export default function ModelSelect({ value, options, disabledIds, onChange, dis
     </div>
   );
 }
+
+// Re-export for callers that want to read model info
+export { getModel };

@@ -1,0 +1,162 @@
+@use '../styles/variables' as *;
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+  padding: $space-lg;
+  border-radius: $radius-md;
+  background: $bg-surface;
+  border: 1px solid $border;
+
+  @media (max-width: 600px) {
+    padding: $space-md;
+    gap: $space-sm;
+  }
+}
+
+.title {
+  font-size: $size-md;
+  font-weight: 700;
+  color: $text-primary;
+  text-align: center;
+}
+
+// --- Pre-vote: option buttons ---
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.option {
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: var(--option-colour, $text-primary);
+  cursor: pointer;
+  transition: all $transition-fast;
+  text-align: left;
+  // Allow long option labels (model + dash + position) to wrap on narrow screens
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.4;
+
+  &:hover:not(:disabled) {
+    border-color: var(--option-colour, rgba($ui-accent, 0.5));
+    background: $bg-card;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// --- Post-vote: results bars ---
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+}
+
+.resultRow {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.resultLabel {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: $space-sm;
+}
+
+.resultName {
+  font-size: $size-sm;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+}
+
+.yourVote {
+  font-size: $size-xs;
+  font-weight: 500;
+  color: $text-muted;
+  font-style: italic;
+}
+
+.resultPct {
+  font-family: $font-mono;
+  font-size: $size-sm;
+  color: $text-secondary;
+}
+
+.barTrack {
+  height: 8px;
+  background: $bg-elevated;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.barFillMine {
+  box-shadow: 0 0 8px var(--model-colour, currentColor);
+}
+
+.totalVotes {
+  font-size: $size-xs;
+  color: $text-muted;
+  text-align: center;
+  margin-top: $space-xs;
+}
+
+// --- Post-vote (metrics hidden): thank-you confirmation ---
+
+.thanks {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-xs;
+  padding: $space-md 0 $space-xs;
+  text-align: center;
+}
+
+.thanksCheck {
+  color: $ui-success;
+  margin-bottom: $space-xs;
+}
+
+.thanksLine {
+  font-size: $size-sm;
+  color: $text-primary;
+  margin: 0;
+}
+
+.thanksName {
+  font-weight: 700;
+}
+
+.thanksHint {
+  font-size: $size-xs;
+  color: $text-muted;
+  margin: 0;
+}
+
+.error {
+  font-size: $size-sm;
+  color: $ui-danger;
+  text-align: center;
+}

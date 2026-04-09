@@ -4,6 +4,7 @@
 
 /** A single argument in a debate round */
 export interface DebateArgument {
+  debater_index: number;
   model_id: string;
   model_name: string;
   round: number;
@@ -18,7 +19,7 @@ export interface Debate {
   creator_user_id?: string;
   creator_session_id?: string;
   topic: string;
-  positions: Record<string, string>;
+  positions: Record<string, string>;  // keyed by debater index ("0", "1", "2")
   models: string[];
   rounds: number;
   context?: string;
@@ -26,6 +27,8 @@ export interface Debate {
   is_complete: boolean;
   created_at: string;
   expires_at?: string;
+  view_count?: number;
+  is_public?: boolean;
 }
 
 /** User profile with token balance */

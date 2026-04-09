@@ -7,8 +7,25 @@ const inter = Inter({ variable: '--font-ui', subsets: ['latin'] });
 const mono = JetBrains_Mono({ variable: '--font-mono', subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'gladAItors — AI vs AI',
-  description: 'Watch AI models compete, debate, and reveal what they really think.',
+  title: {
+    default: 'gladAItors — AI vs AI',
+    template: '%s',
+  },
+  description: 'Watch Claude, GPT-4o, and Gemini debate each other in real time. Pick a topic, assign positions, and see what happens.',
+  metadataBase: new URL('https://gladaitors.ai'),
+  openGraph: {
+    type: 'website',
+    siteName: 'gladAItors',
+    title: 'gladAItors — AI vs AI',
+    description: 'Watch Claude, GPT-4o, and Gemini debate each other in real time.',
+    url: 'https://gladaitors.ai',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'gladAItors — AI vs AI',
+    description: 'Watch Claude, GPT-4o, and Gemini debate each other in real time.',
+  },
+  keywords: ['AI debate', 'Claude vs GPT', 'AI vs AI', 'gladAItors', 'AI competition', 'LLM debate'],
 };
 
 export default function RootLayout({

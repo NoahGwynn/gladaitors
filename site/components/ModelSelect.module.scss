@@ -63,7 +63,8 @@
 }
 
 .option {
-  display: flex;
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
   align-items: center;
   gap: $space-sm;
   width: 100%;
@@ -82,15 +83,8 @@
   }
 }
 
-.optionDisabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-  &:hover { background: transparent; }
-}
-
 .optionActive {
   background: $bg-elevated;
-  font-weight: 600;
 }
 
 .optionDot {
@@ -98,4 +92,32 @@
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.optionName {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.optionVersion {
+  font-family: $font-mono;
+  font-size: $size-xs;
+  font-weight: 500;
+  color: $text-muted;
+}
+
+.optionCost {
+  font-family: $font-mono;
+  font-size: $size-xs;
+  color: $text-muted;
+  white-space: nowrap;
+}
+
+.triggerLabel {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

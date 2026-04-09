@@ -21,10 +21,162 @@
   &:hover { text-decoration: none; opacity: 0.9; }
 }
 
+.logoText {
+  font-size: 24px;
+  font-weight: 500;          // light surround makes the bold "AI" pop
+  letter-spacing: -0.01em;
+  color: $text-primary;
+  font-family: $font-ui;
+  line-height: 1;
+}
+
+.logoAi {
+  font-weight: 800;          // heavy AI is the visual anchor
+  color: $ui-accent;
+}
+
 .links {
   display: flex;
-  gap: $space-lg;
+  gap: $space-md;
   align-items: center;
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+}
+
+// --- Mobile hamburger button ---
+
+.hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    color: $text-primary;
+    border-color: $text-muted;
+  }
+
+  @media (max-width: 768px) {
+    display: flex;
+  }
+}
+
+// --- Mobile drawer (slide-down panel below the nav) ---
+
+.mobileBackdrop {
+  position: fixed;
+  inset: $nav-height 0 0 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 99;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.mobileDrawer {
+  position: fixed;
+  top: $nav-height;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  padding: $space-md;
+  gap: $space-xs;
+  background: $bg-surface;
+  border-bottom: 1px solid $border;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.mobileTokenRow {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: $space-md;
+  margin-bottom: $space-xs;
+  border-radius: $radius-sm;
+  background: rgba($ui-gold, 0.08);
+  border: 1px solid rgba($ui-gold, 0.2);
+  color: $ui-gold;
+  font-family: $font-mono;
+  font-size: $size-md;
+}
+
+.mobileTokenCount {
+  font-weight: 700;
+}
+
+.mobileTokenLabel {
+  font-family: $font-ui;
+  font-size: $size-sm;
+  font-weight: 500;
+  color: $text-secondary;
+  margin-left: $space-xs;
+}
+
+.mobileLink {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  width: 100%;
+  padding: $space-md;
+  font-size: $size-md;
+  font-weight: 500;
+  color: $text-primary;
+  background: none;
+  border: none;
+  border-radius: $radius-sm;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  transition: background $transition-fast;
+
+  &:hover {
+    background: $bg-elevated;
+    text-decoration: none;
+  }
+}
+
+.mobileDivider {
+  height: 1px;
+  background: $border;
+  margin: $space-xs 0;
+}
+
+.mobileSignIn {
+  width: 100%;
+  padding: $space-md;
+  font-size: $size-md;
+  font-weight: 600;
+  color: white;
+  background: $ui-accent;
+  border: none;
+  border-radius: $radius-sm;
+  cursor: pointer;
+  margin-top: $space-xs;
+  transition: opacity $transition-fast;
+
+  &:hover {
+    opacity: 0.9;
+  }
 }
 
 .link {
@@ -38,26 +190,82 @@
   }
 }
 
-.linkActive {
-  color: $text-primary;
-}
-
 .authButton {
   font-size: $size-sm;
   font-weight: 600;
   padding: $space-sm $space-md;
   border-radius: $radius-sm;
-  border: 1px solid $border;
-  background: $bg-elevated;
-  color: $text-primary;
-  transition: background $transition-fast;
+  border: none;
+  background: $ui-accent;
+  color: white;
+  transition: opacity $transition-fast;
   &:hover {
-    background: $bg-surface;
+    opacity: 0.9;
   }
 }
 
-.tokens {
+// --- User menu (token button + dropdown) ---
+
+.userMenu {
+  position: relative;
+}
+
+.tokenButton {
+  display: flex;
+  align-items: center;
+  gap: $space-xs;
   font-family: $font-mono;
   font-size: $size-sm;
+  font-weight: 600;
   color: $ui-gold;
+  background: rgba($ui-gold, 0.1);
+  border: 1px solid rgba($ui-gold, 0.25);
+  border-radius: $radius-sm;
+  padding: $space-sm $space-md;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    background: rgba($ui-gold, 0.15);
+    border-color: rgba($ui-gold, 0.4);
+  }
+}
+
+.tokenCount {
+  font-weight: 700;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + $space-xs);
+  right: 0;
+  min-width: 160px;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  padding: $space-xs;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  z-index: 110;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  width: 100%;
+  font-size: $size-sm;
+  font-weight: 500;
+  color: $text-secondary;
+  background: none;
+  border: none;
+  border-radius: $radius-sm;
+  padding: $space-sm $space-md;
+  cursor: pointer;
+  transition: all $transition-fast;
+  text-align: left;
+
+  &:hover {
+    color: $text-primary;
+    background: $bg-card;
+  }
 }

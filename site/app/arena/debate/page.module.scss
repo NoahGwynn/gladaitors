@@ -8,6 +8,10 @@
   display: flex;
   height: calc(100vh - $nav-height);
   overflow: hidden;
+
+  @media (max-width: 900px) {
+    flex-direction: column;
+  }
 }
 
 // --- Left panel: form ---
@@ -27,7 +31,15 @@
     width: 100%;
     border-right: none;
     border-bottom: 1px solid $border;
-    max-height: 50vh;
+    overflow-y: auto;
+    flex-shrink: 1;
+  }
+}
+
+// On mobile, hide form when debate is active
+.formPanelHidden {
+  @media (max-width: 900px) {
+    display: none;
   }
 }
 
@@ -130,6 +142,69 @@
   &:disabled { opacity: 0.5; }
 }
 
+// --- Toggle switch ---
+
+.toggleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-md;
+}
+
+.toggleText {
+  font-size: $size-sm;
+  color: $text-primary;
+}
+
+.toggleDescription {
+  font-size: $size-xs;
+  color: $text-muted;
+  line-height: 1.4;
+}
+
+.switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  border: none;
+  background: $border;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background $transition-fast;
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.switchOn {
+  background: $ui-accent;
+}
+
+.switchKnob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  transition: transform $transition-fast;
+
+  .switchOn > & {
+    transform: translateX(16px);
+  }
+}
+
 // --- Optional section ---
 
 .optionalSection {
@@ -137,10 +212,17 @@
   border-radius: $radius-md;
   padding: $space-md;
   background: $bg-elevated;
+}
+
+.optionalContent {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+  margin-top: $space-md;
 
   .textarea {
     width: 100%;
-    margin-top: $space-sm;
+    margin-top: 0;
     box-sizing: border-box;
   }
 }
@@ -208,6 +290,47 @@ details[open] > .optionalSummary > .detailsChevron {
   &:disabled { opacity: 0.5; }
 }
 
+.positionRow {
+  display: flex;
+  gap: $space-xs;
+  align-items: stretch;
+}
+
+.autoToggle {
+  font-family: $font-ui;
+  font-size: $size-xs;
+  font-weight: 600;
+  padding: 0 $space-md;
+  border-radius: $radius-sm;
+  border: 1px solid $border;
+  background: $bg-surface;
+  color: $text-muted;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all $transition-fast;
+
+  &:hover:not(:disabled) {
+    color: $text-primary;
+    border-color: rgba($ui-accent, 0.4);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.autoToggleOn {
+  color: $ui-gold;
+  background: rgba($ui-gold, 0.1);
+  border-color: rgba($ui-gold, 0.3);
+
+  &:hover:not(:disabled) {
+    color: $ui-gold;
+    border-color: rgba($ui-gold, 0.5);
+  }
+}
+
 .positionInput {
   font-family: $font-ui;
   font-size: $size-sm;
@@ -218,6 +341,7 @@ details[open] > .optionalSummary > .detailsChevron {
   color: $text-primary;
   outline: none;
   width: 100%;
+  flex: 1;
   &:focus { border-color: rgba($ui-accent, 0.7); }
   &::placeholder { color: $text-muted; }
   &:disabled { opacity: 0.5; }
@@ -332,25 +456,65 @@ details[open] > .optionalSummary > .detailsChevron {
   opacity: 0.6;
 }
 
+.humanRoundsNote {
+  font-size: $size-sm;
+  color: $text-muted;
+  line-height: 1.5;
+  padding: $space-sm $space-md;
+  border-radius: $radius-sm;
+  border: 1px dashed $border;
+  background: rgba($ui-gold, 0.04);
+}
+
 // --- Submit ---
 
 .submitRow {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: $space-sm;
   margin-top: $space-sm;
 }
 
-.cost {
+.tokenBalance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-sm;
   font-family: $font-mono;
-  font-size: $size-xs;
+  font-size: $size-sm;
+  color: $text-muted;
+}
+
+.tokenCount {
   color: $ui-gold;
+  font-weight: 600;
+}
+
+.tokenWarning {
+  font-size: $size-xs;
+  color: $ui-warning;
+  text-align: center;
+}
+
+.buyLink {
+  font-family: $font-ui;
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $ui-accent;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  &:hover { opacity: 0.8; }
 }
 
 .submitButton {
+  width: 100%;
   font-size: $size-sm;
   font-weight: 600;
-  padding: $space-sm $space-lg;
+  padding: $space-md $space-lg;
   border-radius: $radius-sm;
   border: none;
   background: $ui-accent;
@@ -362,6 +526,11 @@ details[open] > .optionalSummary > .detailsChevron {
   &:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+  }
+
+  @media (max-width: 900px) {
+    padding: $space-md $space-lg;
+    font-size: $size-base;
   }
 }
 
@@ -375,9 +544,34 @@ details[open] > .optionalSummary > .detailsChevron {
   padding: $space-xl;
   display: flex;
   flex-direction: column;
+  min-height: 0; // allow flex child to scroll
 
   @media (max-width: 900px) {
     padding: $space-md;
+    flex: 1;
+  }
+}
+
+// Mobile back button — shown at top of debate panel
+.mobileBackButton {
+  display: none;
+
+  @media (max-width: 900px) {
+    display: flex;
+    align-items: center;
+    gap: $space-xs;
+    font-size: $size-sm;
+    font-weight: 600;
+    color: $text-secondary;
+    background: none;
+    border: none;
+    padding: $space-sm 0;
+    margin-bottom: $space-sm;
+    cursor: pointer;
+
+    &:hover {
+      color: $text-primary;
+    }
   }
 }
 
@@ -396,6 +590,12 @@ details[open] > .optionalSummary > .detailsChevron {
   width: 80px;
   height: auto;
   opacity: 0.2;
+}
+
+.notFoundTitle {
+  font-size: $size-xl;
+  font-weight: 700;
+  color: $text-primary;
 }
 
 .emptyText {
@@ -441,6 +641,15 @@ details[open] > .optionalSummary > .detailsChevron {
   margin: 0 auto $space-md;
   text-align: center;
   position: relative;
+  // Leave room on the right so the absolute-positioned share icon never
+  // overlaps long debate titles.
+  padding-right: 40px;
+  padding-left: 40px;
+
+  @media (max-width: 600px) {
+    padding-right: 36px;
+    padding-left: 0;
+  }
 }
 
 .headerShareIcon {
@@ -453,6 +662,11 @@ details[open] > .optionalSummary > .detailsChevron {
   font-size: $size-xl;
   font-weight: 700;
   margin-bottom: $space-sm;
+  line-height: 1.25;
+
+  @media (max-width: 600px) {
+    font-size: $size-lg;
+  }
 }
 
 .debatePositions {
@@ -464,6 +678,15 @@ details[open] > .optionalSummary > .detailsChevron {
 .debatePosition {
   font-size: $size-sm;
   font-weight: 500;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.debaterVersion {
+  font-family: $font-mono;
+  font-size: $size-xs;
+  font-weight: 500;
+  opacity: 0.85;
 }
 
 .debateThread {
@@ -487,6 +710,11 @@ details[open] > .optionalSummary > .detailsChevron {
     height: 1px;
     background: $border;
   }
+
+  @media (max-width: 600px) {
+    margin: $space-lg 0 $space-md;
+    gap: $space-sm;
+  }
 }
 
 .roundLabel {
@@ -507,6 +735,11 @@ details[open] > .optionalSummary > .detailsChevron {
   background: $bg-card;
   border-left: 3px solid var(--model-colour, $text-muted);
   animation: slideIn 0.3s ease;
+
+  @media (max-width: 600px) {
+    padding: $space-md;
+    margin-bottom: $space-sm;
+  }
 }
 
 @keyframes slideIn {
@@ -527,7 +760,8 @@ details[open] > .optionalSummary > .detailsChevron {
 .argumentHeader {
   display: flex;
   align-items: center;
-  gap: $space-sm;
+  flex-wrap: wrap;
+  gap: $space-xs $space-sm;
   margin-bottom: $space-sm;
 }
 
@@ -535,12 +769,17 @@ details[open] > .optionalSummary > .detailsChevron {
   font-weight: 700;
   font-size: $size-md;
   color: var(--model-colour, $text-primary);
+  flex-shrink: 0;
 }
 
 .argumentPosition {
   font-size: $size-xs;
   color: $text-muted;
   font-style: italic;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  line-height: 1.4;
 }
 
 .streamingDot {
@@ -551,6 +790,58 @@ details[open] > .optionalSummary > .detailsChevron {
   background: var(--model-colour, $ui-accent);
   animation: pulse 1s ease-in-out infinite;
   margin-left: auto;
+}
+
+.notChargedBadge {
+  margin-left: auto;
+  font-family: $font-mono;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: $ui-success;
+  background: rgba($ui-success, 0.1);
+  border: 1px solid rgba($ui-success, 0.25);
+  padding: 2px 8px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+// --- Moderator note (centred italic interjection) ---
+
+.moderatorNote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-xs;
+  margin: $space-md auto;
+  padding: $space-md $space-lg;
+  max-width: 80%;
+  text-align: center;
+  border-top: 1px solid $border;
+  border-bottom: 1px solid $border;
+
+  @media (max-width: 600px) {
+    max-width: 100%;
+    padding: $space-sm $space-md;
+  }
+}
+
+.moderatorLabel {
+  font-family: $font-mono;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $text-muted;
+}
+
+.moderatorText {
+  font-style: italic;
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.6;
+  margin: 0;
 }
 
 @keyframes pulse {
@@ -568,12 +859,36 @@ details[open] > .optionalSummary > .detailsChevron {
   color: $text-primary;
   line-height: 1.7;
 
+  @media (max-width: 600px) {
+    font-size: $size-sm;
+    line-height: 1.6;
+  }
+
   p {
     margin: 0 0 $space-sm;
   }
   p:last-child {
     margin-bottom: 0;
   }
+
+  // The first paragraph is the title (a single bold line). Style it like a heading.
+  > p:first-child:has(> strong:only-child) {
+    font-size: $size-lg;
+    font-weight: 700;
+    color: var(--model-colour, $text-primary);
+    margin-bottom: $space-md;
+    line-height: 1.3;
+
+    strong {
+      font-weight: inherit;
+    }
+
+    @media (max-width: 600px) {
+      font-size: $size-md;
+      margin-bottom: $space-sm;
+    }
+  }
+
   strong {
     font-weight: 700;
   }
@@ -599,6 +914,12 @@ details[open] > .optionalSummary > .detailsChevron {
 .refusal {
   color: $ui-warning;
   font-style: italic;
+}
+
+.modelError {
+  color: $ui-danger;
+  font-style: italic;
+  font-size: $size-sm;
 }
 
 // --- Thinking indicator ---
@@ -637,11 +958,17 @@ details[open] > .optionalSummary > .detailsChevron {
   display: flex;
   flex-direction: column;
   gap: $space-md;
+
+  @media (max-width: 600px) {
+    padding: $space-md;
+    margin-top: $space-lg;
+  }
 }
 
 .postDebateText {
   font-size: $size-sm;
   color: $text-secondary;
+  text-align: center;
 }
 
 .shareButton {
@@ -658,6 +985,42 @@ details[open] > .optionalSummary > .detailsChevron {
   &:hover { opacity: 0.9; }
 }
 
+.publicToggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-md;
+  padding: $space-md;
+  border-radius: $radius-sm;
+  background: $bg-elevated;
+  border: 1px solid $border;
+
+  @media (max-width: 600px) {
+    gap: $space-sm;
+    padding: $space-sm $space-md;
+  }
+}
+
+.publicToggleText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.publicToggleLabel {
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.publicToggleDescription {
+  font-size: $size-xs;
+  color: $text-muted;
+  line-height: 1.4;
+}
+
 .postDebateActions {
   display: flex;
   gap: $space-sm;
@@ -666,6 +1029,12 @@ details[open] > .optionalSummary > .detailsChevron {
   > * {
     flex: 1;
     text-align: center;
+  }
+
+  // On mobile, stack the action buttons vertically so each is a full-width
+  // touch target rather than three squeezed pills.
+  @media (max-width: 600px) {
+    flex-direction: column;
   }
 }
 
@@ -677,43 +1046,66 @@ details[open] > .optionalSummary > .detailsChevron {
   border: 1px solid $border;
   background: $bg-elevated;
   color: $text-primary;
+  cursor: pointer;
   transition: background $transition-fast;
   &:hover {
     background: $bg-surface;
   }
+
+  // Larger touch targets on mobile
+  @media (max-width: 600px) {
+    padding: $space-md;
+    font-size: $size-base;
+  }
 }
 
-.savePrompt {
+.signupPrompt {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: $space-md;
-  padding: $space-md;
-  border-radius: $radius-sm;
-  background: rgba($ui-accent, 0.08);
-  border: 1px solid rgba($ui-accent, 0.25);
-  font-size: $size-sm;
-  color: $text-secondary;
-}
-
-.postDebateActions {
-  display: flex;
   gap: $space-sm;
-  flex-wrap: wrap;
+  padding: $space-lg;
+  border-radius: $radius-md;
+  background: rgba($ui-accent, 0.08);
+  border: 1px solid rgba($ui-accent, 0.3);
+  text-align: center;
+
+  @media (max-width: 600px) {
+    padding: $space-md;
+  }
 }
 
-.saveButton {
+.signupPromptTitle {
+  font-size: $size-md;
+  font-weight: 700;
+  color: $text-primary;
+  line-height: 1.3;
+}
+
+.signupPromptDetail {
+  font-size: $size-sm;
+  color: $text-muted;
+}
+
+.signupButton {
   font-size: $size-sm;
   font-weight: 600;
-  padding: $space-xs $space-md;
+  padding: $space-sm $space-xl;
   border-radius: $radius-sm;
   border: none;
   background: $ui-accent;
   color: white;
-  &:hover {
-    opacity: 0.9;
+  cursor: pointer;
+  margin-top: $space-xs;
+  transition: opacity $transition-fast;
+  &:hover { opacity: 0.9; }
+
+  @media (max-width: 600px) {
+    width: 100%;
+    padding: $space-md;
   }
 }
+
 
 // --- Debate history ---
 
@@ -725,6 +1117,15 @@ details[open] > .optionalSummary > .detailsChevron {
 
 .historyHeader {
   margin-bottom: $space-sm;
+}
+
+.historyLoading {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: $space-md;
+  font-size: $size-sm;
+  color: $text-muted;
 }
 
 .historyList {
