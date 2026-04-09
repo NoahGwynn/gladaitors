@@ -475,3 +475,182 @@ begin
   return linked_count;
 end;
 $$ language plpgsql security definer;
+
+-- ============================================================================
+-- Realtime Orchestrator (cross-tab live debate sync)
+-- ============================================================================
+-- Adds status + lease columns to debates so the orchestrator state lives in
+-- the DB and can be observed by all tabs viewing the same debate via
+-- Supabase Realtime. The lease ensures exactly one tab "drives" a given
+-- debate at a time; other tabs are read-only followers until they explicitly
+-- take over.
+--
+-- After running this section, manually enable Realtime replication on the
+-- `debates` table in the Supabase dashboard:
+--   Database -> Replication -> source `supabase_realtime` -> add `debates`
+-- ============================================================================
+
+-- Status fields
+alter table public.debates
+  add column if not exists status text not null default 'idle';
+-- Tighten the allowed values. Use a separate constraint so we can drop and
+-- recreate it without rewriting the column definition.
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'debates_status_check'
+  ) then
+    alter table public.debates
+      add constraint debates_status_check
+      check (status in ('idle', 'running', 'awaiting_human', 'complete', 'error'));
+  end if;
+end$$;
+
+alter table public.debates
+  add column if not exists current_round int not null default 0;
+
+alter table public.debates
+  add column if not exists awaiting_debater_index int;
+
+alter table public.debates
+  add column if not exists driver_session_id text;
+
+alter table public.debates
+  add column if not exists driver_heartbeat_at timestamptz;
+
+alter table public.debates
+  add column if not exists last_error text;
+
+-- One-time backfill: existing complete debates -> 'complete', everything
+-- else stays 'idle' (the new default). Idempotent because we only touch
+-- rows that are still at the default.
+update public.debates
+set status = 'complete'
+where is_complete = true and status = 'idle';
+
+-- Index for the stale-lease query (rare but should be cheap when it runs)
+create index if not exists debates_driver_heartbeat
+  on public.debates(driver_heartbeat_at)
+  where driver_session_id is not null;
+
+-- ----------------------------------------------------------------------------
+-- Lease RPCs
+-- ----------------------------------------------------------------------------
+-- The lease is per-session (not per-user) because anonymous tabs need it too.
+-- These functions are SECURITY DEFINER and trust the caller-supplied session
+-- id, matching the existing trust model used by deduct_session_tokens et al.
+-- The API route is responsible for passing the correct session id.
+-- ----------------------------------------------------------------------------
+
+-- Claim the driver lease for a debate. Returns a jsonb verdict so the caller
+-- can distinguish "claimed" from "rejected because someone else is driving".
+--
+-- Claims if any of:
+--   1. The caller is already the driver (refresh heartbeat, return ok)
+--   2. There is no driver
+--   3. The current driver hasn't heartbeated in p_force_if_stale_secs seconds
+--
+-- Pass p_force_if_stale_secs = 0 for an explicit takeover during awaiting_human
+-- (the user is overriding even a fresh lease). The orchestrator decides which
+-- threshold to use based on UI state.
+create or replace function public.claim_debate_lease(
+  p_debate_id uuid,
+  p_session_id text,
+  p_force_if_stale_secs int default 15
+) returns jsonb as $$
+declare
+  v_row public.debates%rowtype;
+  v_age_secs numeric;
+begin
+  select * into v_row from public.debates where id = p_debate_id for update;
+  if not found then
+    return jsonb_build_object('claimed', false, 'reason', 'not_found');
+  end if;
+
+  -- Already the driver: refresh heartbeat
+  if v_row.driver_session_id = p_session_id then
+    update public.debates
+      set driver_heartbeat_at = now()
+      where id = p_debate_id;
+    return jsonb_build_object('claimed', true, 'reason', 'already_owner');
+  end if;
+
+  -- No driver
+  if v_row.driver_session_id is null then
+    update public.debates
+      set driver_session_id = p_session_id,
+          driver_heartbeat_at = now()
+      where id = p_debate_id;
+    return jsonb_build_object('claimed', true, 'reason', 'no_prior_driver');
+  end if;
+
+  -- Stale driver (or explicit takeover with p_force_if_stale_secs = 0)
+  v_age_secs := extract(epoch from (now() - coalesce(v_row.driver_heartbeat_at, 'epoch'::timestamptz)));
+  if v_row.driver_heartbeat_at is null or v_age_secs > p_force_if_stale_secs then
+    update public.debates
+      set driver_session_id = p_session_id,
+          driver_heartbeat_at = now()
+      where id = p_debate_id;
+    return jsonb_build_object(
+      'claimed', true,
+      'reason', case when p_force_if_stale_secs = 0 then 'forced_takeover' else 'stale_lease' end,
+      'previous_driver', v_row.driver_session_id,
+      'previous_age_secs', v_age_secs
+    );
+  end if;
+
+  -- Active driver, not us, not stale
+  return jsonb_build_object(
+    'claimed', false,
+    'reason', 'active_driver',
+    'current_driver', v_row.driver_session_id,
+    'heartbeat_age_secs', v_age_secs
+  );
+end;
+$$ language plpgsql security definer;
+
+-- Refresh the heartbeat. No-op if the caller is no longer the driver (which
+-- means someone took over while we weren't looking — the caller should detect
+-- this via the Realtime subscription and tear down its orchestrator).
+-- Returns the current driver_session_id so the caller can confirm ownership.
+create or replace function public.heartbeat_debate_lease(
+  p_debate_id uuid,
+  p_session_id text
+) returns text as $$
+declare
+  v_current_driver text;
+begin
+  update public.debates
+    set driver_heartbeat_at = now()
+    where id = p_debate_id and driver_session_id = p_session_id
+    returning driver_session_id into v_current_driver;
+
+  if v_current_driver is null then
+    -- Either the row doesn't exist or we're not the driver. Read the actual
+    -- current driver so the caller can distinguish.
+    select driver_session_id into v_current_driver
+      from public.debates where id = p_debate_id;
+  end if;
+
+  return v_current_driver;
+end;
+$$ language plpgsql security definer;
+
+-- Release the driver lease. Only releases if the caller is the current driver.
+-- Idempotent — safe to call from cleanup paths even if the lease has already
+-- been taken over.
+create or replace function public.release_debate_lease(
+  p_debate_id uuid,
+  p_session_id text
+) returns boolean as $$
+declare
+  v_released boolean;
+begin
+  update public.debates
+    set driver_session_id = null,
+        driver_heartbeat_at = null
+    where id = p_debate_id and driver_session_id = p_session_id;
+  v_released := found;
+  return v_released;
+end;
+$$ language plpgsql security definer;
