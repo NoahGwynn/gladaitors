@@ -968,18 +968,18 @@ function DebateArenaContent() {
                   />
                 )}
 
-                {activeDebate.id && (
-                  <button className={styles.shareButton} onClick={() => setShowShareModal(true)}>
-                    Share This Debate
-                  </button>
-                )}
-
                 {activeDebate.rounds < 15 && !liveArguments.every(a => a.refused) && (
                   <button
                     className={styles.extendButton}
                     onClick={() => setShowExtendModal(true)}
                   >
                     Extend This Debate
+                  </button>
+                )}
+
+                {activeDebate.id && (
+                  <button className={styles.shareButton} onClick={() => setShowShareModal(true)}>
+                    Share This Debate
                   </button>
                 )}
 
