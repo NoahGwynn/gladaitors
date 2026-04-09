@@ -81,13 +81,13 @@ Only one tab "drives" a debate at a time. The driver writes its session id to `d
 
 ### Q1. Take-over availability
 
-**Decision:** "Take over" button is *visible* in non-driving tabs whenever the debate is loaded, but only *enabled* in two cases:
-- Status is `awaiting_human` — label: "Take over"
-- Driver hasn't heartbeated in >15s — label: "The other tab isn't responding — take over?"
+**Decision:** "Take over" button is HIDDEN entirely when not allowed. It only appears in two cases:
+- Status is `awaiting_human` and we are not the driver — label: "Take over"
+- Driver hasn't heartbeated in >15s and we are not the driver — label: "The other tab isn't responding — take over?"
 
-In `running` (with fresh heartbeat), `complete`, and `error` states, the button is disabled with a tooltip.
+In `running` (with fresh heartbeat), `complete`, and `error` states, the button is not rendered at all. No disabled-with-tooltip pattern — disabled controls are noise.
 
-**Rationale:** Take-over during active streaming would have to abort the in-flight argument and re-stream it, which costs tokens and may produce a different argument the second time. Not worth it.
+**Rationale:** Take-over during active streaming would have to abort the in-flight argument and re-stream it, which costs tokens and may produce a different argument the second time. Not worth it. If the user genuinely needs to take over during streaming, they can wait ~5–15s for the round to finish and the button will appear (or, in the worst case, kill the other tab and let the lease go stale).
 
 ### Q2. Driver crash mid-round
 
@@ -487,7 +487,7 @@ Each commit should leave the app in a working state. Stop and verify before movi
 
 ### Commit 6: Take-over UX
 
-- Add the "Take over" button to follower mode with the enable/disable rules from Q1
+- Add the "Take over" button to follower mode with the visibility rules from Q1 (hidden when not allowed, no disabled state)
 - Wire up the lease-claim flow described above
 - Implement tab-A teardown when it loses the lease
 - Implement tab-B startup (resume from persisted state) when it gains the lease
