@@ -105,16 +105,53 @@
   overflow: hidden;
 }
 
+// Stacked debater rows. Each debater gets a colored left border in their
+// brand color so the card visually communicates "two (or three) sides".
 .cardDebaters {
   display: flex;
-  flex-wrap: wrap;
-  gap: $space-xs $space-sm;
-  font-size: $size-xs;
-  font-weight: 600;
+  flex-direction: column;
+  gap: $space-sm;
 }
 
 .cardDebater {
-  display: inline-block;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: $space-sm;
+  border-left: 3px solid var(--debater-colour, $border);
+}
+
+.cardDebaterName {
+  font-size: $size-sm;
+  font-weight: 700;
+  // Colour set inline from the model's brand colour
+  line-height: 1.2;
+}
+
+.cardDebaterPosition {
+  font-size: $size-xs;
+  color: $text-secondary;
+  line-height: 1.4;
+  // 2-line clamp for long positions
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+// Italic preview snippet from the first real argument — gives the card
+// flavour beyond the bare topic + positions
+.cardPreview {
+  font-size: $size-xs;
+  color: $text-secondary;
+  font-style: italic;
+  line-height: 1.5;
+  margin: 0;
+  // 3-line clamp so the preview never dominates the card
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .cardMeta {
@@ -124,4 +161,5 @@
   font-size: $size-xs;
   color: $text-muted;
   margin-top: auto;
+  padding-top: $space-xs;
 }

@@ -19,6 +19,7 @@ interface FeedDebate {
   voteCount: number;
   argumentCount: number;
   createdAt: string;
+  preview: string | null;
 }
 
 type SortMode = 'recent' | 'votes' | 'views';
@@ -108,17 +109,32 @@ export default function ExplorePage() {
             return (
               <Link key={d.id} href={`/arena/debate/${d.id}`} className={styles.card}>
                 <h2 className={styles.cardTopic}>{d.topic}</h2>
+
                 <div className={styles.cardDebaters}>
-                  {d.models.map((modelId, i) => (
-                    <span
-                      key={i}
-                      className={styles.cardDebater}
-                      style={{ color: getModelColour(modelId) }}
-                    >
-                      {displayNames[i]}
-                    </span>
-                  ))}
+                  {d.models.map((modelId, i) => {
+                    const colour = getModelColour(modelId);
+                    const position = d.positions[String(i)] || '';
+                    return (
+                      <div
+                        key={i}
+                        className={styles.cardDebater}
+                        style={{ '--debater-colour': colour } as React.CSSProperties}
+                      >
+                        <span className={styles.cardDebaterName} style={{ color: colour }}>
+                          {displayNames[i]}
+                        </span>
+                        {position && (
+                          <span className={styles.cardDebaterPosition}>{position}</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
+
+                {d.preview && (
+                  <p className={styles.cardPreview}>“{d.preview}”</p>
+                )}
+
                 <div className={styles.cardMeta}>
                   <span>{d.argumentCount} {d.argumentCount === 1 ? 'argument' : 'arguments'}</span>
                   {config.showSocialMetrics && (

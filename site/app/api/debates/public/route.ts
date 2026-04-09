@@ -55,6 +55,31 @@ export async function GET(request: NextRequest) {
     }, {});
   }
 
+  // Build a short preview snippet from the first real (non-moderator,
+  // non-refused) argument so the explore card has flavor text.
+  function buildPreview(args: unknown): string | null {
+    if (!Array.isArray(args) || args.length === 0) return null;
+    type A = { content?: string; refused?: boolean; model_id?: string; round?: number };
+    // Sort by round so we always pick from round 1 first
+    const sorted = (args as A[]).slice().sort((a, b) => (a.round ?? 0) - (b.round ?? 0));
+    const first = sorted.find(a => !a.refused && a.model_id !== 'moderator' && typeof a.content === 'string' && a.content.trim().length > 0);
+    if (!first?.content) return null;
+    // Strip basic markdown (bold/italic/code marks) so the preview reads as plain text
+    let text = first.content
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (text.length > 160) {
+      // Try to end at a sentence boundary near the cap, else hard cut + ellipsis
+      const slice = text.slice(0, 160);
+      const lastBreak = Math.max(slice.lastIndexOf('. '), slice.lastIndexOf('! '), slice.lastIndexOf('? '));
+      text = lastBreak > 80 ? slice.slice(0, lastBreak + 1) : slice.trim() + '…';
+    }
+    return text;
+  }
+
   // Compute argument counts (so the feed can show debate length) and attach vote counts
   let result = (debates || []).map(d => ({
     id: d.id,
@@ -65,6 +90,7 @@ export async function GET(request: NextRequest) {
     voteCount: voteCounts[d.id] || 0,
     argumentCount: Array.isArray(d.arguments) ? d.arguments.length : 0,
     createdAt: d.created_at as string,
+    preview: buildPreview(d.arguments),
   }));
 
   // If sorting by votes, sort the in-memory result
