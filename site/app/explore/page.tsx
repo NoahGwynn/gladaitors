@@ -24,6 +24,19 @@ interface FeedDebate {
 
 type SortMode = 'recent' | 'votes' | 'views';
 
+/** Hand-picked starter topics shown in the empty-state grid. Mix of playful,
+ *  pop-culture, philosophical, and practical so the empty state demonstrates
+ *  the platform's range. Avoiding politics by design — empty state should
+ *  feel friendly, not divisive. */
+const EXAMPLE_TOPICS: string[] = [
+  'Is cereal soup?',
+  'Is a hot dog a sandwich?',
+  'Are dogs better than cats?',
+  'Was Star Wars more important than Star Trek?',
+  'Is free will an illusion?',
+  'Should we have a four-day work week?',
+];
+
 /** Display name disambiguation for duplicates / user slots */
 function getDisplayNames(modelIds: string[]): string[] {
   const counts: Record<string, number> = {};
@@ -102,8 +115,23 @@ export default function ExplorePage() {
       {loading ? (
         <div className={styles.empty}>Loading…</div>
       ) : debates.length === 0 ? (
-        <div className={styles.empty}>
-          No public debates yet. <Link href="/arena/debate">Be the first.</Link>
+        <div className={styles.emptyState}>
+          <h2 className={styles.emptyTitle}>No public debates yet — pick one to start</h2>
+          <p className={styles.emptySubtitle}>
+            Click any topic below to open it on the arena. We&apos;ll fill in the question for you.
+          </p>
+          <div className={styles.exampleGrid}>
+            {EXAMPLE_TOPICS.map(topic => (
+              <Link
+                key={topic}
+                href={`/arena/debate?topic=${encodeURIComponent(topic)}`}
+                className={styles.exampleCard}
+              >
+                <span className={styles.exampleTopic}>{topic}</span>
+                <span className={styles.exampleArrow}>→</span>
+              </Link>
+            ))}
+          </div>
         </div>
       ) : (
         <div className={styles.grid}>

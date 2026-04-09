@@ -97,6 +97,75 @@
   }
 }
 
+// --- Empty state with starter topics ---
+
+.emptyState {
+  padding: $space-2xl $space-md;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-md;
+}
+
+.emptyTitle {
+  font-size: $size-lg;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0;
+}
+
+.emptySubtitle {
+  font-size: $size-sm;
+  color: $text-secondary;
+  max-width: 480px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.exampleGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: $space-sm;
+  width: 100%;
+  margin-top: $space-md;
+}
+
+.exampleCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $space-md;
+  padding: $space-md $space-lg;
+  border-radius: $radius-md;
+  background: $bg-card;
+  border: 1px solid $border;
+  text-decoration: none;
+  text-align: left;
+  transition: all $transition-fast;
+
+  &:hover {
+    border-color: rgba($ui-accent, 0.5);
+    background: $bg-elevated;
+    text-decoration: none;
+    transform: translateY(-1px);
+  }
+}
+
+.exampleTopic {
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-primary;
+  flex: 1;
+  min-width: 0;
+}
+
+.exampleArrow {
+  font-size: $size-md;
+  color: $ui-accent;
+  flex-shrink: 0;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
