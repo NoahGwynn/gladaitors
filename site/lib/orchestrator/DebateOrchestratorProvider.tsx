@@ -58,7 +58,20 @@ import {
 } from '@/lib/debates';
 import { fetchTokenBalance, notifyBalanceChanged } from '@/lib/tokens';
 import { getModelName } from '@/lib/models';
+import { createClient } from '@/lib/supabase';
 import type { Debate, DebateArgument } from '@/lib/types';
+
+// ----------------------------------------------------------------------------
+// Lease constants
+// ----------------------------------------------------------------------------
+
+/** How often the driving tab refreshes its heartbeat. */
+const HEARTBEAT_INTERVAL_MS = 5_000;
+
+/** When claiming the lease as a takeover, force-take if no heartbeat has
+ *  landed in this many seconds. The same threshold the dashboard uses to
+ *  decide whether to show the "other tab isn't responding" message. */
+const STALE_LEASE_THRESHOLD_SECS = 15;
 
 // ----------------------------------------------------------------------------
 // Public types (re-exported for consumer convenience)
@@ -144,6 +157,10 @@ interface StatusContextValue {
   errorReason: ErrorReason | null;
   /** Set briefly when a debate has just transitioned to complete. The page acknowledges this to refresh history. */
   justCompleted: boolean;
+  /** True when this tab currently holds the driver lease for the active debate.
+   *  In commit 4 this is just "we successfully claimed the lease." Commit 5 will
+   *  flip it to false when a Realtime update reports that another tab took over. */
+  isDriver: boolean;
 }
 
 interface StreamContextValue {
@@ -218,11 +235,117 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   const [errorReason, setErrorReason] = useState<ErrorReason | null>(null);
   const [pendingUserTurn, setPendingUserTurn] = useState<PendingUserTurn | null>(null);
   const [justCompleted, setJustCompleted] = useState(false);
+  const [isDriver, setIsDriver] = useState(false);
 
   // --- Refs (closure-stable across re-renders) ---
   const debateIdRef = useRef<string | null>(null);
   const activeRoundRef = useRef(1);
   const userTurnResolverRef = useRef<((result: UserTurnResult | null) => void) | null>(null);
+  /** Stable per-tab session id used as the lease key. */
+  const sessionIdRef = useRef<string>('');
+  /** Heartbeat timer handle while we hold the lease. */
+  const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Lazy-init the session id once on first render. getSessionId() reads/writes
+  // localStorage and only works in the browser, so doing this in useEffect
+  // (instead of useState's lazy init) keeps SSR happy.
+  useEffect(() => {
+    if (!sessionIdRef.current) sessionIdRef.current = getSessionId();
+  }, []);
+
+  // ========================================================================
+  // Lease management — see REALTIME_ORCHESTRATOR_REFACTOR.md for the design
+  // ========================================================================
+
+  /** Claim the driver lease for the current debateIdRef. Returns the RPC verdict. */
+  const claimLease = useCallback(async (
+    forceIfStaleSecs: number = STALE_LEASE_THRESHOLD_SECS,
+  ): Promise<{ claimed: boolean; reason: string }> => {
+    const debateId = debateIdRef.current;
+    if (!debateId) return { claimed: false, reason: 'no_debate_id' };
+    if (!sessionIdRef.current) sessionIdRef.current = getSessionId();
+
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc('claim_debate_lease', {
+      p_debate_id: debateId,
+      p_session_id: sessionIdRef.current,
+      p_force_if_stale_secs: forceIfStaleSecs,
+    });
+
+    if (error) {
+      console.error('[LEASE CLAIM] RPC error:', error);
+      return { claimed: false, reason: 'rpc_error' };
+    }
+
+    const verdict = (data ?? {}) as { claimed?: boolean; reason?: string };
+    return { claimed: !!verdict.claimed, reason: verdict.reason ?? 'unknown' };
+  }, []);
+
+  /** Refresh the heartbeat. Returns the current driver session id from the DB
+   *  (which we compare against ours to detect being kicked off). */
+  const heartbeatLease = useCallback(async (): Promise<string | null> => {
+    const debateId = debateIdRef.current;
+    if (!debateId || !sessionIdRef.current) return null;
+
+    const supabase = createClient();
+    const { data, error } = await supabase.rpc('heartbeat_debate_lease', {
+      p_debate_id: debateId,
+      p_session_id: sessionIdRef.current,
+    });
+    if (error) {
+      console.error('[LEASE HEARTBEAT] RPC error:', error);
+      return null;
+    }
+    return (data as string | null) ?? null;
+  }, []);
+
+  /** Release the lease if we still hold it. Idempotent. */
+  const releaseLease = useCallback(async (): Promise<void> => {
+    const debateId = debateIdRef.current;
+    if (!debateId || !sessionIdRef.current) return;
+    const supabase = createClient();
+    await supabase.rpc('release_debate_lease', {
+      p_debate_id: debateId,
+      p_session_id: sessionIdRef.current,
+    });
+  }, []);
+
+  /** Start the heartbeat interval. Idempotent — clears any existing one first. */
+  const startHeartbeat = useCallback(() => {
+    if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
+    heartbeatTimerRef.current = setInterval(async () => {
+      const currentDriver = await heartbeatLease();
+      // If the DB says we're no longer the driver, another tab took over.
+      // Stop heartbeating and flip isDriver. The orchestrator's in-flight
+      // fetch will keep streaming until it naturally hits the next yield —
+      // commit 5 will add a tear-down via Realtime subscription that aborts
+      // it cleanly. For commit 4 this just stops the timer.
+      if (currentDriver !== sessionIdRef.current) {
+        if (heartbeatTimerRef.current) {
+          clearInterval(heartbeatTimerRef.current);
+          heartbeatTimerRef.current = null;
+        }
+        setIsDriver(false);
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+  }, [heartbeatLease]);
+
+  /** Stop the heartbeat interval. */
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatTimerRef.current) {
+      clearInterval(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = null;
+    }
+  }, []);
+
+  // Cleanup heartbeat on unmount (typically only fires on full app teardown
+  // since the provider lives in the root layout — page navigations don't
+  // unmount it).
+  useEffect(() => {
+    return () => {
+      if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
+    };
+  }, []);
 
   // ========================================================================
   // SSE event handler
@@ -431,6 +554,23 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   // ========================================================================
 
   const runDebate = useCallback(async (config: RunDebateConfig) => {
+    // Claim the lease before doing anything else. If another tab is currently
+    // driving this debate (fresh heartbeat), refuse to start — single-driver
+    // is enforced at the orchestrator level. The page surfaces the error.
+    const claim = await claimLease();
+    if (!claim.claimed) {
+      const message = claim.reason === 'active_driver'
+        ? 'This debate is being driven in another tab. Switch to that tab or take over from there.'
+        : claim.reason === 'rpc_error'
+          ? 'Could not start the debate (database error).'
+          : 'Could not claim this debate.';
+      setError(message);
+      setErrorReason('other');
+      return;
+    }
+    setIsDriver(true);
+    startHeartbeat();
+
     setGenerating(true);
     setError(null);
     setErrorReason(null);
@@ -514,11 +654,16 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     } finally {
       setGenerating(false);
       setCurrentThinking(null);
-      setPendingUserTurn(null);
-      userTurnResolverRef.current = null;
+      // The lease is held for the entire runDebate lifecycle, including
+      // human-turn pauses (promptUserTurn awaits inside the loop, so the
+      // finally block doesn't run until the user submits or cancels).
+      // Always release here so other tabs can claim immediately.
+      stopHeartbeat();
+      await releaseLease();
+      setIsDriver(false);
       notifyBalanceChanged();
     }
-  }, [runOneRound, promptUserTurn]);
+  }, [runOneRound, promptUserTurn, claimLease, startHeartbeat, stopHeartbeat, releaseLease]);
 
   // ========================================================================
   // Public actions
@@ -662,6 +807,13 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   }, [activeDebate, liveArguments, runDebate]);
 
   const loadDebate = useCallback((debate: Debate) => {
+    // If we held a lease on a different debate, release it first.
+    if (debateIdRef.current && debateIdRef.current !== debate.id && isDriver) {
+      stopHeartbeat();
+      void releaseLease();
+      setIsDriver(false);
+    }
+
     const positions = debate.positions as Record<string, string>;
     const debateDebaters = debate.models.map((id, i) => ({
       modelId: id,
@@ -687,9 +839,13 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     setErrorReason(null);
     setPendingUserTurn(null);
     userTurnResolverRef.current = null;
-  }, []);
+  }, [isDriver, stopHeartbeat, releaseLease]);
 
   const resetDebate = useCallback(() => {
+    if (isDriver) {
+      stopHeartbeat();
+      void releaseLease();
+    }
     setActiveDebate(null);
     setLiveArguments([]);
     setGenerating(false);
@@ -700,7 +856,8 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     userTurnResolverRef.current = null;
     debateIdRef.current = null;
     activeRoundRef.current = 1;
-  }, []);
+    setIsDriver(false);
+  }, [isDriver, stopHeartbeat, releaseLease]);
 
   const submitUserTurn = useCallback(async (
     text: string,
@@ -785,6 +942,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     error,
     errorReason,
     justCompleted,
+    isDriver,
   };
 
   const streamValue: StreamContextValue = {
