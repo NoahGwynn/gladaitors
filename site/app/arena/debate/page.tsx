@@ -656,6 +656,11 @@ function DebateArenaContent() {
             <div className={styles.historyHeader}>
               <span className={styles.label}>Your Debates</span>
             </div>
+            {generating && (
+              <p className={styles.historyDisabledNote}>
+                Browsing other debates is disabled while one is running.
+              </p>
+            )}
             {historyLoading && history.length === 0 ? (
               <div className={styles.historyLoading}>
                 <Loader2 size={16} className={styles.spinner} />
@@ -668,7 +673,6 @@ function DebateArenaContent() {
                   key={debate.id}
                   className={`${styles.historyItem} ${activeDebate?.id === debate.id ? styles.historyItemActive : ''} ${generating ? styles.historyItemDisabled : ''}`}
                   onClick={() => !generating && viewSavedDebate(debate)}
-                  title={generating ? 'Browsing other debates is disabled while one is running' : undefined}
                 >
                   {confirmDeleteId === debate.id ? (
                     <div className={styles.confirmDelete}>
