@@ -92,13 +92,7 @@ export default function ShareModal({
         </div>
 
         {showPublicToggle && (
-          <label className={`${styles.publicRow} ${!isPublic ? styles.publicRowOff : ''}`}>
-            <input
-              type="checkbox"
-              className={styles.publicCheckbox}
-              checked={!!isPublic}
-              onChange={e => onTogglePublic?.(e.target.checked)}
-            />
+          <div className={`${styles.publicRow} ${!isPublic ? styles.publicRowOff : ''}`}>
             <div className={styles.publicText}>
               <span className={styles.publicLabel}>
                 {isPublic ? 'Listed on /explore' : 'Also publish to /explore'}
@@ -109,7 +103,15 @@ export default function ShareModal({
                   : 'Let anyone browsing /explore discover it, not just people with the link.'}
               </span>
             </div>
-          </label>
+            <button
+              type="button"
+              className={`${styles.switch} ${isPublic ? styles.switchOn : ''}`}
+              onClick={() => onTogglePublic?.(!isPublic)}
+              aria-label="Toggle public listing"
+            >
+              <span className={styles.switchKnob} />
+            </button>
+          </div>
         )}
 
         <div className={styles.options}>
