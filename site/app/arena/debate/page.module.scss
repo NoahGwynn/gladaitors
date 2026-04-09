@@ -1256,6 +1256,23 @@ details[open] > .optionalSummary > .detailsChevron {
   text-align: center;
 }
 
+// Follower-mode banner — this tab is watching a debate driven in another tab
+.followerBanner {
+  max-width: 720px;
+  width: 100%;
+  margin: $space-md auto 0;
+  padding: $space-sm $space-md;
+  border-radius: $radius-md;
+  background: rgba($ui-accent, 0.08);
+  border: 1px solid rgba($ui-accent, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-sm;
+  font-size: $size-sm;
+  color: $text-secondary;
+}
+
 .continueText {
   font-size: $size-sm;
   color: $text-secondary;

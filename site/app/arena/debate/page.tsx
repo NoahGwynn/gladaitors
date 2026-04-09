@@ -126,13 +126,22 @@ function DebateArenaContent() {
   // --- Debate state (sourced from the layout-mounted orchestrator provider) ---
   // Lifting this state out of the page is what allows in-app navigation
   // (history sidebar, /explore, etc.) without killing the running debate.
-  const { activeDebate, generating, error, errorReason, justCompleted } = useDebateStatus();
+  const {
+    activeDebate, generating, error, errorReason, justCompleted,
+    isDriver, dbStatus, dbAwaitingHuman,
+  } = useDebateStatus();
   const { liveArguments, currentThinking, pendingUserTurn } = useDebateStream();
+  /** True when this tab is viewing a debate that's being driven by another
+   *  tab. We render a follower-mode UI: arguments arrive live via Realtime,
+   *  the Continue Debate / user-turn input controls are hidden, and a
+   *  "live from another tab" indicator is shown. */
+  const isFollowing = !!activeDebate && !isDriver && !generating
+    && (dbStatus === 'running' || dbStatus === 'awaiting_human');
   const {
     startDebate, continueDebate, extendActiveDebate,
     loadDebate, resetDebate,
     submitUserTurn, updateActiveDebate,
-    acknowledgeJustCompleted, clearError,
+    acknowledgeJustCompleted,
   } = useDebateActions();
 
   // --- UI state ---
@@ -807,8 +816,10 @@ function DebateArenaContent() {
               </div>
             )}
 
-            {/* User-turn input — appears when a 'user' debater needs to type their argument */}
-            {pendingUserTurn && (
+            {/* User-turn input — appears when THIS tab's orchestrator hit a
+                human-turn pause. Hidden in follower mode (the driver tab
+                shows the input; this tab is read-only). */}
+            {pendingUserTurn && !isFollowing && (
               <UserTurnInput
                 displayName={pendingUserTurn.displayName}
                 position={pendingUserTurn.position}
@@ -818,10 +829,23 @@ function DebateArenaContent() {
               />
             )}
 
+            {/* Follower-mode banner: this debate is being driven in another
+                tab. Arguments arrive live via the Realtime subscription. */}
+            {isFollowing && (
+              <div className={styles.followerBanner}>
+                <Loader2 size={14} className={styles.spinner} />
+                <span>
+                  {dbAwaitingHuman
+                    ? 'Live — another tab is on a human turn.'
+                    : 'Live — driven from another tab.'}
+                </span>
+              </div>
+            )}
+
             {/* Continue incomplete debate.
                 Hidden when the orchestrator is generating OR when a user input
-                is already pending (UserTurnInput is the continuation in that case). */}
-            {activeDebate && !activeDebate.isComplete && !generating && !pendingUserTurn && liveArguments.length > 0 && (
+                is already pending OR when another tab is driving. */}
+            {activeDebate && !activeDebate.isComplete && !generating && !pendingUserTurn && !isFollowing && liveArguments.length > 0 && (
               <div className={styles.continueDebate}>
                 <p className={styles.continueText}>
                   {nextDebater?.isUser

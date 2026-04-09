@@ -29,6 +29,13 @@ export interface Debate {
   expires_at?: string;
   view_count?: number;
   is_public?: boolean;
+  // --- Orchestrator status fields (set by the API as it runs) ---
+  status?: 'idle' | 'running' | 'awaiting_human' | 'complete' | 'error';
+  current_round?: number;
+  awaiting_debater_index?: number | null;
+  driver_session_id?: string | null;
+  driver_heartbeat_at?: string | null;
+  last_error?: string | null;
 }
 
 /** User profile with token balance */

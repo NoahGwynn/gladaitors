@@ -180,10 +180,15 @@ interface StatusContextValue {
   errorReason: ErrorReason | null;
   /** Set briefly when a debate has just transitioned to complete. The page acknowledges this to refresh history. */
   justCompleted: boolean;
-  /** True when this tab currently holds the driver lease for the active debate.
-   *  In commit 4 this is just "we successfully claimed the lease." Commit 5 will
-   *  flip it to false when a Realtime update reports that another tab took over. */
+  /** True when this tab currently holds the driver lease for the active debate. */
   isDriver: boolean;
+  /** Orchestrator status from the DB. Followers (non-driver tabs) read this
+   *  to render their "what is the driver doing" indicator. */
+  dbStatus: 'idle' | 'running' | 'awaiting_human' | 'complete' | 'error' | null;
+  /** Current round number from the DB. Used for progress display in follower mode. */
+  dbCurrentRound: number;
+  /** True if the driver tab is paused on a human turn (its own user, not us). */
+  dbAwaitingHuman: boolean;
 }
 
 interface StreamContextValue {
@@ -259,6 +264,9 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   const [pendingUserTurn, setPendingUserTurn] = useState<PendingUserTurn | null>(null);
   const [justCompleted, setJustCompleted] = useState(false);
   const [isDriver, setIsDriver] = useState(false);
+  const [dbStatus, setDbStatus] = useState<StatusContextValue['dbStatus']>(null);
+  const [dbCurrentRound, setDbCurrentRound] = useState(0);
+  const [dbAwaitingHuman, setDbAwaitingHuman] = useState(false);
 
   // --- Refs (closure-stable across re-renders) ---
   const debateIdRef = useRef<string | null>(null);
@@ -370,6 +378,142 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
       if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
     };
   }, []);
+
+  // ========================================================================
+  // Realtime subscription — keep follower tabs in sync with the driver
+  // ========================================================================
+  //
+  // Subscribes to UPDATE events on the active debate's row and reconciles
+  // the incoming row state with our local state per the strict-merge rules
+  // (see Q3 in REALTIME_ORCHESTRATOR_REFACTOR.md):
+  //
+  //   - DB always wins for status fields (status, current_round, is_complete,
+  //     awaiting_debater_index, driver_session_id).
+  //   - For arguments, LOCAL is authoritative. Any (round, debater_index)
+  //     already in local state stays as-is. Incoming args at keys we don't
+  //     have are added. The currently-streaming arg (if any) is never
+  //     clobbered by an incoming complete arg.
+  //
+  // The subscription is keyed on activeDebate.id and re-subscribes whenever
+  // the active debate changes.
+
+  useEffect(() => {
+    const debateId = activeDebate?.id;
+    if (!debateId) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`debate-${debateId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'debates',
+          filter: `id=eq.${debateId}`,
+        },
+        (payload) => {
+          const row = payload.new as Debate;
+          reconcileRealtimeUpdate(row);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // We deliberately depend only on the debate id — we don't want to
+    // resubscribe on every state change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDebate?.id]);
+
+  /** Strict-merge incoming row arguments into local liveArguments. */
+  const mergeRealtimeArgs = useCallback((
+    local: LiveArgument[],
+    incoming: DebateArgument[] | undefined,
+  ): LiveArgument[] => {
+    if (!incoming || incoming.length === 0) return local;
+
+    // Streaming arg in local always wins — never overwritten by Realtime echo
+    const streamingArg = local.find(a => a.streaming);
+    const localKeys = new Set(
+      local.filter(a => !a.streaming).map(a => `${a.round}-${a.debater_index}`),
+    );
+
+    const result = [...local];
+    let added = false;
+    for (const arg of incoming) {
+      const key = `${arg.round}-${arg.debater_index}`;
+      // Already have a complete local copy
+      if (localKeys.has(key)) continue;
+      // Don't clobber the in-flight streaming arg
+      if (
+        streamingArg &&
+        streamingArg.round === arg.round &&
+        streamingArg.debater_index === arg.debater_index
+      ) continue;
+      result.push({ ...arg, streaming: false });
+      added = true;
+    }
+    // Avoid creating a new array reference if nothing actually changed —
+    // prevents unnecessary re-renders.
+    if (!added) return local;
+    // Sort by (round, debater_index) so the rendered thread stays in order
+    // even when args arrive out of sequence over the wire.
+    result.sort((a, b) => {
+      if (a.round !== b.round) return a.round - b.round;
+      return a.debater_index - b.debater_index;
+    });
+    return result;
+  }, []);
+
+  /** Apply a Realtime row update to local state. */
+  const reconcileRealtimeUpdate = useCallback((row: Debate) => {
+    // 1. Driver-change detection. If the row says someone else owns the
+    //    lease but our local isDriver flag is true, we just got kicked.
+    //    Tear down our heartbeat so we stop pretending we're driving.
+    const newDriver = row.driver_session_id ?? null;
+    if (newDriver && newDriver !== tabIdRef.current && isDriver) {
+      stopHeartbeat();
+      setIsDriver(false);
+      // Note: any in-flight runDebate fetch will keep streaming until it
+      // hits its next yield, then its claim refresh on the next round will
+      // see it's no longer the driver. Commit 6 will add explicit AbortController
+      // teardown when take-over is implemented.
+    }
+    if (newDriver === tabIdRef.current && !isDriver) {
+      // Edge case: a forced takeover from another tab could have flipped
+      // the driver back to us. Re-flag as driver. (This codepath becomes
+      // more relevant in commit 6.)
+      setIsDriver(true);
+    }
+
+    // 2. Status fields — DB always wins
+    if (row.status !== undefined) setDbStatus(row.status);
+    if (row.current_round !== undefined) setDbCurrentRound(row.current_round);
+    setDbAwaitingHuman(row.status === 'awaiting_human');
+
+    // 3. is_complete — followers learn the debate is done from here
+    if (row.is_complete) {
+      setActiveDebate(prev => prev && !prev.isComplete ? { ...prev, isComplete: true } : prev);
+    }
+
+    // 4. Positions (driver may have just resolved auto-assign)
+    if (row.positions) {
+      const positions = row.positions as Record<string, string>;
+      setActiveDebate(prev => {
+        if (!prev) return prev;
+        const updatedDebaters = prev.debaters.map((d, i) => ({
+          ...d,
+          position: positions[String(i)] ?? d.position,
+        }));
+        return { ...prev, debaters: updatedDebaters };
+      });
+    }
+
+    // 5. Arguments — strict merge
+    setLiveArguments(prev => mergeRealtimeArgs(prev, row.arguments));
+  }, [isDriver, stopHeartbeat, mergeRealtimeArgs]);
 
   // ========================================================================
   // SSE event handler
@@ -863,6 +1007,12 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     setErrorReason(null);
     setPendingUserTurn(null);
     userTurnResolverRef.current = null;
+
+    // Seed DB status from the loaded row. The Realtime subscription will
+    // keep these fresh from now on.
+    setDbStatus(debate.status ?? (debate.is_complete ? 'complete' : 'idle'));
+    setDbCurrentRound(debate.current_round ?? 0);
+    setDbAwaitingHuman(debate.status === 'awaiting_human');
   }, [isDriver, stopHeartbeat, releaseLease]);
 
   const resetDebate = useCallback(() => {
@@ -881,6 +1031,9 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     debateIdRef.current = null;
     activeRoundRef.current = 1;
     setIsDriver(false);
+    setDbStatus(null);
+    setDbCurrentRound(0);
+    setDbAwaitingHuman(false);
   }, [isDriver, stopHeartbeat, releaseLease]);
 
   const submitUserTurn = useCallback(async (
@@ -967,6 +1120,9 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     errorReason,
     justCompleted,
     isDriver,
+    dbStatus,
+    dbCurrentRound,
+    dbAwaitingHuman,
   };
 
   const streamValue: StreamContextValue = {
