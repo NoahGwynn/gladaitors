@@ -974,6 +974,15 @@ function DebateArenaContent() {
                   </button>
                 )}
 
+                {activeDebate.rounds < 15 && !liveArguments.every(a => a.refused) && (
+                  <button
+                    className={styles.extendButton}
+                    onClick={() => setShowExtendModal(true)}
+                  >
+                    Extend This Debate
+                  </button>
+                )}
+
                 {isLoggedIn && activeDebate.id && !liveArguments.every(a => a.refused) && (
                   <div className={styles.publicToggleRow}>
                     <div className={styles.publicToggleText}>
@@ -1005,12 +1014,6 @@ function DebateArenaContent() {
                       navigator.clipboard.writeText(`# ${activeDebate.topic}\n\n${text}`);
                     }}
                   >Copy Text</button>
-                  {activeDebate.rounds < 15 && !liveArguments.every(a => a.refused) && (
-                    <button
-                      className={styles.secondaryButton}
-                      onClick={() => setShowExtendModal(true)}
-                    >Extend Debate</button>
-                  )}
                   <button
                     className={styles.secondaryButton}
                     onClick={() => {

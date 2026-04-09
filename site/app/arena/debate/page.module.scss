@@ -985,6 +985,21 @@ details[open] > .optionalSummary > .detailsChevron {
   &:hover { opacity: 0.9; }
 }
 
+// Outlined peer of .shareButton — same prominence, distinct visual identity
+.extendButton {
+  width: 100%;
+  font-size: $size-md;
+  font-weight: 600;
+  padding: $space-md;
+  border-radius: $radius-md;
+  border: 1px solid $ui-accent;
+  background: transparent;
+  color: $ui-accent;
+  cursor: pointer;
+  transition: background $transition-fast;
+  &:hover { background: rgba($ui-accent, 0.08); }
+}
+
 .publicToggleRow {
   display: flex;
   align-items: center;
