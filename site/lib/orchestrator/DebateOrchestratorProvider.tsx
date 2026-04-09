@@ -73,6 +73,29 @@ const HEARTBEAT_INTERVAL_MS = 5_000;
  *  decide whether to show the "other tab isn't responding" message. */
 const STALE_LEASE_THRESHOLD_SECS = 15;
 
+/** Per-tab identity for the driver lease.
+ *
+ *  IMPORTANT: this is a SEPARATE id from getSessionId() (which uses
+ *  localStorage and is therefore shared between every tab in the same
+ *  browser). The lease must be per-tab — otherwise two tabs in the same
+ *  browser both look like "already_owner" to the claim RPC and both can
+ *  drive the same debate at once.
+ *
+ *  sessionStorage is per-tab in browsers and survives reloads of that tab,
+ *  which is what we want: refreshing the page keeps the same lease key so
+ *  the orchestrator can reclaim immediately after a reload.
+ */
+function getTabId(): string {
+  if (typeof window === 'undefined') return '';
+  const KEY = 'gladaitors_tab_id';
+  let id = sessionStorage.getItem(KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    sessionStorage.setItem(KEY, id);
+  }
+  return id;
+}
+
 // ----------------------------------------------------------------------------
 // Public types (re-exported for consumer convenience)
 // ----------------------------------------------------------------------------
@@ -241,16 +264,17 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   const debateIdRef = useRef<string | null>(null);
   const activeRoundRef = useRef(1);
   const userTurnResolverRef = useRef<((result: UserTurnResult | null) => void) | null>(null);
-  /** Stable per-tab session id used as the lease key. */
-  const sessionIdRef = useRef<string>('');
+  /** Per-tab id used as the driver lease key. NOT the same as the per-browser
+   *  session id from getSessionId() — see the comment on getTabId(). */
+  const tabIdRef = useRef<string>('');
   /** Heartbeat timer handle while we hold the lease. */
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Lazy-init the session id once on first render. getSessionId() reads/writes
-  // localStorage and only works in the browser, so doing this in useEffect
-  // (instead of useState's lazy init) keeps SSR happy.
+  // Lazy-init the tab id once on first render. sessionStorage only works in
+  // the browser, so doing this in useEffect (instead of useState's lazy init)
+  // keeps SSR happy.
   useEffect(() => {
-    if (!sessionIdRef.current) sessionIdRef.current = getSessionId();
+    if (!tabIdRef.current) tabIdRef.current = getTabId();
   }, []);
 
   // ========================================================================
@@ -263,12 +287,12 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   ): Promise<{ claimed: boolean; reason: string }> => {
     const debateId = debateIdRef.current;
     if (!debateId) return { claimed: false, reason: 'no_debate_id' };
-    if (!sessionIdRef.current) sessionIdRef.current = getSessionId();
+    if (!tabIdRef.current) tabIdRef.current = getTabId();
 
     const supabase = createClient();
     const { data, error } = await supabase.rpc('claim_debate_lease', {
       p_debate_id: debateId,
-      p_session_id: sessionIdRef.current,
+      p_session_id: tabIdRef.current,
       p_force_if_stale_secs: forceIfStaleSecs,
     });
 
@@ -285,12 +309,12 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
    *  (which we compare against ours to detect being kicked off). */
   const heartbeatLease = useCallback(async (): Promise<string | null> => {
     const debateId = debateIdRef.current;
-    if (!debateId || !sessionIdRef.current) return null;
+    if (!debateId || !tabIdRef.current) return null;
 
     const supabase = createClient();
     const { data, error } = await supabase.rpc('heartbeat_debate_lease', {
       p_debate_id: debateId,
-      p_session_id: sessionIdRef.current,
+      p_session_id: tabIdRef.current,
     });
     if (error) {
       console.error('[LEASE HEARTBEAT] RPC error:', error);
@@ -302,11 +326,11 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   /** Release the lease if we still hold it. Idempotent. */
   const releaseLease = useCallback(async (): Promise<void> => {
     const debateId = debateIdRef.current;
-    if (!debateId || !sessionIdRef.current) return;
+    if (!debateId || !tabIdRef.current) return;
     const supabase = createClient();
     await supabase.rpc('release_debate_lease', {
       p_debate_id: debateId,
-      p_session_id: sessionIdRef.current,
+      p_session_id: tabIdRef.current,
     });
   }, []);
 
@@ -320,7 +344,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
       // fetch will keep streaming until it naturally hits the next yield —
       // commit 5 will add a tear-down via Realtime subscription that aborts
       // it cleanly. For commit 4 this just stops the timer.
-      if (currentDriver !== sessionIdRef.current) {
+      if (currentDriver !== tabIdRef.current) {
         if (heartbeatTimerRef.current) {
           clearInterval(heartbeatTimerRef.current);
           heartbeatTimerRef.current = null;
