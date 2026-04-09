@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import '@/styles/globals.scss';
 import Nav from '@/components/Nav';
+import { DebateOrchestratorProvider } from '@/lib/orchestrator/DebateOrchestratorProvider';
 
 const inter = Inter({ variable: '--font-ui', subsets: ['latin'] });
 const mono = JetBrains_Mono({ variable: '--font-mono', subsets: ['latin'] });
@@ -34,8 +35,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${mono.variable}`}>
       <body>
-        <Nav />
-        <main>{children}</main>
+        <DebateOrchestratorProvider>
+          <Nav />
+          <main>{children}</main>
+        </DebateOrchestratorProvider>
       </body>
     </html>
   );

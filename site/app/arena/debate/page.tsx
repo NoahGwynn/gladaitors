@@ -22,11 +22,14 @@ import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import { config } from '@/lib/config';
 import {
-  createDebateRecord, completeDebate, extendDebate,
-  getUserDebates, deleteDebate, getSessionId,
+  getUserDebates, deleteDebate,
 } from '@/lib/debates';
 import { fetchTokenBalance, notifyBalanceChanged, onBalanceChanged } from '@/lib/tokens';
 import { createClient } from '@/lib/supabase';
+import {
+  useDebateStatus, useDebateStream, useDebateActions,
+  type DebaterConfig,
+} from '@/lib/orchestrator/DebateOrchestratorProvider';
 import type { Debate } from '@/lib/types';
 import type { DebateArgument } from '@/lib/types';
 import ModelSelect from '@/components/ModelSelect';
@@ -66,13 +69,9 @@ function formatModelList(debaters: DebaterConfig[]): string {
 }
 
 // --- Types ---
-
-interface DebaterConfig {
-  modelId: string;
-  position: string;
-  /** 'manual' = user typed the position; 'auto' = AI picks its own stance on the first round */
-  assignmentMode?: 'manual' | 'auto';
-}
+// DebaterConfig, LiveArgument, and ActiveDebate are now provided by
+// @/lib/orchestrator/DebateOrchestratorProvider so the page and the
+// orchestrator agree on shape.
 
 /** Find the next debater that needs to argue for an incomplete debate.
  *  Walks rounds in order, then debaters within each round, and returns the
@@ -99,21 +98,6 @@ function findNextDebaterToArgue(
   return null;
 }
 
-interface LiveArgument extends DebateArgument {
-  streaming: boolean;
-}
-
-/** Metadata for the debate currently displayed in the right panel */
-interface ActiveDebate {
-  id: string | null;
-  topic: string;
-  debaters: DebaterConfig[];
-  rounds: number;
-  context?: string;
-  isComplete: boolean;
-  isPublic?: boolean;
-}
-
 // ============================================================================
 // Component
 // ============================================================================
@@ -129,7 +113,7 @@ export default function DebateArenaPage() {
 function DebateArenaContent() {
   const searchParams = useSearchParams();
 
-  // --- Form state (left panel only) ---
+  // --- Form state (left panel only — page-local) ---
   const [topic, setTopic] = useState(searchParams.get('topic') || '');
   const [debaters, setDebaters] = useState<DebaterConfig[]>([
     { modelId: 'claude-sonnet', position: '' },
@@ -139,14 +123,17 @@ function DebateArenaContent() {
   const [context, setContext] = useState('');
   const [revealIdentities, setRevealIdentities] = useState(true);
 
-  // --- Debate state (right panel) ---
-  const [activeDebate, setActiveDebate] = useState<ActiveDebate | null>(null);
-  const [liveArguments, setLiveArguments] = useState<LiveArgument[]>([]);
-  const [generating, setGenerating] = useState(false);
-  const [currentThinking, setCurrentThinking] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const activeRoundRef = useRef(1);
-  const debateIdRef = useRef<string | null>(null);
+  // --- Debate state (sourced from the layout-mounted orchestrator provider) ---
+  // Lifting this state out of the page is what allows in-app navigation
+  // (history sidebar, /explore, etc.) without killing the running debate.
+  const { activeDebate, generating, error, errorReason, justCompleted } = useDebateStatus();
+  const { liveArguments, currentThinking, pendingUserTurn } = useDebateStream();
+  const {
+    startDebate, continueDebate, extendActiveDebate,
+    loadDebate, resetDebate,
+    submitUserTurn, updateActiveDebate,
+    acknowledgeJustCompleted, clearError,
+  } = useDebateActions();
 
   // --- UI state ---
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -158,24 +145,6 @@ function DebateArenaContent() {
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   const [showBuyTokens, setShowBuyTokens] = useState(false);
   const [showExtendModal, setShowExtendModal] = useState(false);
-
-  // --- Pending user turn (when a 'user' debater needs to type their argument) ---
-  const [pendingUserTurn, setPendingUserTurn] = useState<{
-    debaterIndex: number;
-    displayName: string;
-    position: string;
-    round: number;
-    isLastInRound: boolean;
-  } | null>(null);
-  // The orchestrator awaits this resolver. The user's submit handler resolves
-  // it with one of:
-  //   { kind: 'submitted', arg } — continue the debate normally
-  //   { kind: 'ended',     arg } — submit this as the final user turn, then stop
-  //   null                       — abandoned (page closed, etc); debate stays incomplete
-  type UserTurnResult =
-    | { kind: 'submitted'; arg: DebateArgument }
-    | { kind: 'ended'; arg: DebateArgument };
-  const userTurnResolverRef = useRef<((result: UserTurnResult | null) => void) | null>(null);
 
   // --- Keyboard shortcut (Ctrl/Cmd+Enter to start) ---
   const generateRef = useRef<(() => void) | undefined>(undefined);
@@ -288,24 +257,28 @@ function DebateArenaContent() {
   }, [liveArguments.length, currentThinking]);
 
   // ========================================================================
-  // Mark debate complete when finished (only for debates we generated)
+  // React to orchestrator state transitions
   // ========================================================================
 
-  const justCompletedRef = useRef(false);
+  // When the orchestrator finishes a debate, refresh history sidebar so the
+  // newly completed debate appears at the top. The provider handles the DB
+  // write itself; the page just reacts to the flag.
   useEffect(() => {
-    if (activeDebate?.isComplete && generating === false && justCompletedRef.current) {
-      justCompletedRef.current = false;
-      // The server marks is_complete=true on the natural-end path (final
-      // round completed), but the early-end path (user clicked "End debate"
-      // before the final round) only happens client-side. Calling
-      // completeDebate here is idempotent and covers both cases.
-      if (debateIdRef.current) {
-        completeDebate(debateIdRef.current).then(() => {
-          if (isLoggedIn) loadHistory();
-        });
-      }
+    if (justCompleted) {
+      if (isLoggedIn) loadHistory();
+      acknowledgeJustCompleted();
     }
-  }, [activeDebate?.isComplete, generating]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [justCompleted, isLoggedIn, loadHistory, acknowledgeJustCompleted]);
+
+  // When the orchestrator surfaces an insufficient_tokens error, open the
+  // buy/auth modal. The error itself stays on screen until cleared by the
+  // user starting a new action.
+  useEffect(() => {
+    if (errorReason === 'insufficient_tokens') {
+      if (isLoggedIn) setShowBuyTokens(true);
+      else setShowAuth(true);
+    }
+  }, [errorReason, isLoggedIn]);
 
   // ========================================================================
   // Form helpers
@@ -352,32 +325,8 @@ function DebateArenaContent() {
   // ========================================================================
 
   function viewSavedDebate(debate: Debate) {
-    const positions = debate.positions as Record<string, string>;
-    const debateDebaters = debate.models.map((id, i) => ({
-      modelId: id,
-      position: positions[String(i)] || '',
-    }));
-
-    setActiveDebate({
-      id: debate.id,
-      topic: debate.topic,
-      debaters: debateDebaters,
-      rounds: debate.rounds,
-      context: debate.context,
-      isComplete: debate.is_complete,
-      isPublic: debate.is_public ?? false,
-    });
-    debateIdRef.current = debate.id;
-
-    const args = debate.arguments as Array<DebateArgument>;
-    setLiveArguments(args.map(a => ({ ...a, streaming: false })));
-    setGenerating(false);
-    setCurrentThinking(null);
-    setError(null);
-    setPendingUserTurn(null);
-    userTurnResolverRef.current = null;
+    loadDebate(debate);
     isNearBottomRef.current = false;
-
     setTimeout(() => {
       if (debatePanelRef.current) debatePanelRef.current.scrollTop = 0;
     }, 0);
@@ -387,478 +336,69 @@ function DebateArenaContent() {
   // Round-by-round orchestration
   // ========================================================================
   //
-  // The API runs ONE round per call. The frontend loops rounds, calling the
-  // API once per round and accumulating arguments locally so each call has
-  // the full prior context.
-  //
-  // Completion is set by the orchestrator when the loop ends naturally —
-  // not by an SSE event. If `insufficient_tokens` fires mid-round, the loop
-  // stops and the debate stays incomplete (so it can be resumed after top-up).
+  // The actual orchestrator loop now lives in DebateOrchestratorProvider so
+  // it survives in-app navigation. Everything below this comment used to be
+  // orchestration logic — it has been moved out. The page now drives the
+  // orchestrator via the actions hook (startDebate / continueDebate /
+  // extendActiveDebate / submitUserTurn / loadDebate / resetDebate).
   // ========================================================================
 
-  interface RunDebateConfig {
-    topic: string;
-    debaters: DebaterConfig[];
-    rounds: number;
-    context: string;
-    revealIdentities: boolean;
-    initialArgs: DebateArgument[];
-    startRound: number;
-    /** Set true on the very first call of a brand-new debate so we delete the empty record on safety/auth failure. */
-    isNewDebate: boolean;
-  }
+  // (orchestrator lives in lib/orchestrator/DebateOrchestratorProvider.tsx)
+  // The block formerly here — RunDebateConfig, RoundResult, runOneRound,
+  // runDebate, promptUserTurn, handleUserSubmit, handleSSE — is gone.
+  // Removed in commit 3 of the realtime orchestrator refactor.
 
-  interface RoundResult {
-    newArgs: DebateArgument[];
-    insufficientTokens: boolean;
-    error: string | null;
-    /** If set, the API stopped because a user slot needs input. */
-    userTurnNeeded: {
-      debaterIndex: number;
-      displayName: string;
-      position: string;
-      round: number;
-    } | null;
-  }
-
-  async function runOneRound(
-    config: RunDebateConfig,
-    existingArguments: DebateArgument[],
-    currentRound: number,
-  ): Promise<RoundResult> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    const sid = getSessionId();
-    if (sid) headers['x-session-id'] = sid;
-
-    const res = await fetch('/api/debate', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        topic: config.topic,
-        debaters: config.debaters,
-        rounds: config.rounds,
-        currentRound,
-        context: config.context || undefined,
-        revealIdentities: config.revealIdentities,
-        existingArguments,
-        debateId: debateIdRef.current || undefined,
-      }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      let message = 'Something went wrong';
-      try { message = JSON.parse(text).error || message; } catch { message = text || message; }
-      const isInsufficient = res.status === 402;
-      return { newArgs: [], insufficientTokens: isInsufficient, error: message, userTurnNeeded: null };
-    }
-
-    const reader = res.body?.getReader();
-    if (!reader) {
-      return { newArgs: [], insufficientTokens: false, error: 'No response stream', userTurnNeeded: null };
-    }
-
-    const newArgs: DebateArgument[] = [];
-    let insufficientTokens = false;
-    let userTurnNeeded: RoundResult['userTurnNeeded'] = null;
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      let eventType = '';
-      for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          eventType = line.slice(7).trim();
-        } else if (line.startsWith('data: ') && eventType) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            handleSSE(eventType, data);
-            // Track results locally for the orchestrator
-            if (eventType === 'argument') {
-              newArgs.push(data as DebateArgument);
-            } else if (eventType === 'insufficient_tokens') {
-              insufficientTokens = true;
-            } else if (eventType === 'user_turn_needed') {
-              userTurnNeeded = {
-                debaterIndex: data.debater_index as number,
-                displayName: data.model_name as string,
-                position: data.position as string,
-                round: data.round as number,
-              };
-            }
-          } catch { /* skip malformed */ }
-          eventType = '';
-        }
-      }
-    }
-
-    return { newArgs, insufficientTokens, error: null, userTurnNeeded };
-  }
-
-  async function runDebate(config: RunDebateConfig) {
-    setGenerating(true);
-    setError(null);
-    setCurrentThinking(null);
-    isNearBottomRef.current = true;
-
-    const allArgs: DebateArgument[] = [...config.initialArgs];
-    let currentRound = config.startRound;
-
-    // Set when the user explicitly chooses to end the debate. The orchestrator
-    // lets the current round finish (so all debaters have the same number of
-    // arguments), then breaks out of the outer loop and marks complete.
-    let endRequested = false;
-
-    try {
-      outer: while (currentRound <= config.rounds) {
-        // A single round may require MULTIPLE API calls if there are user slots
-        // mid-round. Each call runs as much as it can; when it hits a user slot
-        // (without an injected argument), it stops and we collect input from the
-        // user, then re-call the same round to continue.
-        let roundDone = false;
-        while (!roundDone) {
-          const result = await runOneRound(config, allArgs, currentRound);
-
-          if (result.error) {
-            // First-round failure on a brand-new debate: clean up the empty record
-            if (config.isNewDebate && currentRound === config.startRound && allArgs.length === 0) {
-              if (debateIdRef.current) {
-                deleteDebate(debateIdRef.current);
-                debateIdRef.current = null;
-              }
-              setActiveDebate(null);
-            }
-            if (result.insufficientTokens) {
-              if (isLoggedIn) setShowBuyTokens(true);
-              else setShowAuth(true);
-            }
-            setError(result.error);
-            return;
-          }
-
-          if (result.insufficientTokens) {
-            // SSE handler already opened the buy/auth modal and set the error.
-            // Stop the loop so the debate stays incomplete.
-            return;
-          }
-
-          allArgs.push(...result.newArgs);
-
-          if (result.userTurnNeeded) {
-            // The API stopped at a user slot. Collect input from the user, then
-            // re-call the same round so the API can continue past this slot.
-            const isLastInRound = result.userTurnNeeded.debaterIndex === config.debaters.length - 1;
-            const userResult = await promptUserTurn(result.userTurnNeeded, isLastInRound);
-            if (!userResult) {
-              // User cancelled / orchestrator was reset. Stop cleanly — debate
-              // stays incomplete and can be resumed.
-              return;
-            }
-            allArgs.push(userResult.arg);
-            // The user's argument is sent to the server in the next round
-            // POST as part of `existingArguments`; the server merges and
-            // persists it before generating the next AI argument. No client
-            // write needed.
-            if (userResult.kind === 'ended') {
-              endRequested = true;
-              // If the user was the last debater in the round, the round is
-              // already done — break out immediately. Otherwise let the inner
-              // loop continue so the API runs the remaining AI debaters before
-              // we mark the debate complete (no lopsided rounds).
-              if (isLastInRound) {
-                roundDone = true;
-              }
-              // else: continue inner loop, API will fill in the rest of the round
-            }
-            // else (kind === 'submitted'): just loop and re-call the API for the same round
-          } else {
-            // round_complete (or stream closed cleanly) — advance to the next round.
-            roundDone = true;
-          }
-        }
-
-        if (endRequested) break outer;
-
-        currentRound++;
-        loadTokenBalance();
-      }
-
-      // Either all rounds completed naturally, or the user explicitly ended
-      // the debate after the current round finished. The server marked
-      // is_complete=true on the final round_complete; the useEffect on
-      // (activeDebate.isComplete + justCompletedRef) just refreshes the
-      // sidebar history.
-      justCompletedRef.current = true;
-      setActiveDebate(prev => prev ? { ...prev, isComplete: true } : prev);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
-    } finally {
-      setGenerating(false);
-      setCurrentThinking(null);
-      setPendingUserTurn(null);
-      userTurnResolverRef.current = null;
-      loadTokenBalance();
-      notifyBalanceChanged();
-    }
-  }
+  // (orchestrator moved to lib/orchestrator/DebateOrchestratorProvider.tsx)
+  // The page calls submitUserTurn() directly via the actions hook — the
+  // pending Promise resolver lives in the provider so the user-turn pause
+  // survives navigation.
+  const handleUserSubmit = submitUserTurn;
 
   // ========================================================================
-  // User-turn prompt — pause the orchestrator until the user submits
-  // ========================================================================
-
-  function promptUserTurn(
-    turn: NonNullable<RoundResult['userTurnNeeded']>,
-    isLastInRound: boolean,
-  ): Promise<UserTurnResult | null> {
-    return new Promise(resolve => {
-      setPendingUserTurn({ ...turn, isLastInRound });
-      userTurnResolverRef.current = resolve;
-    });
-  }
-
-  /**
-   * Called by UserTurnInput's submit handler. Runs the safety check, and if it
-   * passes, builds a DebateArgument from the user's text and resolves the
-   * pending promise so the orchestrator continues.
-   *
-   * `intent` tells the orchestrator whether to continue the debate ('continue')
-   * or stop after this round ('end').
-   */
-  async function handleUserSubmit(
-    text: string,
-    intent: 'continue' | 'end',
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
-    if (!pendingUserTurn) return { ok: false, error: 'No pending turn' };
-
-    // Safety check
-    const res = await fetch('/api/debate/check-argument', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-    if (!res.ok) {
-      return { ok: false, error: 'Safety check failed. Please try again.' };
-    }
-    const { safe } = await res.json();
-    if (!safe) {
-      return { ok: false, error: 'This argument violates our usage policy. Please rewrite and try again.' };
-    }
-
-    // Build the synthetic argument
-    const arg: DebateArgument = {
-      debater_index: pendingUserTurn.debaterIndex,
-      model_id: 'user',
-      model_name: pendingUserTurn.displayName,
-      round: pendingUserTurn.round,
-      content: text,
-      refused: false,
-    };
-
-    // Push it into liveArguments so it appears in the thread immediately
-    setLiveArguments(prev => [...prev, { ...arg, streaming: false }]);
-
-    // Resolve the orchestrator's promise — the inner loop will continue
-    setPendingUserTurn(null);
-    const resolver = userTurnResolverRef.current;
-    userTurnResolverRef.current = null;
-    if (resolver) {
-      resolver(intent === 'end' ? { kind: 'ended', arg } : { kind: 'submitted', arg });
-    }
-
-    return { ok: true };
-  }
-
-  // ========================================================================
-  // Generate a new debate (wrapper around runDebate)
+  // Action wrappers — thin glue between page-local form/UI state and the
+  // orchestrator provider. The provider does the actual work.
   // ========================================================================
 
   async function generateDebate() {
     if (!isValid || generating) return;
 
-    // Capture form values before clearing
+    // Capture the current form values (we clear the form right after, before
+    // the orchestrator returns) and reset the scroll-anchor so new tokens
+    // pin to the bottom.
     const debateTopic = topic;
     const debateDebaters = [...debaters];
-    // Human debates use the open-ended cap; AI-only debates use the picker value
     const debateRounds = effectiveRounds;
     const debateContext = context;
     const debateReveal = revealIdentities;
 
-    // Reset state for the new debate
-    setActiveDebate({
-      id: null,
-      topic: debateTopic,
-      debaters: debateDebaters,
-      rounds: debateRounds,
-      context: debateContext,
-      isComplete: false,
-    });
-    setLiveArguments([]);
-    setPendingUserTurn(null);
-    userTurnResolverRef.current = null;
-    debateIdRef.current = null;
-    activeRoundRef.current = 1;
+    isNearBottomRef.current = true;
     argCountRef.current = 0;
-
-    // Clear form for next debate
     clearForm();
 
-    // Create the database record up-front (positions keyed by index)
-    const positions: Record<string, string> = {};
-    debateDebaters.forEach((d, i) => { positions[String(i)] = d.position; });
-    const newId = await createDebateRecord({
-      topic: debateTopic,
-      positions,
-      models: debateDebaters.map(d => d.modelId),
-      rounds: debateRounds,
-      context: debateContext || undefined,
-    });
-    if (newId) {
-      debateIdRef.current = newId;
-      setActiveDebate(prev => prev ? { ...prev, id: newId } : prev);
-    }
-
-    await runDebate({
+    await startDebate({
       topic: debateTopic,
       debaters: debateDebaters,
       rounds: debateRounds,
       context: debateContext,
       revealIdentities: debateReveal,
-      initialArgs: [],
-      startRound: 1,
-      isNewDebate: true,
     });
   }
 
-  // ========================================================================
-  // Continue an incomplete debate (wrapper around runDebate)
-  // ========================================================================
+  // Page-local wrapper around the provider's continueDebate so the JSX can
+  // keep its existing onClick reference name.
+  const handleContinueDebate = continueDebate;
 
-  async function continueDebate() {
-    if (!activeDebate || generating || activeDebate.isComplete) return;
-
-    // Build the prior-arguments list (drop streaming placeholders)
-    const existingArgs: DebateArgument[] = liveArguments.filter(a => !a.streaming).map(a => ({
-      debater_index: a.debater_index,
-      model_id: a.model_id,
-      model_name: a.model_name,
-      round: a.round,
-      content: a.content,
-      refused: a.refused,
-      refusal_reason: a.refusal_reason,
-    }));
-
-    // Find the first round where not all debaters have argued — that's the resume point.
-    // Moderator notes (model_id === 'moderator') are ignored when counting; they aren't
-    // debater turns.
-    let resumeRound = activeDebate.rounds + 1;
-    for (let r = 1; r <= activeDebate.rounds; r++) {
-      const argsInRound = existingArgs.filter(a => a.round === r && a.model_id !== 'moderator').length;
-      if (argsInRound < activeDebate.debaters.length) {
-        resumeRound = r;
-        break;
-      }
-    }
-
-    if (resumeRound > activeDebate.rounds) {
-      // Already complete — nothing to do
-      return;
-    }
-
-    await runDebate({
-      topic: activeDebate.topic,
-      debaters: activeDebate.debaters,
-      rounds: activeDebate.rounds,
-      context: activeDebate.context || '',
-      // revealIdentities is not stored on the debate record — defaults to true on resume.
-      // Pre-existing limitation; storing it is a separate concern.
-      revealIdentities: true,
-      initialArgs: existingArgs,
-      startRound: resumeRound,
-      isNewDebate: false,
-    });
-  }
-
-  // ========================================================================
-  // Extend a completed debate (add more rounds + optional moderator note)
-  // ========================================================================
-
+  // Page-local wrapper around extendActiveDebate. Returns the in-flight
+  // promise so the modal can satisfy its onExtend: Promise<void> contract,
+  // but the modal closes immediately and the rounds stream in the background.
   async function handleExtendDebate(extraRounds: number, moderatorNote: string) {
-    if (!activeDebate || !debateIdRef.current) return;
-
-    const newTotalRounds = activeDebate.rounds + extraRounds;
-    const firstNewRound = activeDebate.rounds + 1;
-
-    // Build the updated arguments list. If the user typed a moderator note, append
-    // it as a special argument tagged for the first new round so it shows up in
-    // the AI prompts before the next debater speaks.
-    const existingArgs: DebateArgument[] = liveArguments.filter(a => !a.streaming).map(a => ({
-      debater_index: a.debater_index,
-      model_id: a.model_id,
-      model_name: a.model_name,
-      round: a.round,
-      content: a.content,
-      refused: a.refused,
-      refusal_reason: a.refusal_reason,
-    }));
-
-    if (moderatorNote) {
-      existingArgs.push({
-        debater_index: -1,
-        model_id: 'moderator',
-        model_name: 'Moderator note',
-        round: firstNewRound,
-        content: moderatorNote,
-        refused: false,
-      });
-    }
-
-    // Persist the extension to the DB (rounds + args + is_complete=false)
-    await extendDebate(debateIdRef.current, newTotalRounds, existingArgs);
-
-    // Update local state to match
-    setActiveDebate(prev => prev ? { ...prev, rounds: newTotalRounds, isComplete: false } : prev);
-    if (moderatorNote) {
-      setLiveArguments(prev => [...prev, {
-        debater_index: -1,
-        model_id: 'moderator',
-        model_name: 'Moderator note',
-        round: firstNewRound,
-        content: moderatorNote,
-        refused: false,
-        streaming: false,
-      }]);
-    }
-
-    // Kick off the orchestrator without awaiting it. The new rounds will stream
-    // in the background while the modal closes immediately. We bypass
-    // continueDebate because it reads activeDebate from React state which
-    // hasn't propagated yet.
-    void runDebate({
-      topic: activeDebate.topic,
-      debaters: activeDebate.debaters,
-      rounds: newTotalRounds,
-      context: activeDebate.context || '',
-      revealIdentities: true,
-      initialArgs: existingArgs,
-      startRound: firstNewRound,
-      isNewDebate: false,
-    });
+    await extendActiveDebate(extraRounds, moderatorNote);
   }
-
-  // ========================================================================
-  // Toggle public visibility on a completed debate (owner only)
-  // ========================================================================
 
   async function toggleDebateVisibility(makePublic: boolean) {
     if (!activeDebate?.id) return;
-    // Optimistic update
-    setActiveDebate(prev => prev ? { ...prev, isPublic: makePublic } : prev);
+    // Optimistic update via the provider
+    updateActiveDebate({ isPublic: makePublic });
     try {
       const res = await fetch(`/api/debates/${activeDebate.id}/visibility`, {
         method: 'POST',
@@ -867,126 +407,10 @@ function DebateArenaContent() {
       });
       if (!res.ok) {
         // Revert on failure
-        setActiveDebate(prev => prev ? { ...prev, isPublic: !makePublic } : prev);
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || 'Failed to update visibility');
+        updateActiveDebate({ isPublic: !makePublic });
       }
     } catch {
-      setActiveDebate(prev => prev ? { ...prev, isPublic: !makePublic } : prev);
-      setError('Failed to update visibility');
-    }
-  }
-
-  // ========================================================================
-  // SSE event handler
-  // ========================================================================
-
-  function handleSSE(event: string, data: Record<string, unknown>) {
-    switch (event) {
-      case 'positions_resolved': {
-        // Auto-assign just resolved any 'auto' debaters' positions. Update the
-        // active debate so the header, voting options, and AI prompts in subsequent
-        // rounds all see the new positions.
-        const positions = data.positions as string[];
-        setActiveDebate(prev => {
-          if (!prev) return prev;
-          const updatedDebaters = prev.debaters.map((d, i) => ({
-            ...d,
-            position: positions[i] ?? d.position,
-            assignmentMode: 'manual' as const, // resolved — no longer auto
-          }));
-          return { ...prev, debaters: updatedDebaters };
-        });
-        break;
-      }
-
-      case 'thinking':
-        setCurrentThinking(data.model_name as string);
-        activeRoundRef.current = (data.round as number) || activeRoundRef.current;
-        break;
-
-      case 'token': {
-        const debaterIndex = data.debater_index as number;
-        const modelId = data.model_id as string;
-        const token = data.token as string;
-        setLiveArguments(prev => {
-          const last = prev[prev.length - 1];
-          if (last && last.debater_index === debaterIndex && last.streaming) {
-            const updated = [...prev];
-            updated[updated.length - 1] = { ...last, content: last.content + token };
-            return updated;
-          } else {
-            setCurrentThinking(null);
-            return [...prev, {
-              debater_index: debaterIndex,
-              model_id: modelId,
-              model_name: getModelName(modelId),
-              round: activeRoundRef.current,
-              content: token,
-              refused: false,
-              streaming: true,
-            }];
-          }
-        });
-        break;
-      }
-
-      case 'argument': {
-        const arg = data as unknown as DebateArgument;
-        setLiveArguments(prev => {
-          const updated = [...prev];
-          const idx = updated.findIndex(a => a.debater_index === arg.debater_index && a.streaming);
-          const final_: LiveArgument = { ...arg, streaming: false };
-          if (idx >= 0) updated[idx] = final_;
-          else updated.push(final_);
-          return updated;
-        });
-        // Persistence is handled server-side now — the API route writes each
-        // argument to the DB before emitting this SSE event.
-        setCurrentThinking(null);
-        break;
-      }
-
-      // 'round_complete' is handled implicitly — the stream closes after it
-      // and the orchestrator advances. No state to update here.
-
-      case 'model_error': {
-        // Show failure inline as a failed argument card — debate continues
-        const errIndex = data.debater_index as number;
-        const errModelId = data.model_id as string;
-        const errModelName = data.model_name as string;
-        const errRound = data.round as number;
-        const errMsg = data.message as string;
-        setLiveArguments(prev => {
-          // Remove any partial streaming entry for this debater
-          const cleaned = prev.filter(a => !(a.debater_index === errIndex && a.streaming));
-          return [...cleaned, {
-            debater_index: errIndex,
-            model_id: errModelId,
-            model_name: errModelName,
-            round: errRound,
-            content: `[Failed to respond: ${errMsg}]`,
-            refused: true,
-            refusal_reason: `API error: ${errMsg}`,
-            streaming: false,
-          }];
-        });
-        setCurrentThinking(null);
-        break;
-      }
-
-      case 'insufficient_tokens':
-        setError('You ran out of tokens. Top up to continue debating.');
-        if (isLoggedIn) {
-          setShowBuyTokens(true);
-        } else {
-          setShowAuth(true);
-        }
-        break;
-
-      case 'error':
-        setError(data.message as string || 'An error occurred');
-        break;
+      updateActiveDebate({ isPublic: !makePublic });
     }
   }
 
@@ -1226,8 +650,7 @@ function DebateArenaContent() {
                               if (ok) {
                                 loadHistory();
                                 if (activeDebate?.id === debate.id) {
-                                  setActiveDebate(null);
-                                  setLiveArguments([]);
+                                  resetDebate();
                                 }
                               }
                               setConfirmDeleteId(null);
@@ -1272,7 +695,7 @@ function DebateArenaContent() {
         {hasDebate && !generating && (
           <button
             className={styles.mobileBackButton}
-            onClick={() => { setActiveDebate(null); setLiveArguments([]); }}
+            onClick={() => resetDebate()}
           >
             <ChevronLeft size={16} /> New debate
           </button>
@@ -1405,7 +828,7 @@ function DebateArenaContent() {
                     ? "It's your turn to argue."
                     : `This debate was interrupted — ${liveArguments.length} arguments completed.`}
                 </p>
-                <button className={styles.submitButton} onClick={continueDebate}>
+                <button className={styles.submitButton} onClick={() => void handleContinueDebate()}>
                   {nextDebater?.isUser ? 'Take Your Turn' : 'Continue Debate'}
                 </button>
               </div>
