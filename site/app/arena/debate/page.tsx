@@ -984,13 +984,17 @@ function DebateArenaContent() {
                 )}
 
                 {isLoggedIn && activeDebate.id && !liveArguments.every(a => a.refused) && (
-                  <div className={styles.publicToggleRow}>
+                  <div className={`${styles.publicToggleRow} ${!activeDebate.isPublic ? styles.publicToggleRowOff : ''}`}>
                     <div className={styles.publicToggleText}>
-                      <span className={styles.publicToggleLabel}>List in public feed</span>
+                      <span className={styles.publicToggleLabel}>
+                        {activeDebate.isPublic
+                          ? 'Listed on /explore'
+                          : 'Get more eyes on this debate'}
+                      </span>
                       <span className={styles.publicToggleDescription}>
                         {activeDebate.isPublic
-                          ? 'Visible on /explore. Anyone can find this debate.'
-                          : 'Only people with the link can find this debate.'}
+                          ? 'Anyone browsing the explore feed can find it.'
+                          : 'Add it to /explore so anyone browsing can discover it.'}
                       </span>
                     </div>
                     <button
@@ -1048,6 +1052,18 @@ function DebateArenaContent() {
           topic={activeDebate.topic}
           modelNames={activeDisplayNames}
           onClose={() => setShowShareModal(false)}
+          // Only logged-in owners with non-all-refused debates can change
+          // visibility — same gating as the in-arena toggle.
+          isPublic={
+            isLoggedIn && !liveArguments.every(a => a.refused)
+              ? !!activeDebate.isPublic
+              : undefined
+          }
+          onTogglePublic={
+            isLoggedIn && !liveArguments.every(a => a.refused)
+              ? toggleDebateVisibility
+              : undefined
+          }
         />
       )}
 

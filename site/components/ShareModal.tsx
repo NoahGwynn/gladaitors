@@ -18,10 +18,20 @@ interface ShareModalProps {
   topic: string;
   modelNames: string[];
   onClose: () => void;
+  /** Whether the debate is currently listed in the public /explore feed.
+   *  If undefined, the public-listing toggle is hidden entirely (e.g.
+   *  anonymous viewers can't change visibility, all-refused debates
+   *  shouldn't be promoted). */
+  isPublic?: boolean;
+  /** Called when the user toggles the public listing. */
+  onTogglePublic?: (next: boolean) => void;
 }
 
-export default function ShareModal({ url, topic, modelNames, onClose }: ShareModalProps) {
+export default function ShareModal({
+  url, topic, modelNames, onClose, isPublic, onTogglePublic,
+}: ShareModalProps) {
   const [copied, setCopied] = useState(false);
+  const showPublicToggle = typeof isPublic === 'boolean' && onTogglePublic !== undefined;
 
   const encodedUrl = encodeURIComponent(url);
   const shareText = `Watch ${modelNames.join(' vs ')} debate: "${topic}"`;
@@ -80,6 +90,27 @@ export default function ShareModal({ url, topic, modelNames, onClose }: ShareMod
           <div className={styles.previewTopic}>{topic}</div>
           <div className={styles.previewModels}>{modelNames.join(' vs ')}</div>
         </div>
+
+        {showPublicToggle && (
+          <label className={`${styles.publicRow} ${!isPublic ? styles.publicRowOff : ''}`}>
+            <input
+              type="checkbox"
+              className={styles.publicCheckbox}
+              checked={!!isPublic}
+              onChange={e => onTogglePublic?.(e.target.checked)}
+            />
+            <div className={styles.publicText}>
+              <span className={styles.publicLabel}>
+                {isPublic ? 'Listed on /explore' : 'Also publish to /explore'}
+              </span>
+              <span className={styles.publicDescription}>
+                {isPublic
+                  ? 'Anyone browsing the explore feed can find this debate.'
+                  : 'Let anyone browsing /explore discover it, not just people with the link.'}
+              </span>
+            </div>
+          </label>
+        )}
 
         <div className={styles.options}>
           {socials.map(s => (

@@ -1016,6 +1016,13 @@ details[open] > .optionalSummary > .detailsChevron {
   }
 }
 
+// When the toggle is OFF, give it a subtle accent border to draw the eye —
+// this is the state we want to encourage the user out of.
+.publicToggleRowOff {
+  border-color: rgba($ui-accent, 0.35);
+  background: rgba($ui-accent, 0.04);
+}
+
 .publicToggleText {
   display: flex;
   flex-direction: column;

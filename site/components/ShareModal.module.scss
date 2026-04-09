@@ -63,6 +63,60 @@
   color: $text-secondary;
 }
 
+// --- Public listing toggle (peer of the in-arena toggle) ---
+
+.publicRow {
+  display: flex;
+  align-items: flex-start;
+  gap: $space-md;
+  padding: $space-md;
+  border-radius: $radius-md;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  margin-bottom: $space-lg;
+  cursor: pointer;
+  transition: border-color $transition-fast, background $transition-fast;
+
+  &:hover {
+    border-color: rgba($ui-accent, 0.4);
+  }
+}
+
+// Highlight the off state — this is what we want to encourage out of
+.publicRowOff {
+  border-color: rgba($ui-accent, 0.35);
+  background: rgba($ui-accent, 0.04);
+}
+
+.publicCheckbox {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: $ui-accent;
+  cursor: pointer;
+}
+
+.publicText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.publicLabel {
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.publicDescription {
+  font-size: $size-xs;
+  color: $text-secondary;
+  line-height: 1.4;
+}
+
 // --- Share options grid ---
 
 .options {
