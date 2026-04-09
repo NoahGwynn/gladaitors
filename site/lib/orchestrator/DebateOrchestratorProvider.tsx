@@ -584,7 +584,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     const claim = await claimLease();
     if (!claim.claimed) {
       const message = claim.reason === 'active_driver'
-        ? 'This debate is being driven in another tab. Switch to that tab or take over from there.'
+        ? 'This debate is already running in another tab. Switch to that tab to see it.'
         : claim.reason === 'rpc_error'
           ? 'Could not start the debate (database error).'
           : 'Could not claim this debate.';

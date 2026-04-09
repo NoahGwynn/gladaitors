@@ -831,6 +831,11 @@ function DebateArenaContent() {
                 <button className={styles.submitButton} onClick={() => void handleContinueDebate()}>
                   {nextDebater?.isUser ? 'Take Your Turn' : 'Continue Debate'}
                 </button>
+                {/* Inline error from the orchestrator (e.g. "this debate is
+                    being driven in another tab"). The form panel is hidden
+                    when a debate is loaded, so its own error block is
+                    invisible — show it here too. */}
+                {error && <p className={styles.error}>{error}</p>}
               </div>
             )}
 
