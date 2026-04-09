@@ -22,7 +22,7 @@ import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import { config } from '@/lib/config';
 import {
-  createDebateRecord, updateDebateArguments, completeDebate, extendDebate,
+  createDebateRecord, completeDebate, extendDebate,
   getUserDebates, deleteDebate, getSessionId,
 } from '@/lib/debates';
 import { fetchTokenBalance, notifyBalanceChanged, onBalanceChanged } from '@/lib/tokens';
@@ -295,6 +295,10 @@ function DebateArenaContent() {
   useEffect(() => {
     if (activeDebate?.isComplete && generating === false && justCompletedRef.current) {
       justCompletedRef.current = false;
+      // The server marks is_complete=true on the natural-end path (final
+      // round completed), but the early-end path (user clicked "End debate"
+      // before the final round) only happens client-side. Calling
+      // completeDebate here is idempotent and covers both cases.
       if (debateIdRef.current) {
         completeDebate(debateIdRef.current).then(() => {
           if (isLoggedIn) loadHistory();
@@ -557,14 +561,10 @@ function DebateArenaContent() {
               return;
             }
             allArgs.push(userResult.arg);
-            // Persist the user's argument to the DB alongside the AI ones.
-            if (debateIdRef.current) {
-              await updateDebateArguments(debateIdRef.current, allArgs.map(a => ({
-                debater_index: a.debater_index, model_id: a.model_id,
-                model_name: a.model_name, round: a.round,
-                content: a.content, refused: a.refused, refusal_reason: a.refusal_reason,
-              })));
-            }
+            // The user's argument is sent to the server in the next round
+            // POST as part of `existingArguments`; the server merges and
+            // persists it before generating the next AI argument. No client
+            // write needed.
             if (userResult.kind === 'ended') {
               endRequested = true;
               // If the user was the last debater in the round, the round is
@@ -589,10 +589,11 @@ function DebateArenaContent() {
         loadTokenBalance();
       }
 
-      // Either all rounds completed naturally, or the user explicitly ended the
-      // debate after the current round finished. Mark complete either way.
-      // The existing useEffect on (activeDebate.isComplete + justCompletedRef)
-      // will fire completeDebate() in the database.
+      // Either all rounds completed naturally, or the user explicitly ended
+      // the debate after the current round finished. The server marked
+      // is_complete=true on the final round_complete; the useEffect on
+      // (activeDebate.isComplete + justCompletedRef) just refreshes the
+      // sidebar history.
       justCompletedRef.current = true;
       setActiveDebate(prev => prev ? { ...prev, isComplete: true } : prev);
     } catch (err) {
@@ -938,18 +939,10 @@ function DebateArenaContent() {
           const final_: LiveArgument = { ...arg, streaming: false };
           if (idx >= 0) updated[idx] = final_;
           else updated.push(final_);
-
-          // Save to database
-          if (debateIdRef.current) {
-            const completed = updated.filter(a => !a.streaming).map(a => ({
-              debater_index: a.debater_index, model_id: a.model_id,
-              model_name: a.model_name, round: a.round,
-              content: a.content, refused: a.refused, refusal_reason: a.refusal_reason,
-            }));
-            updateDebateArguments(debateIdRef.current, completed);
-          }
           return updated;
         });
+        // Persistence is handled server-side now — the API route writes each
+        // argument to the DB before emitting this SSE event.
         setCurrentThinking(null);
         break;
       }

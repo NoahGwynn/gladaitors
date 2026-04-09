@@ -877,11 +877,109 @@ export async function POST(request: NextRequest) {
     return data === true;
   }
 
+  // -------------------------------------------------------------------------
+  // Persistence helpers — server is now the source of truth for the debate
+  // row's `arguments` and orchestrator status fields. The orchestrator client
+  // observes these via Supabase Realtime in the cross-tab refactor.
+  //
+  // All helpers are no-ops when debateId is missing (the route still supports
+  // anonymous one-shot calls without a persisted record, though the
+  // orchestrator always passes a debateId in practice).
+  // -------------------------------------------------------------------------
+
+  /** Persist the full arguments array. Cheap-ish — runs once per argument. */
+  async function persistArguments(args: DebateArgument[]): Promise<void> {
+    if (!debateId) return;
+    const { error } = await supabase
+      .from('debates')
+      .update({ arguments: args })
+      .eq('id', debateId);
+    if (error) console.error('[PERSIST ARGS]', error);
+  }
+
+  /** Update orchestrator status fields. Pass only the fields you want changed. */
+  async function persistStatus(patch: {
+    status?: 'idle' | 'running' | 'awaiting_human' | 'complete' | 'error';
+    current_round?: number;
+    awaiting_debater_index?: number | null;
+    last_error?: string | null;
+    is_complete?: boolean;
+    arguments?: DebateArgument[];
+  }): Promise<void> {
+    if (!debateId) return;
+    const { error } = await supabase
+      .from('debates')
+      .update(patch)
+      .eq('id', debateId);
+    if (error) console.error('[PERSIST STATUS]', error);
+  }
+
+  /**
+   * Merge any args present in `priorArguments` (sent by the client) but missing
+   * from the DB row into the DB. This catches user-submitted arguments that the
+   * client persisted out-of-band as well as any reconciliation gaps after a
+   * lease takeover. Union by (round, debater_index); local content wins on
+   * conflict (the client just streamed it).
+   */
+  async function mergeIncomingArguments(): Promise<DebateArgument[]> {
+    if (!debateId) return [...priorArguments];
+
+    const { data: row, error: readErr } = await supabase
+      .from('debates')
+      .select('arguments')
+      .eq('id', debateId)
+      .single();
+
+    if (readErr) {
+      console.error('[MERGE ARGS] read error:', readErr);
+      return [...priorArguments];
+    }
+
+    const dbArgs = (row?.arguments || []) as DebateArgument[];
+    const incomingByKey = new Map<string, DebateArgument>(
+      priorArguments.map(a => [`${a.round}-${a.debater_index}`, a])
+    );
+
+    const merged: DebateArgument[] = [];
+    const seen = new Set<string>();
+
+    // Start with DB args, replacing any that the client also has (client wins)
+    for (const a of dbArgs) {
+      const key = `${a.round}-${a.debater_index}`;
+      seen.add(key);
+      merged.push(incomingByKey.get(key) ?? a);
+    }
+    // Add any client args not already in DB
+    for (const a of priorArguments) {
+      const key = `${a.round}-${a.debater_index}`;
+      if (!seen.has(key)) {
+        merged.push(a);
+        seen.add(key);
+      }
+    }
+
+    return merged;
+  }
+
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
-      // The running list of all arguments (prior + new this round) used to build prompts
-      const allArguments: DebateArgument[] = [...priorArguments];
+      // Pull in any client-side args that haven't been persisted yet (user
+      // turns from the previous round, primarily) and start the round from
+      // the merged view. This is the canonical "source of truth" hand-off:
+      // from here on, the server owns the arguments array.
+      const allArguments: DebateArgument[] = await mergeIncomingArguments();
+
+      // Mark the debate as running for this round and clear any prior
+      // awaiting-human flag. Persist the merged arguments at the same time
+      // so followers see user turns immediately.
+      await persistStatus({
+        status: 'running',
+        current_round: currentRound,
+        awaiting_debater_index: null,
+        last_error: null,
+        arguments: allArguments,
+      });
 
       try {
         // If positions were just auto-assigned, send them to the frontend so it can
@@ -905,6 +1003,10 @@ export async function POST(request: NextRequest) {
           // injected into existingArguments, and the loop will skip this slot
           // and continue with whatever comes next.
           if (model.family === 'user') {
+            await persistStatus({
+              status: 'awaiting_human',
+              awaiting_debater_index: di,
+            });
             controller.enqueue(encoder.encode(sseEvent('user_turn_needed', {
               debater_index: di,
               model_name: displayName,
@@ -974,6 +1076,7 @@ export async function POST(request: NextRequest) {
                 refused: false,
               };
               allArguments.push(argument);
+              await persistArguments(allArguments);
               controller.enqueue(encoder.encode(sseEvent('argument', argument)));
               controller.enqueue(encoder.encode(sseEvent('insufficient_tokens', {
                 message: 'You ran out of tokens. Top up to continue debating.',
@@ -993,8 +1096,22 @@ export async function POST(request: NextRequest) {
           };
           allArguments.push(argument);
 
+          // Persist BEFORE emitting the SSE event so followers can never see
+          // an argument in their local state that isn't yet in the DB.
+          await persistArguments(allArguments);
+
           // Signal: argument complete
           controller.enqueue(encoder.encode(sseEvent('argument', argument)));
+        }
+
+        // The round finished cleanly — every debater in this round produced
+        // (or refused) an argument. If this was the last round, mark complete.
+        if (currentRound >= rounds) {
+          await persistStatus({
+            status: 'complete',
+            is_complete: true,
+            current_round: currentRound,
+          });
         }
 
         // Signal: round complete (the orchestrator can fetch the next round)
@@ -1002,10 +1119,10 @@ export async function POST(request: NextRequest) {
 
       } catch (err) {
         console.error('[DEBATE STREAM] error:', err);
+        const message = err instanceof Error ? err.message : 'Internal error';
+        await persistStatus({ status: 'error', last_error: message });
         try {
-          controller.enqueue(encoder.encode(sseEvent('error', {
-            message: err instanceof Error ? err.message : 'Internal error',
-          })));
+          controller.enqueue(encoder.encode(sseEvent('error', { message })));
         } catch { /* controller may already be closed */ }
       } finally {
         try { controller.close(); } catch { /* already closed */ }

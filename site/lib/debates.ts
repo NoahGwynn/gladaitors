@@ -64,12 +64,12 @@ export async function updateDebateArguments(
     .eq('id', id);
 }
 
-/** Mark a debate as complete */
+/** Mark a debate as complete (sets both legacy flag and orchestrator status) */
 export async function completeDebate(id: string): Promise<void> {
   const supabase = createClient();
   await supabase
     .from('debates')
-    .update({ is_complete: true })
+    .update({ is_complete: true, status: 'complete' })
     .eq('id', id);
 }
 
@@ -88,6 +88,7 @@ export async function extendDebate(
       rounds: newTotalRounds,
       arguments: args,
       is_complete: false,
+      status: 'idle',
     })
     .eq('id', id);
 }
