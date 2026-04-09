@@ -668,6 +668,7 @@ function DebateArenaContent() {
                   key={debate.id}
                   className={`${styles.historyItem} ${activeDebate?.id === debate.id ? styles.historyItemActive : ''} ${generating ? styles.historyItemDisabled : ''}`}
                   onClick={() => !generating && viewSavedDebate(debate)}
+                  title={generating ? 'Browsing other debates is disabled while one is running' : undefined}
                 >
                   {confirmDeleteId === debate.id ? (
                     <div className={styles.confirmDelete}>

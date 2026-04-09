@@ -645,6 +645,8 @@ These are real but non-critical and don't need to land in this refactor:
 
 6. **`dbDriverStale` ticker keeps running while a debate is loaded but we're the driver.** Harmless — the `useMemo` short-circuits when `dbDriverSessionId === tabIdRef.current` — but a 5s timer is still firing. Could be gated more tightly on `isFollowing`.
 
+7. **History sidebar is disabled while a debate runs.** Tooltip explains why. Root cause: `activeDebate` in the provider is both "the running debate" and "the displayed debate" — clicking another history item would clobber the orchestrator's `debateIdRef` and the still-running runDebate loop would start writing to the wrong row. Proper fix is to decouple "running" from "viewed" in the provider (separate `runningDebate` and `viewedDebate` state, parallel liveArguments trees, the page reads viewed-or-running). Meaningful refactor — defer until users feel real friction. Considered the cheaper "navigate to share view" alternative but the UX of leaving the sidebar mid-debate was confusing.
+
 ---
 
 ## Final commit graph for this refactor
