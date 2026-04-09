@@ -63,28 +63,56 @@ function formatRelativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+const PAGE_SIZE = 30;
+
 export default function ExplorePage() {
   const [sort, setSort] = useState<SortMode>('recent');
   const [debates, setDebates] = useState<FeedDebate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
 
-  const load = useCallback(async (sortMode: SortMode) => {
+  /** Load the first page for a given sort. Resets offset and replaces the
+   *  current list. Called on initial mount and when the sort mode changes. */
+  const loadFirstPage = useCallback(async (sortMode: SortMode) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/debates/public?sort=${sortMode}&limit=30`);
+      const res = await fetch(`/api/debates/public?sort=${sortMode}&limit=${PAGE_SIZE}&offset=0`);
       if (res.ok) {
         const data = await res.json();
-        setDebates(data.debates || []);
+        const fetched = (data.debates || []) as FeedDebate[];
+        setDebates(fetched);
+        setHasMore(fetched.length === PAGE_SIZE);
       }
     } catch {
       setDebates([]);
+      setHasMore(false);
     }
     setLoading(false);
   }, []);
 
+  /** Load the NEXT page and append to the existing list. */
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const offset = debates.length;
+      const res = await fetch(`/api/debates/public?sort=${sort}&limit=${PAGE_SIZE}&offset=${offset}`);
+      if (res.ok) {
+        const data = await res.json();
+        const fetched = (data.debates || []) as FeedDebate[];
+        setDebates(prev => [...prev, ...fetched]);
+        setHasMore(fetched.length === PAGE_SIZE);
+      }
+    } catch {
+      // Leave the existing list as-is on error
+    }
+    setLoadingMore(false);
+  }, [debates.length, hasMore, loadingMore, sort]);
+
   useEffect(() => {
-    load(sort);
-  }, [sort, load]);
+    loadFirstPage(sort);
+  }, [sort, loadFirstPage]);
 
   return (
     <div className={styles.page}>
@@ -183,6 +211,35 @@ export default function ExplorePage() {
             );
           })}
         </div>
+      )}
+
+      {/* Load more — only shown when the last fetch returned a full page */}
+      {!loading && debates.length > 0 && hasMore && (
+        <div className={styles.loadMoreRow}>
+          <button
+            type="button"
+            className={styles.loadMoreButton}
+            onClick={loadMore}
+            disabled={loadingMore}
+          >
+            {loadingMore ? 'Loading…' : 'Load more debates'}
+          </button>
+        </div>
+      )}
+
+      {/* Bottom CTA — catches users who scrolled through everything and are
+          now most primed to start their own debate. Different framing from
+          the header CTA so it doesn't feel redundant. */}
+      {!loading && debates.length > 0 && (
+        <section className={styles.bottomCta}>
+          <h2 className={styles.bottomCtaTitle}>Got a question of your own?</h2>
+          <p className={styles.bottomCtaSubtitle}>
+            Pick a topic, choose your debaters, watch them argue.
+          </p>
+          <Link href="/arena/debate" className={styles.bottomCtaButton}>
+            Start your debate →
+          </Link>
+        </section>
       )}
     </div>
   );

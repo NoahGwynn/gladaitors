@@ -166,6 +166,85 @@
   flex-shrink: 0;
 }
 
+// --- Load more button ---
+
+.loadMoreRow {
+  display: flex;
+  justify-content: center;
+  margin-top: $space-xl;
+}
+
+.loadMoreButton {
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-sm $space-xl;
+  border-radius: $radius-md;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-primary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover:not(:disabled) {
+    border-color: rgba($ui-accent, 0.5);
+    background: $bg-card;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// --- Bottom CTA — catches users who scrolled through every card ---
+
+.bottomCta {
+  margin-top: $space-3xl;
+  padding: $space-2xl $space-lg;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-sm;
+  border-top: 1px solid $border;
+}
+
+.bottomCtaTitle {
+  font-size: $size-xl;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0;
+}
+
+.bottomCtaSubtitle {
+  font-size: $size-sm;
+  color: $text-secondary;
+  max-width: 480px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.bottomCtaButton {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-sm $space-lg;
+  border-radius: $radius-md;
+  background: $ui-accent;
+  color: white;
+  text-decoration: none;
+  transition: opacity $transition-fast, transform $transition-fast;
+  margin-top: $space-sm;
+
+  &:hover {
+    opacity: 0.92;
+    transform: translateY(-1px);
+    text-decoration: none;
+  }
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
