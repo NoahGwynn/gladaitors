@@ -1,9 +1,20 @@
 # Realtime Orchestrator Refactor — Plan & Roadmap
 
-**Status:** Not started. Pre-refactor checkpoint committed at `dbaf6db... — site/dbaf6db^` (next commit after `dbaf6db Debate arena: auth, sharing, streaming, history, branding — pre-refactor backup`). **Look at `git log` for the actual hash of the pre-refactor checkpoint commit.**
+**Status: COMPLETE.** All 6 planned commits landed plus 5 in-flight fixes (see "Actual commit history" at the bottom). Manual test plan from each commit verified by noah end-to-end.
 
 **Owner:** noah + Claude
 **Last updated:** 2026-04-09
+
+---
+
+## TL;DR — what this refactor delivered
+
+- **In-app navigation no longer kills the debate.** The orchestrator lives in a layout-mounted React Context, so clicking `/explore` or any other route while a debate runs leaves the orchestrator running in the background. (commit 3)
+- **Multi-tab sync.** Open the same debate in two tabs and the non-driving tabs receive arguments live via Supabase Realtime (~300ms after the driver persists each one). (commit 5)
+- **Single-driver enforcement.** Only one tab can drive a given debate at a time, enforced via a per-tab lease in the DB. Heartbeat every 5s, stale after 15s. (commit 4)
+- **Take-over UX.** Followers can explicitly claim the lease when the driver is paused on a human turn (any time) or has gone stale (driver tab dead). Hidden during active streaming with a fresh heartbeat. (commit 6)
+- **Clean tab close/refresh.** `beforeunload` + `keepalive: true` releases the lease immediately, no 15s wait. (post-commit-5 fix)
+- **Unrelated wins picked up along the way:** server-side per-argument persistence, server-side status tracking, fixed token deduction leak (pre-deduct + refund-on-refusal), fixed duplicate args from stale-tab resume.
 
 ---
 
@@ -573,3 +584,85 @@ The 6-commit structure exists specifically so we can stop or roll back at any po
 - Token deduction is atomic via RPC — no double-spend regardless of how many tabs are running.
 - The 30 req/min IP rate limit gives loose abuse protection.
 - The `temp instructions.txt` file is a personal scratchpad — left tracked because it was already tracked.
+
+---
+
+## Actual commit history
+
+The 6 planned commits + 5 in-flight fixes that came up during implementation. The fixes are listed in the order they happened.
+
+**Commit 1 — Schema additions** (`31d04e3`)
+Status / lease columns on `debates`, plus `claim_debate_lease`, `heartbeat_debate_lease`, `release_debate_lease` RPCs. Realtime enabled on the table via dashboard.
+
+**Commit 2 — Server-side per-argument persistence** (`e265ebf`)
+The API route now writes each argument to the DB before emitting the SSE event, and updates `status` / `current_round` / `awaiting_debater_index` / `last_error` as the loop progresses. Client no longer writes args. Started carrying the `mergeIncomingArguments` helper for stale-client reconciliation.
+
+**Fix — Token deduction order** (`ecddc2d`)
+Caught during testing: the old per-argument deduct happened AFTER the model call, so a mid-round balance exhaustion would eat one model API call without billing. Flipped to pre-deduct, refund on refusal. Added `credit_session_tokens` RPC to support refunds for anonymous sessions.
+
+**Commit 3 — Lift orchestrator into provider** (`90b83b7`)
+The big mechanical commit. `lib/orchestrator/DebateOrchestratorProvider.tsx` (provider + 3 hooks) mounted in `app/layout.tsx`. The arena page shrank from 1548 → 971 lines. The user-turn Promise resolver moved into the provider. This is where in-app navigation stopped killing debates.
+
+**Commit 4 — Lease claim + heartbeat** (`326c59a`)
+Provider now claims the lease before each `runDebate`, heartbeats every 5s, releases on completion. Added `isDriver` to status context. Two-tab races are now refused at the orchestrator level.
+
+**Fix — Per-tab lease key** (`39be25d`)
+The lease was keyed on `getSessionId()` which uses localStorage and is shared across tabs in the same browser → both tabs claimed as `already_owner` and the lease was useless. Introduced `getTabId()` (sessionStorage, per-tab). Token wallet still uses the per-browser session id; lease uses the per-tab id.
+
+**Fix — Inline lease error placement** (`2e8a98b`)
+The lease-rejection error was rendering in the form panel, which is hidden when a debate is loaded. Moved the error display to mirror under the Continue Debate button as well. Also tightened the wording to drop a misleading "take over from there" hint that the button didn't exist for yet.
+
+**Fix — Duplicate args on stale-tab resume** (`80c4ac0`)
+`alreadyArguedIndices` was computed from the client-supplied `priorArguments` BEFORE `mergeIncomingArguments` ran. A stale tab passing only `[A1]` while the DB had `[A1, A2, A3]` would cause the server to re-run `A2` and `A3`. Fixed by moving the computation inside the stream's start block, after the merge.
+
+**Commit 5 — Realtime subscription + follower mode** (`116ef5b`)
+Provider subscribes to the `debates` row via Supabase Realtime when an active debate is set. Strict-merge reconciliation: DB wins for status fields, local wins for the streaming arg, incoming-only args are added. Page renders a `followerBanner` when not driving. `Continue Debate` and user-turn input hidden in follower mode.
+
+**Fix — Release on unload + tighter follower detection** (`3d5e8ba`)
+After commit 5, refreshing the driver tab during a human turn left the lease held until heartbeat staleness, and the follower-mode check didn't verify there was actually a live driver. Added a `beforeunload` handler that POSTs to a new `/api/debate/release-lease` endpoint with `keepalive: true` so the release survives page unload. Tightened `isFollowing` to require `dbDriverSessionId !== null && !== us`.
+
+**Commit 6 — Take-over button** (`bdd7d5b`)
+`takeOverDebate()` action force-claims the lease (`force_if_stale_secs=0`) and resumes via `continueDebate()`. Button visible per Q1 rules: `awaiting_human` always, or stale lease. Hidden during active streaming with a fresh heartbeat. Added periodic 5s `staleTick` to drive `dbDriverStale` re-evaluation.
+
+**Fix — Stale closure in Realtime reconcile** (`6650a75`)
+`reconcileRealtimeUpdate` was reading `isDriver` from React state via closure. The Realtime subscription effect captures the callback at subscribe time and only re-subscribes on `activeDebate.id` changes — so the captured callback always saw the *original* `isDriver` value (usually `false` from before `runDebate` set it to `true`). Take-over correctly transferred the lease but the old driver tab's input box never disappeared because the cleanup branch silently no-op'd. Switched to detection via REFs (`heartbeatTimerRef.current`, `userTurnResolverRef.current`) which are always current.
+
+---
+
+## Followups (deferred, not blockers)
+
+These are real but non-critical and don't need to land in this refactor:
+
+1. **`continueDebate` could refresh from DB before computing resume point.** Currently it reads `liveArguments` (which is now kept fresh by Realtime, so it's almost always correct). After a stale-tab takeover the server-side merge backstops any drift, so the client effectively re-runs through already-cached rounds in 0-work API round-trips before doing real work. Inefficient but correct. Cleanup: have `continueDebate` re-fetch the row and compute resume from the merged authoritative state.
+
+2. **Driver heartbeat doesn't react to "we lost the lease" via the heartbeat RPC's response.** `heartbeat_debate_lease` returns the current driver id; if it's not us, we tear down. This works but is a 5s detection latency. The Realtime path is faster (~300ms) and is the primary detection mechanism — the heartbeat path is only the fallback for when Realtime is broken. Acceptable.
+
+3. **`cancelUserTurn` doesn't release the lease.** Today we keep the lease held when the user cancels the input, on the assumption they may return to it. If we want explicit cancel to also free the lease for other tabs/devices, that's a one-line addition. Skipped for now because the meaning of "cancel" in the existing UI isn't clearly "give up the debate."
+
+4. **No abort signal for in-flight SSE on lease loss.** When Tab A loses the lease via Realtime, we tear down its heartbeat and pending user-turn but don't abort an in-flight `runOneRound` fetch. The fetch will complete naturally — Tab A's arguments will land in `liveArguments` and be persisted to the DB by the server. With the lease lost, Tab A's NEXT round POST would also write to the row (race with Tab B). In practice this only happens if takeover fires during active streaming, which the UI prevents (button hidden). If we ever allow active-streaming takeover, this needs a real `AbortController` plumbed through `runOneRound`.
+
+5. **No spectator mode for non-owners.** Realtime is wired up but only owners can read their own debates. The shared debate view at `/arena/debate/[id]` is a separate page and doesn't yet use the provider's Realtime subscription, so a public viewer of a running debate doesn't see live updates. A small additional commit to wire `SharedDebateView` into the same provider would give us this for free.
+
+6. **`dbDriverStale` ticker keeps running while a debate is loaded but we're the driver.** Harmless — the `useMemo` short-circuits when `dbDriverSessionId === tabIdRef.current` — but a 5s timer is still firing. Could be gated more tightly on `isFollowing`.
+
+---
+
+## Final commit graph for this refactor
+
+```
+6650a75 Fix stale closure in Realtime reconcile — driver tab now reacts to take-over
+bdd7d5b Take-over button: claim the lease from another tab and resume                       [commit 6]
+3d5e8ba Release driver lease on tab unload + tighten follower-mode detection
+116ef5b Realtime cross-tab sync + follower mode                                              [commit 5]
+80c4ac0 Fix duplicate args when a stale tab resumes a debate
+2e8a98b Surface lease-claim error inline near the Continue Debate button
+39be25d Fix lease key: use per-tab id instead of per-browser session id
+326c59a Provider: claim driver lease before each runDebate, heartbeat while running         [commit 4]
+ecddc2d Fix token deduction order: pre-deduct, refund on refusal
+90b83b7 Lift debate orchestrator into a layout-mounted React Context provider               [commit 3]
+e265ebf API: server-side per-argument persistence and orchestrator status updates           [commit 2]
+31d04e3 Schema: add status + lease columns and lease RPCs for orchestrator refactor         [commit 1]
+9a96fae Refactor plan: hide take-over button when not allowed (no disabled state)
+b5478e9 Add Realtime Orchestrator Refactor plan
+bf1ce3f Site: full debate platform — pre-refactor checkpoint
+```
