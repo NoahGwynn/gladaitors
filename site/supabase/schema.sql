@@ -406,6 +406,19 @@ create index if not exists debates_public
   on public.debates(is_public, created_at desc)
   where is_public = true;
 
+-- Per-debater "the model picked its own stance" flag, aligned to the models
+-- array by index. NULL on legacy rows where this metadata wasn't recorded.
+-- Surfaced on the shared debate view as a small "self-chosen" marker.
+alter table public.debates
+  add column if not exists auto_assigned boolean[];
+
+-- Whether the debate was generated with revealIdentities=true (models knew
+-- their opponents) or false (anonymous mode). NULL on legacy rows. Surfaced
+-- on the shared debate view as a banner when explicitly false, because
+-- "models had no idea who they were arguing with" is a compelling angle.
+alter table public.debates
+  add column if not exists reveal_identities boolean;
+
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,

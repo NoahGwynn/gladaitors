@@ -36,6 +36,14 @@ export interface Debate {
   driver_session_id?: string | null;
   driver_heartbeat_at?: string | null;
   last_error?: string | null;
+  // --- Generation metadata (recorded once at creation) ---
+  /** Per-debater flag for whether the AI picked its own stance (true) or
+   *  the user supplied one (false). Aligned to the `models` array by index.
+   *  NULL on legacy rows where this wasn't recorded. */
+  auto_assigned?: boolean[] | null;
+  /** Whether the models knew who their opponents were during generation.
+   *  NULL on legacy rows. */
+  reveal_identities?: boolean | null;
 }
 
 /** User profile with token balance */

@@ -940,6 +940,11 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
       models: config.debaters.map(d => d.modelId),
       rounds: config.rounds,
       context: config.context || undefined,
+      // Per-debater "AI picked its own stance" flags + the anonymous-mode
+      // flag, recorded once at creation so the shared debate view can
+      // surface them later.
+      autoAssigned: config.debaters.map(d => d.assignmentMode === 'auto'),
+      revealIdentities: config.revealIdentities,
     });
     if (newId) {
       debateIdRef.current = newId;

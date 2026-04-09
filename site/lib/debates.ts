@@ -23,6 +23,13 @@ export async function createDebateRecord(params: {
   models: string[];
   rounds: number;
   context?: string;
+  /** Per-debater flag aligned to `models`: true if the AI was set to pick
+   *  its own stance, false if a position was typed by the user. Recorded
+   *  here so the shared debate view can surface a "self-chosen" marker. */
+  autoAssigned?: boolean[];
+  /** Whether the models knew who their opponents were. Recorded so the
+   *  shared view can show an "anonymous" banner when this is false. */
+  revealIdentities?: boolean;
 }): Promise<string | null> {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -41,6 +48,8 @@ export async function createDebateRecord(params: {
       arguments: [],
       is_complete: false,
       expires_at: user ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      auto_assigned: params.autoAssigned ?? null,
+      reveal_identities: params.revealIdentities ?? null,
     })
     .select('id')
     .single();
