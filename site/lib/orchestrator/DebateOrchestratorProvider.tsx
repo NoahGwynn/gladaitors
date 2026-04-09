@@ -519,35 +519,47 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     return result;
   }, []);
 
-  /** Apply a Realtime row update to local state. */
+  /** Apply a Realtime row update to local state.
+   *
+   *  IMPORTANT: this callback must NOT close over React state values like
+   *  `isDriver`, because the Realtime subscription effect captures the
+   *  current `reconcileRealtimeUpdate` reference at subscription time and
+   *  doesn't re-subscribe when state changes. Reading isDriver from a
+   *  closure here would mean the callback always sees the value from the
+   *  moment the subscription was created — usually `false`, before runDebate
+   *  ever set it to `true`.
+   *
+   *  Instead, detect "we were driving" via REFS (heartbeatTimerRef and
+   *  userTurnResolverRef), which are always current. The state setters
+   *  (setIsDriver, setPendingUserTurn) don't suffer this problem because
+   *  React provides stable setter references.
+   */
   const reconcileRealtimeUpdate = useCallback((row: Debate) => {
-    // 1. Driver-change detection. If the row says someone else owns the
-    //    lease but our local isDriver flag is true, we just got kicked.
-    //    Tear down our heartbeat AND cancel any pending user-turn so the
-    //    in-flight runDebate loop unwinds cleanly.
     const newDriver = row.driver_session_id ?? null;
-    if (newDriver && newDriver !== tabIdRef.current && isDriver) {
+
+    // If the row says someone else owns the lease and we have a heartbeat
+    // running (= we thought we were the driver), tear it down.
+    if (newDriver !== tabIdRef.current && heartbeatTimerRef.current) {
       stopHeartbeat();
       setIsDriver(false);
-      // If the orchestrator is paused awaiting human input, resolve the
-      // pending Promise with null so runDebate returns and runs its
-      // finally block (which clears generating, releases the lease ref,
-      // etc). Without this the orchestrator would sit forever awaiting
-      // input that the user is now typing in another tab.
-      const resolver = userTurnResolverRef.current;
-      if (resolver) {
-        userTurnResolverRef.current = null;
-        setPendingUserTurn(null);
-        resolver(null);
-      }
-    }
-    if (newDriver === tabIdRef.current && !isDriver) {
-      // Edge case: a forced takeover from another tab could have flipped
-      // the driver back to us. Re-flag as driver.
-      setIsDriver(true);
     }
 
-    // 2. Status fields — DB always wins
+    // If the row says someone else owns the lease and we have a pending
+    // user-turn resolver, we just got kicked off mid-pause. Cancel the
+    // pending turn so the orchestrator's runDebate loop unwinds cleanly
+    // — otherwise the input box would stay visible in this tab forever.
+    if (
+      newDriver &&
+      newDriver !== tabIdRef.current &&
+      userTurnResolverRef.current
+    ) {
+      const resolver = userTurnResolverRef.current;
+      userTurnResolverRef.current = null;
+      setPendingUserTurn(null);
+      resolver(null);
+    }
+
+    // Status fields — DB always wins
     if (row.status !== undefined) setDbStatus(row.status);
     if (row.current_round !== undefined) setDbCurrentRound(row.current_round);
     setDbAwaitingHuman(row.status === 'awaiting_human');
@@ -574,7 +586,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
 
     // 5. Arguments — strict merge
     setLiveArguments(prev => mergeRealtimeArgs(prev, row.arguments));
-  }, [isDriver, stopHeartbeat, mergeRealtimeArgs]);
+  }, [stopHeartbeat, mergeRealtimeArgs]);
 
   // ========================================================================
   // SSE event handler
