@@ -857,10 +857,12 @@ export async function POST(request: NextRequest) {
   // Generate display names (handles duplicate models: "Claude 1", "Claude 2")
   const displayNames = getDisplayNames(debaters);
 
-  // Which debaters in `currentRound` already have an argument? (skip them)
-  const alreadyArguedIndices = new Set(
-    priorArguments.filter(a => a.round === currentRound).map(a => a.debater_index)
-  );
+  // NOTE: alreadyArguedIndices is computed INSIDE the stream's start() block
+  // below, AFTER mergeIncomingArguments() runs. Using priorArguments here
+  // would only see the client's view, which can be stale (e.g. another tab
+  // ran several rounds while this client wasn't looking). Computing from
+  // the merged DB-first view prevents the loop from re-running debaters
+  // whose arguments are already in the row.
 
   // Token deduction helper — atomically deducts N tokens, returns false if insufficient.
   // Throws on RPC errors (e.g. missing function, database down) so they can't be
@@ -981,6 +983,15 @@ export async function POST(request: NextRequest) {
       // the merged view. This is the canonical "source of truth" hand-off:
       // from here on, the server owns the arguments array.
       const allArguments: DebateArgument[] = await mergeIncomingArguments();
+
+      // Compute "already argued for this round" from the MERGED view, not
+      // from the client-supplied priorArguments. The client's view can be
+      // stale (lease takeover from a tab that missed several rounds), and
+      // using the stale view here is what causes duplicate arguments to be
+      // generated for slots that already have one in the DB.
+      const alreadyArguedIndices = new Set(
+        allArguments.filter(a => a.round === currentRound).map(a => a.debater_index)
+      );
 
       // Mark the debate as running for this round and clear any prior
       // awaiting-human flag. Persist the merged arguments at the same time
