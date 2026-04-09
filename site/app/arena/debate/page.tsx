@@ -128,15 +128,9 @@ function DebateArenaContent() {
   // (history sidebar, /explore, etc.) without killing the running debate.
   const {
     activeDebate, generating, error, errorReason, justCompleted,
-    isDriver, dbStatus, dbAwaitingHuman,
+    dbAwaitingHuman, isFollowing,
   } = useDebateStatus();
   const { liveArguments, currentThinking, pendingUserTurn } = useDebateStream();
-  /** True when this tab is viewing a debate that's being driven by another
-   *  tab. We render a follower-mode UI: arguments arrive live via Realtime,
-   *  the Continue Debate / user-turn input controls are hidden, and a
-   *  "live from another tab" indicator is shown. */
-  const isFollowing = !!activeDebate && !isDriver && !generating
-    && (dbStatus === 'running' || dbStatus === 'awaiting_human');
   const {
     startDebate, continueDebate, extendActiveDebate,
     loadDebate, resetDebate,

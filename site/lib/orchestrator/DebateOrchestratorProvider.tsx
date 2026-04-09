@@ -189,6 +189,10 @@ interface StatusContextValue {
   dbCurrentRound: number;
   /** True if the driver tab is paused on a human turn (its own user, not us). */
   dbAwaitingHuman: boolean;
+  /** True when this tab should render in read-only follower mode: the row
+   *  is being driven by another live tab (driver_session_id is set, isn't us,
+   *  and status is running or awaiting_human). */
+  isFollowing: boolean;
 }
 
 interface StreamContextValue {
@@ -267,6 +271,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   const [dbStatus, setDbStatus] = useState<StatusContextValue['dbStatus']>(null);
   const [dbCurrentRound, setDbCurrentRound] = useState(0);
   const [dbAwaitingHuman, setDbAwaitingHuman] = useState(false);
+  const [dbDriverSessionId, setDbDriverSessionId] = useState<string | null>(null);
 
   // --- Refs (closure-stable across re-renders) ---
   const debateIdRef = useRef<string | null>(null);
@@ -378,6 +383,33 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
       if (heartbeatTimerRef.current) clearInterval(heartbeatTimerRef.current);
     };
   }, []);
+
+  // Release the driver lease on tab unload (close, refresh, navigate to
+  // another origin). Uses fetch with keepalive: true so the request
+  // survives the page unload event. Without this, the lease would only
+  // clear after the 15s stale-heartbeat threshold, leaving other tabs
+  // (or the same tab after refresh) stuck in follower mode.
+  useEffect(() => {
+    const handler = () => {
+      if (!isDriver) return;
+      const debateId = debateIdRef.current;
+      const tabId = tabIdRef.current;
+      if (!debateId || !tabId) return;
+      try {
+        // keepalive lets the POST survive the unload — fire-and-forget.
+        fetch('/api/debate/release-lease', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ debateId, tabId }),
+          keepalive: true,
+        });
+      } catch {
+        // Best-effort. Heartbeat staleness is the backup.
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [isDriver]);
 
   // ========================================================================
   // Realtime subscription — keep follower tabs in sync with the driver
@@ -492,6 +524,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     if (row.status !== undefined) setDbStatus(row.status);
     if (row.current_round !== undefined) setDbCurrentRound(row.current_round);
     setDbAwaitingHuman(row.status === 'awaiting_human');
+    setDbDriverSessionId(row.driver_session_id ?? null);
 
     // 3. is_complete — followers learn the debate is done from here
     if (row.is_complete) {
@@ -1013,6 +1046,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     setDbStatus(debate.status ?? (debate.is_complete ? 'complete' : 'idle'));
     setDbCurrentRound(debate.current_round ?? 0);
     setDbAwaitingHuman(debate.status === 'awaiting_human');
+    setDbDriverSessionId(debate.driver_session_id ?? null);
   }, [isDriver, stopHeartbeat, releaseLease]);
 
   const resetDebate = useCallback(() => {
@@ -1034,6 +1068,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     setDbStatus(null);
     setDbCurrentRound(0);
     setDbAwaitingHuman(false);
+    setDbDriverSessionId(null);
   }, [isDriver, stopHeartbeat, releaseLease]);
 
   const submitUserTurn = useCallback(async (
@@ -1113,6 +1148,17 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   // Context value assembly
   // ========================================================================
 
+  /** Follower mode: someone ELSE is currently driving this debate. The check
+   *  is "live driver exists" rather than "status is running" so a stale-but-
+   *  not-yet-released-on-unload lease still triggers it correctly only when
+   *  there really is another active driver. */
+  const isFollowing =
+    !!activeDebate &&
+    !generating &&
+    !!dbDriverSessionId &&
+    dbDriverSessionId !== tabIdRef.current &&
+    (dbStatus === 'running' || dbStatus === 'awaiting_human');
+
   const statusValue: StatusContextValue = {
     activeDebate,
     generating,
@@ -1123,6 +1169,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     dbStatus,
     dbCurrentRound,
     dbAwaitingHuman,
+    isFollowing,
   };
 
   const streamValue: StreamContextValue = {
