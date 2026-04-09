@@ -1159,13 +1159,10 @@ details[open] > .optionalSummary > .detailsChevron {
 
 .historyDisabledNote {
   font-size: $size-xs;
-  color: $text-muted;
+  color: $text-secondary;
   font-style: italic;
   margin: 0 0 $space-sm 0;
-  padding: $space-xs $space-sm;
-  border-left: 2px solid rgba($ui-accent, 0.3);
-  background: rgba($ui-accent, 0.04);
-  border-radius: $radius-sm;
+  padding: 0;
 }
 
 .historyItemActive {
