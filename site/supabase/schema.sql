@@ -5,12 +5,45 @@
 -- Safe to re-run — uses IF NOT EXISTS and DROP IF EXISTS throughout.
 -- ============================================================================
 
+-- ----------------------------------------------------------------------------
+-- Token economy constants
+-- ----------------------------------------------------------------------------
+-- Single source of truth for starting token balances. Changing these values
+-- automatically updates the column DEFAULTs (because the DEFAULTs reference
+-- these functions) AND every RPC that creates a new session row, so we
+-- don't have to chase magic numbers across the file. To change the
+-- balances, edit the `select N` literal in each function below and re-run
+-- this schema.
+--
+-- IMPORTANT: column DEFAULTs only apply to NEW rows. Existing profiles or
+-- sessions are not retroactively topped up when these values change.
+-- ----------------------------------------------------------------------------
+
+create or replace function public.signup_starting_tokens()
+returns int as $$ select 50 $$ language sql immutable;
+
+create or replace function public.anonymous_starting_tokens()
+returns int as $$ select 15 $$ language sql immutable;
+
+-- Re-apply column DEFAULTs to existing tables. `create table if not exists`
+-- below is a no-op on existing tables, so without these explicit ALTERs the
+-- old literal DEFAULTs (e.g. default 20, default 6) would remain in place.
+do $$
+begin
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'profiles') then
+    execute 'alter table public.profiles alter column token_balance set default public.signup_starting_tokens()';
+  end if;
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'sessions') then
+    execute 'alter table public.sessions alter column token_balance set default public.anonymous_starting_tokens()';
+  end if;
+end$$;
+
 -- User profiles (extends Supabase auth.users)
 create table if not exists public.profiles (
   id uuid references auth.users(id) on delete cascade primary key,
   email text,
   display_name text,
-  token_balance int not null default 20,
+  token_balance int not null default public.signup_starting_tokens(),
   created_at timestamptz not null default now()
 );
 
@@ -19,7 +52,7 @@ create or replace function public.handle_new_user()
 returns trigger as $$
 begin
   insert into public.profiles (id, email, token_balance)
-  values (new.id, new.email, 20);
+  values (new.id, new.email, public.signup_starting_tokens());
   return new;
 end;
 $$ language plpgsql security definer;
@@ -97,7 +130,7 @@ create policy "Creators can delete own debates"
 -- Anonymous sessions (token tracking for logged-out users)
 create table if not exists public.sessions (
   id text primary key,
-  token_balance int not null default 6,
+  token_balance int not null default public.anonymous_starting_tokens(),
   created_at timestamptz not null default now(),
   last_used_at timestamptz not null default now()
 );
@@ -135,7 +168,7 @@ begin
 
   -- Upsert the session (create with default balance if it doesn't exist)
   insert into public.sessions (id, token_balance, last_used_at)
-  values (p_session_id, 6, now())
+  values (p_session_id, public.anonymous_starting_tokens(), now())
   on conflict (id) do update set last_used_at = now();
 
   -- Now deduct atomically
@@ -165,7 +198,7 @@ begin
   if p_session_id is not null then
     -- Upsert session to ensure it exists
     insert into public.sessions (id, token_balance)
-    values (p_session_id, 6)
+    values (p_session_id, public.anonymous_starting_tokens())
     on conflict (id) do nothing;
 
     select token_balance into balance from public.sessions where id = p_session_id;

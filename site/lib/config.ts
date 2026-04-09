@@ -16,8 +16,11 @@ export const config = {
    */
   showSocialMetrics: false,
 
-  /** Starting token balance for new users */
-  startingTokens: 20,
+  /** Starting token balance for new signed-up users. The DB-side source of
+   *  truth lives in the `signup_starting_tokens()` SQL function in
+   *  schema.sql — this constant must be kept in sync if the UI quotes the
+   *  number anywhere (e.g. signup CTA copy "Sign up for 50 free tokens"). */
+  startingTokens: 50,
 
   /** Max character limits */
   maxTopicLength: 200,

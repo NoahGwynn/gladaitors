@@ -631,7 +631,7 @@ function DebateArenaContent() {
                   className={styles.buyLink}
                   onClick={() => isLoggedIn ? setShowBuyTokens(true) : setShowAuth(true)}
                 >
-                  {isLoggedIn ? 'Top up' : 'Sign up for 20 free'}
+                  {isLoggedIn ? 'Top up' : `Sign up for ${config.startingTokens} free`}
                 </button>
               )}
             </span>
@@ -947,7 +947,7 @@ function DebateArenaContent() {
                 {!isLoggedIn && (
                   <div className={styles.signupPrompt}>
                     <span className={styles.signupPromptTitle}>
-                      Sign up to save debates and get 20 free tokens
+                      Sign up to save debates and get {config.startingTokens} free tokens
                     </span>
                     <span className={styles.signupPromptDetail}>
                       This debate expires in 30 days without an account.

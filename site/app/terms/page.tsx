@@ -34,7 +34,7 @@ export default function TermsPage() {
         <h2>3. Tokens and payments</h2>
         <p>
           Debates are powered by tokens. Anonymous users receive a small free allowance.
-          Registered users receive 20 tokens on signup. Additional tokens can be purchased
+          Registered users receive 50 tokens on signup. Additional tokens can be purchased
           via Stripe.
         </p>
         <p>
