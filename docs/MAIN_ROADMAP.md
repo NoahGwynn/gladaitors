@@ -98,12 +98,14 @@ Extend the two live formats before building new ones. Also the first real moneti
 
 **Monetisation foundation:**
 
-- Free tier with daily caps on runs across the Arena
-- Tip jar / "Support the Lab" (one-time and recurring)
-- Pro tier (monthly): unlimited runs, early access to new challenges, downloadable results, custom debate personas
-- Credits for extra runs beyond the free cap
+- Welcome token grant for new signups
+- Weekly top-up for signed-in users
+- Token packs (£3 / £10 / £25) live in Stripe
+- Tip jar / "Support the Lab"
+- Hard monthly API budget ceiling enforced in code (ships in Phase 1 but monitored through Phase 2)
+- Model-tiered token costs (cheap models cost fewer tokens than flagship)
 
-**Phase boundary review:** Is Arena engagement growing? Is Pro tier converting? Is Territory War actually pulling the kind of audience that justifies graphical investment, or is the text-based debate doing the heavy lifting? The answer shapes Phase 3 scope.
+**Phase boundary review:** Is Arena engagement growing? Are users converting from welcome grant to first token purchase? Is Territory War actually pulling the kind of audience that justifies graphical investment, or is the text-based debate doing the heavy lifting? The answer shapes Phase 3 scope.
 
 ### Phase 3 — Extend the library (~14–24 weeks)
 
@@ -198,22 +200,34 @@ The Arena is only as good as the meta-layer that holds it together. These featur
 
 ## Monetisation
 
-The goal is **small, steady revenue that rewards the work** — not viral scale, not investor pitches, not ad-supported attention mining. A realistic target is a few hundred engaged users paying £5/month within 12 months. That's £1–2k/month — enough to feel like the project is paying something back, not enough to require a business plan.
+The goal is **small, steady revenue that rewards the work** — not viral scale, not investor pitches, not ad-supported attention mining. A realistic target is enough monthly income to cover API costs comfortably and pay something back for the time invested.
 
-**The model:**
+**Tokens are the model.** Already built. They match the lab identity: every action on the site is a discrete experiment with a discrete cost, and tokens make that relationship honest and visible. This aligns user spending with actual API cost, unlocks whale behaviour from heavily engaged users, and avoids the subscription fatigue that kills conversion for small sites.
 
-- **Free tier:** Daily cap on runs across the Arena. Enough to try everything and come back. No advertising.
-- **Tip jar / Support the Lab:** One-time or recurring donation. The simplest possible monetisation. Low conversion but low effort.
-- **Credits / extra runs:** Pay per run beyond the free cap. Works well for replayable challenges (The Pot, The Mirror, Debate, Territory War matchups).
-- **Pro tier (monthly):** Unlimited runs, priority access during load, early access to new challenges, detailed result downloads, custom debate personas, custom Territory War matchups.
-- **Later extensions:** Additional models (DeepSeek, Kimi, Qwen) as a paid feature. Tournaments with entry fees. Embedded challenges for external sites as a B2B offer.
+**The structure:**
+
+- **Free signup welcome grant.** Generous enough to meaningfully try things across multiple challenges. The first-experience moment that decides whether someone stays.
+- **Weekly top-up for signed-in users.** A small automatic grant each week just for being active. The retention hook. Costs almost nothing on cheap models and gives users a reason to come back.
+- **Token packs at classic price points.** £3, £10, £25, with bonus tokens on the larger packs so the average purchase pushes upward without feeling exploitative.
+- **Tokens never expire.** This is critical. Expiring tokens destroy trust and turn casual users into churned users. Non-expiring balances keep users coming back even after months away because they remember they have something waiting.
+- **Model tiering on token cost.** Cheap-model debates cost fewer tokens than flagship-model debates. Territory War matches cost more than debates because they're longer and more expensive to run. Users see the cost before committing, which makes the economy feel fair rather than arbitrary.
+- **Curated content stays free.** The hero "Which AI is best?" debate, showcase debates, Explore page browsing, reading and voting on existing runs — all free. No API calls triggered by the user, no cost to the site. This is the funnel.
+- **Tip jar / Support the Lab:** Always available. Some people will just give money because they like what you're doing. Zero friction to add.
+- **Later extensions:** Additional models (DeepSeek, Kimi, Qwen) as a token-priced feature. Tournaments with token entry fees. Embedded challenges for external sites as a B2B offer.
+
+**Launch protection — non-negotiable:**
+
+- **Hard monthly API budget ceiling in code.** If total debates across all users exceed the cap in a given month, the site refuses new free-tier runs and shows a friendly "we're at capacity today, try tomorrow" message. Paid token runs continue because they're self-funding. This is the solo-founder survival feature that protects against viral moments becoming bankruptcy events.
+- Ship the cap logic with Debate v2 in Phase 1, not later.
+- Start the free tier tight. Tightening after launch is painful; starting tight and loosening is easy.
 
 **What the monetisation should not do:**
 
-- Paywall the core experience. The free tier must be genuinely usable.
+- Paywall the core experience. The free welcome grant must be genuinely usable.
 - Rely on advertising. Incompatible with the lab brand.
 - Gate the behavioural data itself. The observations are the product — they should be public.
-- Chase growth metrics over engagement. A small engaged audience that pays is the target; a large free audience that doesn't is not.
+- Chase growth metrics over engagement. A small engaged audience that spends is the target; a large free audience that doesn't is not.
+- Expire tokens. Ever.
 
 ---
 
@@ -224,7 +238,7 @@ Things this roadmap assumes but hasn't verified:
 - **Whether shipping Debate v2 and Territory War simultaneously dilutes the launch story or amplifies it.** Two formats at once is more to communicate but fundamentally repositions the site as a multi-format lab rather than a debate product. The roadmap bets on amplification. Phase 1 review should validate this.
 - **Whether the Territory War strategy feedback UI actually produces legible insight for non-technical users.** The feature is the core lab-identity moment, but if users can't parse the per-turn reasoning log it fails as a hook. Usability testing before deployment is worth real time.
 - **Whether users want non-debate challenges beyond Territory War.** Phases 3 and 4 assume appetite for additional formats. That assumption needs data from Phase 2 engagement before committing Phase 3 engineering time.
-- **Whether monetisation converts at the planned rate.** £5/month × a few hundred users is realistic for an engaged niche audience, but it's not guaranteed. The Phase 2 boundary review should check actual conversion before scoping Phase 3.
+- **Whether monetisation converts at a sustainable rate.** The token model assumes meaningful conversion from the welcome grant to first purchase, plus some power-user whale behaviour. That's realistic for an engaged niche audience but not guaranteed. The Phase 2 boundary review should check actual conversion data before scoping Phase 3.
 - **Whether the TypeScript backend stabilisation lands on time.** Everything in Phase 1 and beyond depends on this.
 
 The roadmap should be revisited at the end of each phase with these uncertainties as the review agenda.

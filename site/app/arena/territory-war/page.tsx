@@ -13,13 +13,19 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import { getSessionId } from '@/lib/debates';
 import { getModelColour, getModelName, findModel, MODELS } from '@/lib/models';
-import { GRID_SIZE } from '@/lib/challenges/territory-war/constants';
 import { applyActions } from '@/lib/challenges/territory-war/actions';
-import { advanceTick } from '@/lib/challenges/territory-war/scoring';
+import { advanceTick, updateTerritory } from '@/lib/challenges/territory-war/scoring';
 import type { ChallengeState, PieceAction, ChallengeEvent } from '@/lib/challenges/territory-war/types';
 import styles from './page.module.scss';
+
+// Phaser requires DOM — dynamic import with ssr: false
+const TerritoryWarCanvas = dynamic(
+  () => import('@/lib/challenges/territory-war/phaser/TerritoryWarCanvas'),
+  { ssr: false },
+);
 
 // --- Types for SSE events ---
 
@@ -56,8 +62,19 @@ export default function TerritoryWarPage() {
   const [challengeId, setChallengeId] = useState<string | null>(null);
   const [thinkingModel, setThinkingModel] = useState<string | null>(null);
   const [winner, setWinner] = useState<string | null>(null);
+  const [lastActions, setLastActions] = useState<{ model: string; actions: PieceAction[] } | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
+
+  // Build Phaser colour map from selected model IDs → model display names
+  // The Phaser scene keys colours by display name (e.g. "Claude Sonnet")
+  const colourMap: Record<string, number> = {};
+  for (const id of selectedModels) {
+    const name = getModelName(id);
+    // Convert CSS hex string (#D97757) to Phaser number (0xD97757)
+    const hex = getModelColour(id);
+    colourMap[name] = parseInt(hex.replace('#', ''), 16);
+  }
 
   // --- Model picker helpers ---
   function toggleModel(id: string) {
@@ -151,7 +168,12 @@ export default function TerritoryWarPage() {
             // immediately — don't wait for tick_complete
             if (localState && actions.length > 0) {
               applyActions(localState, modelName, actions);
+              // Update territory immediately so tile colours change
+              // as pieces move (not just at tick end)
+              updateTerritory(localState);
               setChallengeState({ ...localState });
+              // Trigger Phaser animations for this model's actions
+              setLastActions({ model: modelName, actions });
             }
 
             const turnActions: TurnActions = {
@@ -316,67 +338,12 @@ export default function TerritoryWarPage() {
           <div className={styles.mainLayout}>
             {/* Map */}
             <div className={styles.mapContainer}>
-              {challengeState && (
-                <div
-                  className={styles.grid}
-                  style={{
-                    gridTemplateColumns: `repeat(${GRID_SIZE}, 1fr)`,
-                    gridTemplateRows: `repeat(${GRID_SIZE}, 1fr)`,
-                  }}
-                >
-                  {challengeState.grid.flat().map((tile, i) => {
-                    const piece = challengeState.pieces.find(
-                      p => p.x === tile.x && p.y === tile.y
-                    );
-                    const ownerColour = tile.owner
-                      ? getModelColour(
-                          selectedModels[
-                            Object.keys(challengeState.models).indexOf(tile.owner)
-                          ] || ''
-                        )
-                      : undefined;
-
-                    return (
-                      <div
-                        key={i}
-                        className={`${styles.tile} ${styles[`tile_${tile.tileType}`] || ''}`}
-                        style={ownerColour ? {
-                          backgroundColor: ownerColour,
-                          opacity: tile.tileType === 'base' ? 0.8
-                            : tile.tileType === 'fort' ? 0.6 : 0.25,
-                        } : undefined}
-                        title={`(${tile.x},${tile.y}) ${tile.tileType}${tile.owner ? ` — ${tile.owner}` : ''}${tile.resourceAmount ? ` [${tile.resourceAmount}]` : ''}`}
-                      >
-                        {tile.tileType === 'ore' && !tile.owner && (
-                          <span className={styles.resourceIcon}>⛏</span>
-                        )}
-                        {tile.tileType === 'food' && !tile.owner && (
-                          <span className={styles.resourceIcon}>🌾</span>
-                        )}
-                        {tile.tileType === 'base' && (
-                          <span className={styles.resourceIcon}>🏰</span>
-                        )}
-                        {tile.tileType === 'fort' && (
-                          <span className={styles.resourceIcon}>🛡</span>
-                        )}
-                        {piece && (
-                          <div
-                            className={styles.piece}
-                            style={{
-                              backgroundColor: getModelColour(
-                                selectedModels[
-                                  Object.keys(challengeState.models).indexOf(piece.modelName)
-                                ] || ''
-                              ),
-                            }}
-                            title={`${piece.modelName} #${piece.id} (${piece.hp} HP)`}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              <TerritoryWarCanvas
+                state={challengeState}
+                colourMap={colourMap}
+                lastActions={lastActions}
+                winner={winner}
+              />
 
               {/* Loading state */}
               {running && !challengeState && (
