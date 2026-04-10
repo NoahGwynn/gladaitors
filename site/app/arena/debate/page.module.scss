@@ -449,6 +449,8 @@ details[open] > .optionalSummary > .detailsChevron {
 .roundSelector {
   display: flex;
   gap: $space-xs;
+
+  > * { flex: 1; text-align: center; }
 }
 
 .roundOption {
