@@ -28,7 +28,7 @@ import {
   WIN_SCORE_TILES,
 } from './constants';
 import { calculateAllScores } from './scoring';
-import type { GameState } from './types';
+import type { ChallengeState } from './types';
 
 // --- System prompt ---
 
@@ -122,7 +122,7 @@ Note: "unit_id" field refers to piece ID. Only include fields relevant to the ac
 /** Build the per-turn user prompt for a given model. Contains the
  *  current game state from that model's perspective: territory,
  *  pieces, resources, and recent events. */
-export function buildTurnPrompt(state: GameState, modelName: string): string {
+export function buildTurnPrompt(state: ChallengeState, modelName: string): string {
   const model = state.models[modelName];
   if (!model) throw new Error(`Model "${modelName}" not found in game state`);
 
@@ -236,7 +236,7 @@ export interface ModelPrompts {
 
 /** Build prompts for all non-eliminated models in the game.
  *  Returns a map of modelName → { system, user }. */
-export function buildAllPrompts(state: GameState): Record<string, ModelPrompts> {
+export function buildAllPrompts(state: ChallengeState): Record<string, ModelPrompts> {
   const prompts: Record<string, ModelPrompts> = {};
 
   for (const modelName of Object.keys(state.models)) {

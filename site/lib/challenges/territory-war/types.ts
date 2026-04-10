@@ -56,7 +56,7 @@ export interface ModelState {
 
 // --- Full game state ---
 
-export interface GameState {
+export interface ChallengeState {
   tick: number;
   maxTicks: number;
   /** 30×30 grid. Access as grid[y][x]. */
@@ -66,7 +66,7 @@ export interface GameState {
   /** Keyed by model name. */
   models: Record<string, ModelState>;
   /** Chronological event log for the current game. */
-  eventLog: GameEvent[];
+  eventLog: ChallengeEvent[];
   finished: boolean;
   winner: string | null;
   /** Auto-incrementing counter for piece IDs. */
@@ -99,7 +99,7 @@ export interface TerritoryWarResponse {
 
 // --- Events ---
 
-export type GameEventType =
+export type ChallengeEventType =
   | 'move'
   | 'attack'
   | 'kill'
@@ -111,11 +111,11 @@ export type GameEventType =
   | 'territory_claimed'
   | 'invalid_action'
   | 'resource_reveal'
-  | 'game_over';
+  | 'challenge_complete';
 
-export interface GameEvent {
+export interface ChallengeEvent {
   tick: number;
-  type: GameEventType;
+  type: ChallengeEventType;
   model: string;
   /** Human-readable description of the event. */
   message: string;

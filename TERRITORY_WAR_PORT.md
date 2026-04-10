@@ -10,7 +10,7 @@
 ## What this is
 
 Port the Territory War game engine from `backend/game_engine/territory_war.py`
-into `site/lib/games/territory-war/` as TypeScript. The site becomes the
+into `site/lib/challenges/territory-war/` as TypeScript. The site becomes the
 authoritative home for all game logic. This is item #0 from PRODUCT_ROADMAP.md.
 
 ---
@@ -61,23 +61,23 @@ Each model gets a 3×3 claimed area around base + 3 pieces spawned toward center
 ## Files to create
 
 ```
-site/lib/games/territory-war/
+site/lib/challenges/territory-war/
 ├── constants.ts        — all game constants (GRID_SIZE, costs, etc.)
-├── types.ts            — TileType, Tile, Piece, ModelState, GameState,
-│                         PieceAction, GameEvent
-├── state.ts            — createGame(), spawnModel(), initGrid()
+├── types.ts            — TileType, Tile, Piece, ModelState, ChallengeState,
+│                         PieceAction, ChallengeEvent
+├── state.ts            — createChallenge(), spawnModel(), initGrid()
 ├── actions.ts          — validateAction(), resolveAction(), applyActions()
 ├── scoring.ts          — calculateTerritory(), calculateScore(),
 │                         checkWinCondition()
 ├── prompts.ts          — buildSystemPrompt(), buildTurnPrompt()
 └── index.ts            — re-exports
 
-site/app/api/games/territory-war/
+site/app/api/challenges/territory-war/
 └── route.ts            — POST handler (auth, tokens, SSE streaming,
                           AI calls, persistence)
 
 site/supabase/
-└── schema.sql          — games + game_turns tables (append to existing)
+└── schema.sql          — games + challenge_turns tables (append to existing)
 ```
 
 ---
@@ -90,8 +90,8 @@ Create the type definitions and game constants. No logic, just the data
 shapes that everything else imports.
 
 - `constants.ts` — all numeric constants, spawn positions
-- `types.ts` — all interfaces (Tile, Piece, ModelState, GameState,
-  PieceAction, TerritoryWarResponse, GameEvent)
+- `types.ts` — all interfaces (Tile, Piece, ModelState, ChallengeState,
+  PieceAction, TerritoryWarResponse, ChallengeEvent)
 
 Manual test: imports compile, types are correct.
 
@@ -100,12 +100,12 @@ Manual test: imports compile, types are correct.
 Create a new game from scratch: grid generation, resource placement,
 model spawning.
 
-- `state.ts` — createGame(modelNames), initGrid(), placeResources(),
+- `state.ts` — createChallenge(modelNames), initGrid(), placeResources(),
   spawnModel()
 - Random resource placement (ore + food tiles with random amounts)
 - Corner-based model spawning with 3×3 territory claim
 
-Manual test: call createGame(['Claude', 'GPT', 'Gemini']), inspect the
+Manual test: call createChallenge(['Claude', 'GPT', 'Gemini']), inspect the
 resulting state — correct grid size, resources placed, pieces spawned
 at correct corners, territory claimed.
 
@@ -179,13 +179,13 @@ Database tables + the API endpoint that drives the game.
 
 - Schema additions to `site/supabase/schema.sql`:
   - `games` table (id, challenge, models, config, status, winner,
-    game_state jsonb, created_at)
-  - `game_turns` table (id, game_id, turn_number, game_state jsonb,
+    challenge_state jsonb, created_at)
+  - `challenge_turns` table (id, game_id, turn_number, challenge_state jsonb,
     model_responses jsonb, events jsonb)
   - RLS policies
   - Token-related RPCs (reuse existing deduct functions)
 
-- `site/app/api/games/territory-war/route.ts`:
+- `site/app/api/challenges/territory-war/route.ts`:
   - POST handler similar in shape to the debate route
   - Auth + session check
   - Token deduction per turn (or per game)
@@ -244,16 +244,16 @@ simplicity.
 
 The debate route sends: thinking, token, argument, round_complete, etc.
 The game route should send:
-- `game_started` — initial state
+- `challenge_started` — initial state
 - `turn_start` — which model is thinking
 - `turn_actions` — the model's actions + resulting state
 - `turn_complete` — all models have moved, tick advanced
-- `game_over` — winner, scores, reason
+- `challenge_complete` — winner, scores, reason
 - `error` — model failure, etc.
 
 ### State persistence
 
-Each turn's full state is stored in `game_turns` so replays can be
+Each turn's full state is stored in `challenge_turns` so replays can be
 reconstructed from the database without re-running models (same
 principle as debate arguments). The `games` table stores the latest
 state for quick access.
@@ -264,7 +264,7 @@ state for quick access.
 
 1. Read this document.
 2. Run `git log --oneline -10` to see how far we've gotten.
-3. Check which files exist under `site/lib/games/territory-war/`.
+3. Check which files exist under `site/lib/challenges/territory-war/`.
 4. Resume from the next uncompleted commit.
 
 ---

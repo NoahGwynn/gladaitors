@@ -7,11 +7,11 @@
 // scoring, and win conditions. No AI calls, no DB, no network.
 // ============================================================================
 
-import { createGame } from './state';
+import { createChallenge } from './state';
 import { applyActions } from './actions';
 import { updateTerritory, calculateScore, calculateAllScores, checkWinCondition, advanceTick } from './scoring';
 import { GRID_SIZE, PIECE_HP, FORT_COST, FORT_HP, HEAL_COST, PIECE_ATTACK } from './constants';
-import type { GameState, PieceAction } from './types';
+import type { ChallengeState, PieceAction } from './types';
 
 let passed = 0;
 let failed = 0;
@@ -36,7 +36,7 @@ function section(name: string) {
 
 section('State creation');
 
-const game = createGame(['Claude', 'GPT', 'Gemini']);
+const game = createChallenge(['Claude', 'GPT', 'Gemini']);
 
 assert(game.grid.length === GRID_SIZE, 'Grid has 30 rows');
 assert(game.grid[0].length === GRID_SIZE, 'Grid has 30 columns');
@@ -84,16 +84,16 @@ assert(game.grid[0][0].owner === 'Claude', 'Claude claims (0,0) — NW of base')
 assert(game.grid[2][2].owner === 'Claude', 'Claude claims (2,2) — SE of base');
 
 // Check 2-model game works
-const game2 = createGame(['A', 'B']);
+const game2 = createChallenge(['A', 'B']);
 assert(game2.pieces.length === 6, '2-model game has 6 pieces');
 
 // Check 4-model game works
-const game4 = createGame(['A', 'B', 'C', 'D']);
+const game4 = createChallenge(['A', 'B', 'C', 'D']);
 assert(game4.pieces.length === 12, '4-model game has 12 pieces');
 
 // Check invalid model count throws
 try {
-  createGame(['Solo']);
+  createChallenge(['Solo']);
   assert(false, 'Single model should throw');
 } catch {
   assert(true, 'Single model throws');
@@ -106,7 +106,7 @@ try {
 section('Move action');
 
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   const startX = piece.x;
   const startY = piece.y;
@@ -120,7 +120,7 @@ section('Move action');
 
 // Move out of bounds
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   // Find a piece near the edge — Claude's base is at (1,1), pieces near there
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   // Move it to top-left corner
@@ -141,7 +141,7 @@ section('Move action');
 section('Attack action (piece)');
 
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const attacker = g.pieces.find(p => p.modelName === 'A')!;
   const target = g.pieces.find(p => p.modelName === 'B')!;
 
@@ -158,7 +158,7 @@ section('Attack action (piece)');
 
 // Attack non-adjacent should fail
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const attacker = g.pieces.find(p => p.modelName === 'A')!;
   const target = g.pieces.find(p => p.modelName === 'B')!;
 
@@ -174,7 +174,7 @@ section('Attack action (piece)');
 
 // Attack own piece should fail
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const pieces = g.pieces.filter(p => p.modelName === 'A');
   pieces[0].x = 5;
   pieces[0].y = 5;
@@ -188,7 +188,7 @@ section('Attack action (piece)');
 
 // Kill + elimination
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const attacker = g.pieces.find(p => p.modelName === 'A')!;
 
   // Kill all B pieces
@@ -211,7 +211,7 @@ section('Attack action (piece)');
 section('Harvest action');
 
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
 
   // Place piece on an ore tile
@@ -227,7 +227,7 @@ section('Harvest action');
 
 // Harvest depletes tile
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   piece.x = 15;
   piece.y = 15;
@@ -241,7 +241,7 @@ section('Harvest action');
 
 // Harvest on empty tile
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   piece.x = 15;
   piece.y = 15;
@@ -259,7 +259,7 @@ section('Harvest action');
 section('Build action');
 
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   piece.x = 10;
   piece.y = 10;
@@ -281,7 +281,7 @@ section('Build action');
 
 // Build without enough ore
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   piece.x = 10;
   piece.y = 10;
@@ -294,7 +294,7 @@ section('Build action');
 
 // Build on non-empty tile
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   piece.x = 10;
   piece.y = 10;
@@ -313,7 +313,7 @@ section('Build action');
 section('Attack fort');
 
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const attacker = g.pieces.find(p => p.modelName === 'A')!;
   attacker.x = 10;
   attacker.y = 10;
@@ -339,7 +339,7 @@ section('Attack fort');
 section('Heal action');
 
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   piece.hp = 1;
   g.models['A'].food = HEAL_COST;
@@ -351,7 +351,7 @@ section('Heal action');
 
 // Heal at full HP
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   g.models['A'].food = HEAL_COST;
 
@@ -364,7 +364,7 @@ section('Heal action');
 
 // Heal without food
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   piece.hp = 1;
   g.models['A'].food = 0;
@@ -380,7 +380,7 @@ section('Heal action');
 section('Scoring');
 
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   // Clear all ownership
   for (let y = 0; y < GRID_SIZE; y++)
     for (let x = 0; x < GRID_SIZE; x++)
@@ -398,7 +398,7 @@ section('Scoring');
 
 // Fort-protected scoring
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   for (let y = 0; y < GRID_SIZE; y++)
     for (let x = 0; x < GRID_SIZE; x++)
       g.grid[y][x].owner = null;
@@ -435,7 +435,7 @@ section('Scoring');
 section('Territory update');
 
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   piece.x = 15;
   piece.y = 15;
@@ -447,7 +447,7 @@ section('Territory update');
 
 // Enemy fort protection blocks claiming
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   piece.x = 15;
   piece.y = 15;
@@ -470,7 +470,7 @@ section('Win conditions');
 
 // Last survivor
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   g.models['B'].eliminated = true;
   // Remove B's pieces
   g.pieces = g.pieces.filter(p => p.modelName !== 'B');
@@ -483,7 +483,7 @@ section('Win conditions');
 
 // Time up
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   g.tick = 100;
   // Give A more territory
   for (let x = 0; x < 20; x++) g.grid[0][x].owner = 'A';
@@ -497,7 +497,7 @@ section('Win conditions');
 
 // Game continues
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   g.tick = 5;
   const result = checkWinCondition(g);
   assert(!result.finished, 'Mid-game: not finished');
@@ -510,7 +510,7 @@ section('Win conditions');
 section('Multiple actions per turn');
 
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const pieces = g.pieces.filter(p => p.modelName === 'A');
   pieces[0].x = 5; pieces[0].y = 5;
   pieces[1].x = 10; pieces[1].y = 10;
@@ -530,7 +530,7 @@ section('Multiple actions per turn');
 
 // More than 3 actions: only first 3 apply
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const piece = g.pieces.find(p => p.modelName === 'A')!;
   piece.x = 10;
   piece.y = 10;
@@ -553,7 +553,7 @@ section('Multiple actions per turn');
 section('advanceTick');
 
 {
-  const g = createGame(['A', 'B']);
+  const g = createChallenge(['A', 'B']);
   const tickBefore = g.tick;
   advanceTick(g);
   assert(g.tick === tickBefore + 1, `Tick advanced: ${tickBefore} → ${g.tick}`);

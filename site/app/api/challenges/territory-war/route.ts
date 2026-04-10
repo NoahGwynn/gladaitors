@@ -1,20 +1,20 @@
 // ============================================================================
-// POST /api/games/territory-war — Run a Territory War game (streaming)
+// POST /api/challenges/territory-war — Run a Territory War challenge (streaming)
 // ============================================================================
-// Creates a new game, runs all turns sequentially (each model takes
+// Creates a new challenge, runs all turns sequentially (each model takes
 // actions per tick), streams events via SSE, and persists every turn
 // to the database for replay.
 //
 // SSE event types:
-//   game_started    — initial state + game id
+//   challenge_started    — initial state + challenge id
 //   turn_start      — which model is about to act
 //   turn_actions    — a model's actions + resulting state changes
 //   tick_complete   — all models have acted, tick advanced
-//   game_over       — winner, scores, reason
+//   challenge_complete       — winner, scores, reason
 //   error           — unrecoverable error
 //
 // Similar in shape to the debate route but adapted for the sequential-
-// turn game model instead of round-by-round debate orchestration.
+// turn challenge model instead of round-by-round debate orchestration.
 // ============================================================================
 
 import { NextRequest } from 'next/server';
@@ -24,7 +24,7 @@ import { GoogleGenAI } from '@google/genai';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { findModel, type ModelDefinition } from '@/lib/models';
 import {
-  createGame,
+  createChallenge,
   applyActions,
   advanceTick,
   buildSystemPrompt,
@@ -34,16 +34,16 @@ import {
   RESOURCE_REVEAL_AMOUNT,
   GRID_SIZE,
   SPAWN_CORNERS,
-} from '@/lib/games/territory-war';
+} from '@/lib/challenges/territory-war';
 import type {
-  GameState,
+  ChallengeState,
   PieceAction,
   TerritoryWarResponse,
-} from '@/lib/games/territory-war';
+} from '@/lib/challenges/territory-war';
 
 // --- Request body ---
 
-interface GameRequest {
+interface ChallengeRequest {
   /** Model variant ids (2-4). Same ids as the debate model picker. */
   models: string[];
 }
@@ -158,7 +158,7 @@ function parseActions(raw: string): { actions: PieceAction[]; raw: string; error
 
 // --- Scripted events ---
 
-function applyScriptedEvents(state: GameState): void {
+function applyScriptedEvents(state: ChallengeState): void {
   if (state.tick === RESOURCE_REVEAL_TICK) {
     // Place a large ore deposit at the grid center
     const center = Math.floor(GRID_SIZE / 2);
@@ -191,7 +191,7 @@ function applyScriptedEvents(state: GameState): void {
 // --- Rate limiting (reuse the same pattern as debates) ---
 
 const RATE_LIMIT_WINDOW = 60_000;
-const RATE_LIMIT_MAX = 10; // fewer than debates — games are long-running
+const RATE_LIMIT_MAX = 10; // fewer than debates — challenges are long-running
 const rateLimitMap = new Map<string, number[]>();
 
 function isRateLimited(ip: string): boolean {
@@ -243,7 +243,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Parse request
-  const body: GameRequest = await request.json();
+  const body: ChallengeRequest = await request.json();
   const { models: modelIds } = body;
 
   if (!modelIds || modelIds.length < 2 || modelIds.length > 4) {
@@ -289,32 +289,32 @@ export async function POST(request: NextRequest) {
   }
 
   // Create game state
-  const gameState = createGame(modelNames);
+  const challengeState = createChallenge(modelNames);
 
   // Create DB record
-  const { data: gameRow, error: insertErr } = await supabase
-    .from('games')
+  const { data: challengeRow, error: insertErr } = await supabase
+    .from('challenges')
     .insert({
-      challenge: 'territory_war',
+      challenge_type: 'territory_war',
       creator_user_id: user?.id || null,
       creator_session_id: sessionId || null,
       models: modelIds,
       config: {},
-      game_state: gameState as unknown as Record<string, unknown>,
+      challenge_state: challengeState as unknown as Record<string, unknown>,
       status: 'running',
       expires_at: user ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     })
     .select('id')
     .single();
 
-  if (insertErr || !gameRow) {
+  if (insertErr || !challengeRow) {
     console.error('[GAME] Insert error:', insertErr);
     return new Response(JSON.stringify({ error: 'Failed to create game' }), {
       status: 500, headers: { 'Content-Type': 'application/json' },
     });
   }
 
-  const gameId = gameRow.id;
+  const challengeId = challengeRow.id;
 
   // Stream the game via SSE
   const encoder = new TextEncoder();
@@ -322,16 +322,16 @@ export async function POST(request: NextRequest) {
     async start(controller) {
       try {
         // Emit initial state
-        controller.enqueue(encoder.encode(sseEvent('game_started', {
-          gameId,
-          state: gameState,
+        controller.enqueue(encoder.encode(sseEvent('challenge_started', {
+          challengeId,
+          state: challengeState,
           models: modelNames,
         })));
 
         // Game loop
-        while (!gameState.finished) {
+        while (!challengeState.finished) {
           // Apply scripted events BEFORE model turns
-          applyScriptedEvents(gameState);
+          applyScriptedEvents(challengeState);
 
           // Sequential turns: each model acts, others see the result
           for (let mi = 0; mi < modelDefs.length; mi++) {
@@ -339,28 +339,28 @@ export async function POST(request: NextRequest) {
             const modelName = modelNames[mi];
 
             // Skip eliminated models
-            if (gameState.models[modelName]?.eliminated) continue;
+            if (challengeState.models[modelName]?.eliminated) continue;
 
             // Signal: model is thinking
             controller.enqueue(encoder.encode(sseEvent('turn_start', {
-              tick: gameState.tick,
+              tick: challengeState.tick,
               model: modelName,
               modelId: modelIds[mi],
             })));
 
             // Build prompts
             const systemPrompt = buildSystemPrompt(modelName);
-            const userPrompt = buildTurnPrompt(gameState, modelName);
+            const userPrompt = buildTurnPrompt(challengeState, modelName);
 
             // Call the model
             const result = await callModel(modelDef, systemPrompt, userPrompt);
 
             // Apply actions
-            const events = applyActions(gameState, modelName, result.actions);
+            const events = applyActions(challengeState, modelName, result.actions);
 
             // Emit the model's turn
             controller.enqueue(encoder.encode(sseEvent('turn_actions', {
-              tick: gameState.tick,
+              tick: challengeState.tick,
               model: modelName,
               modelId: modelIds[mi],
               actions: result.actions,
@@ -370,38 +370,38 @@ export async function POST(request: NextRequest) {
           }
 
           // Advance tick (territory update, win check)
-          const winResult = advanceTick(gameState);
+          const winResult = advanceTick(challengeState);
 
           // Store this turn
-          await supabase.from('game_turns').insert({
-            game_id: gameId,
-            turn_number: gameState.tick,
-            game_state: gameState as unknown as Record<string, unknown>,
+          await supabase.from('challenge_turns').insert({
+            challenge_id: challengeId,
+            turn_number: challengeState.tick,
+            challenge_state: challengeState as unknown as Record<string, unknown>,
             model_responses: {},
-            events: gameState.eventLog.slice(-20),
+            events: challengeState.eventLog.slice(-20),
           });
 
           // Update the game row with latest state
-          await supabase.from('games').update({
-            game_state: gameState as unknown as Record<string, unknown>,
-            total_turns: gameState.tick,
+          await supabase.from('challenges').update({
+            challenge_state: challengeState as unknown as Record<string, unknown>,
+            total_turns: challengeState.tick,
             ...(winResult.finished ? {
               status: 'complete',
               winner: winResult.winner,
               finished_at: new Date().toISOString(),
             } : {}),
-          }).eq('id', gameId);
+          }).eq('id', challengeId);
 
           // Emit tick complete
           controller.enqueue(encoder.encode(sseEvent('tick_complete', {
-            tick: gameState.tick,
-            finished: gameState.finished,
+            tick: challengeState.tick,
+            finished: challengeState.finished,
           })));
 
-          if (gameState.finished) {
-            controller.enqueue(encoder.encode(sseEvent('game_over', {
-              winner: gameState.winner,
-              tick: gameState.tick,
+          if (challengeState.finished) {
+            controller.enqueue(encoder.encode(sseEvent('challenge_complete', {
+              winner: challengeState.winner,
+              tick: challengeState.tick,
               reason: winResult.reason,
             })));
           }
@@ -411,10 +411,10 @@ export async function POST(request: NextRequest) {
         const message = err instanceof Error ? err.message : 'Internal error';
 
         // Mark game as errored
-        await supabase.from('games').update({
+        await supabase.from('challenges').update({
           status: 'error',
-          game_state: gameState as unknown as Record<string, unknown>,
-        }).eq('id', gameId);
+          challenge_state: challengeState as unknown as Record<string, unknown>,
+        }).eq('id', challengeId);
 
         try {
           controller.enqueue(encoder.encode(sseEvent('error', { message })));

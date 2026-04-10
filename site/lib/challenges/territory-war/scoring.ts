@@ -9,11 +9,11 @@
 
 import { GRID_SIZE, WIN_SCORE_TILES } from './constants';
 import type {
-  GameState,
+  ChallengeState,
   Tile,
   TerritoryScore,
   WinResult,
-  GameEvent,
+  ChallengeEvent,
 } from './types';
 
 // --- Helpers ---
@@ -67,7 +67,7 @@ function isEnemyFortProtected(grid: Tile[][], x: number, y: number, modelName: s
  *  claimed. Base tiles cannot be claimed by enemies.
  *
  *  Mutates `state.grid` in place. */
-export function updateTerritory(state: GameState): void {
+export function updateTerritory(state: ChallengeState): void {
   for (const piece of state.pieces) {
     if (piece.hp <= 0) continue;
     const tile = state.grid[piece.y][piece.x];
@@ -85,7 +85,7 @@ export function updateTerritory(state: GameState): void {
 /** Calculate the territory score for a single model.
  *  - Regular owned tile: 1 point
  *  - Fort-protected owned tile: 2 points */
-export function calculateScore(state: GameState, modelName: string): TerritoryScore {
+export function calculateScore(state: ChallengeState, modelName: string): TerritoryScore {
   let tiles = 0;
   let score = 0;
 
@@ -107,7 +107,7 @@ export function calculateScore(state: GameState, modelName: string): TerritorySc
 }
 
 /** Calculate territory scores for ALL models in the game. */
-export function calculateAllScores(state: GameState): Record<string, TerritoryScore> {
+export function calculateAllScores(state: ChallengeState): Record<string, TerritoryScore> {
   const scores: Record<string, TerritoryScore> = {};
   for (const modelName of Object.keys(state.models)) {
     scores[modelName] = calculateScore(state, modelName);
@@ -121,7 +121,7 @@ export function calculateAllScores(state: GameState): Record<string, TerritorySc
  *  1. Score threshold: a model's score >= WIN_SCORE_TILES (540)
  *  2. Last survivor: all other models are eliminated
  *  3. Time up: tick >= maxTicks — highest score wins */
-export function checkWinCondition(state: GameState): WinResult {
+export function checkWinCondition(state: ChallengeState): WinResult {
   const modelNames = Object.keys(state.models);
 
   // 1. Score threshold
@@ -166,7 +166,7 @@ export function checkWinCondition(state: GameState): WinResult {
  *  for the current tick.
  *
  *  Mutates `state` in place. Returns the win result. */
-export function advanceTick(state: GameState): WinResult {
+export function advanceTick(state: ChallengeState): WinResult {
   state.tick++;
 
   // Update territory (pieces claim tiles)
@@ -189,7 +189,7 @@ export function advanceTick(state: GameState): WinResult {
 
     state.eventLog.push({
       tick: state.tick,
-      type: 'game_over',
+      type: 'challenge_complete',
       model: result.winner || 'none',
       message: `Game over — ${result.reason}. ${result.winner ? `${result.winner} wins!` : 'No winner.'} Scores: ${scoreStr}`,
       data: { reason: result.reason, winner: result.winner, scores },

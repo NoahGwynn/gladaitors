@@ -22,11 +22,11 @@ import {
   DIRECTIONS,
 } from './constants';
 import type {
-  GameState,
+  ChallengeState,
   Piece,
   Tile,
   PieceAction,
-  GameEvent,
+  ChallengeEvent,
 } from './types';
 
 // --- Helpers ---
@@ -40,13 +40,13 @@ function isAdjacent(x1: number, y1: number, x2: number, y2: number): boolean {
   return Math.abs(x1 - x2) <= 1 && Math.abs(y1 - y2) <= 1 && !(x1 === x2 && y1 === y2);
 }
 
-function findPiece(state: GameState, id: number): Piece | undefined {
+function findPiece(state: ChallengeState, id: number): Piece | undefined {
   return state.pieces.find(p => p.id === id);
 }
 
 function addEvent(
-  state: GameState,
-  type: GameEvent['type'],
+  state: ChallengeState,
+  type: ChallengeEvent['type'],
   model: string,
   message: string,
   data?: Record<string, unknown>,
@@ -56,7 +56,7 @@ function addEvent(
 
 // --- Individual action resolvers ---
 
-function resolveMove(state: GameState, piece: Piece, action: PieceAction): void {
+function resolveMove(state: ChallengeState, piece: Piece, action: PieceAction): void {
   if (!action.direction || !(action.direction in DIRECTIONS)) {
     addEvent(state, 'invalid_action', piece.modelName,
       `Piece ${piece.id}: invalid move direction "${action.direction}"`);
@@ -81,7 +81,7 @@ function resolveMove(state: GameState, piece: Piece, action: PieceAction): void 
     { pieceId: piece.id, x: nx, y: ny, direction: action.direction });
 }
 
-function resolveAttackPiece(state: GameState, piece: Piece, action: PieceAction): void {
+function resolveAttackPiece(state: ChallengeState, piece: Piece, action: PieceAction): void {
   if (action.targetId == null) {
     addEvent(state, 'invalid_action', piece.modelName,
       `Piece ${piece.id}: attack requires target_id`);
@@ -134,7 +134,7 @@ function resolveAttackPiece(state: GameState, piece: Piece, action: PieceAction)
   }
 }
 
-function resolveAttackFort(state: GameState, piece: Piece, action: PieceAction): void {
+function resolveAttackFort(state: ChallengeState, piece: Piece, action: PieceAction): void {
   if (action.targetX == null || action.targetY == null) {
     addEvent(state, 'invalid_action', piece.modelName,
       `Piece ${piece.id}: fort attack requires target_x and target_y`);
@@ -186,7 +186,7 @@ function resolveAttackFort(state: GameState, piece: Piece, action: PieceAction):
   }
 }
 
-function resolveAttack(state: GameState, piece: Piece, action: PieceAction): void {
+function resolveAttack(state: ChallengeState, piece: Piece, action: PieceAction): void {
   // Determine if this is a piece attack or fort attack based on which
   // target fields are provided.
   if (action.targetId != null) {
@@ -199,7 +199,7 @@ function resolveAttack(state: GameState, piece: Piece, action: PieceAction): voi
   }
 }
 
-function resolveHarvest(state: GameState, piece: Piece): void {
+function resolveHarvest(state: ChallengeState, piece: Piece): void {
   const tile = state.grid[piece.y][piece.x];
 
   if (tile.tileType !== 'ore' && tile.tileType !== 'food') {
@@ -234,7 +234,7 @@ function resolveHarvest(state: GameState, piece: Piece): void {
   }
 }
 
-function resolveBuild(state: GameState, piece: Piece): void {
+function resolveBuild(state: ChallengeState, piece: Piece): void {
   const model = state.models[piece.modelName];
 
   if (model.ore < FORT_COST) {
@@ -274,7 +274,7 @@ function resolveBuild(state: GameState, piece: Piece): void {
   }
 }
 
-function resolveHeal(state: GameState, piece: Piece): void {
+function resolveHeal(state: ChallengeState, piece: Piece): void {
   const model = state.models[piece.modelName];
 
   if (piece.hp >= PIECE_HP) {
@@ -305,10 +305,10 @@ function resolveHeal(state: GameState, piece: Piece): void {
  *
  *  Mutates `state` in place and returns the list of events generated. */
 export function applyActions(
-  state: GameState,
+  state: ChallengeState,
   modelName: string,
   actions: PieceAction[],
-): GameEvent[] {
+): ChallengeEvent[] {
   const startEventCount = state.eventLog.length;
 
   // Cap at MAX_ACTIONS_PER_TURN

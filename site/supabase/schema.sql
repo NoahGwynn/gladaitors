@@ -734,19 +734,19 @@ end;
 $$ language plpgsql security definer;
 
 -- ============================================================================
--- Games (Territory War, Trading Pit, future challenges)
+-- Challenges (Territory War, future structured experiments)
 -- ============================================================================
 -- Same persistence model as debates: every turn is stored so replays can
 -- be reconstructed from the database without re-running models.
 
-create table if not exists public.games (
+create table if not exists public.challenges (
   id uuid primary key default gen_random_uuid(),
-  challenge text not null,               -- 'territory_war', 'trading_pit', etc.
+  challenge_type text not null,          -- 'territory_war', etc.
   creator_user_id uuid references public.profiles(id) on delete set null,
   creator_session_id text,
   models text[] not null,                -- model ids, same as debates.models
-  config jsonb not null default '{}'::jsonb,  -- game-specific config overrides
-  game_state jsonb not null default '{}'::jsonb,  -- latest full game state
+  config jsonb not null default '{}'::jsonb,  -- challenge-specific config overrides
+  challenge_state jsonb not null default '{}'::jsonb,  -- latest full state
   status text not null default 'idle',   -- 'idle' | 'running' | 'complete' | 'error'
   winner text,                           -- model name or null
   total_turns int not null default 0,
@@ -756,49 +756,49 @@ create table if not exists public.games (
   expires_at timestamptz                 -- null = never expires (logged-in users)
 );
 
-create index if not exists games_creator_user on public.games(creator_user_id)
+create index if not exists challenges_creator_user on public.challenges(creator_user_id)
   where creator_user_id is not null;
-create index if not exists games_creator_session on public.games(creator_session_id)
+create index if not exists challenges_creator_session on public.challenges(creator_session_id)
   where creator_session_id is not null and creator_user_id is null;
-create index if not exists games_public on public.games(is_public, created_at desc)
+create index if not exists challenges_public on public.challenges(is_public, created_at desc)
   where is_public = true;
 
 -- Per-turn snapshots for replay
-create table if not exists public.game_turns (
+create table if not exists public.challenge_turns (
   id uuid primary key default gen_random_uuid(),
-  game_id uuid not null references public.games(id) on delete cascade,
+  challenge_id uuid not null references public.challenges(id) on delete cascade,
   turn_number int not null,
-  game_state jsonb not null,             -- full state after this turn
+  challenge_state jsonb not null,        -- full state after this turn
   model_responses jsonb not null default '{}'::jsonb,  -- raw AI responses keyed by model
   events jsonb not null default '[]'::jsonb,           -- events generated this turn
   created_at timestamptz not null default now()
 );
 
-create index if not exists game_turns_by_game on public.game_turns(game_id, turn_number);
+create index if not exists challenge_turns_by_challenge on public.challenge_turns(challenge_id, turn_number);
 
 -- RLS
-alter table public.games enable row level security;
-alter table public.game_turns enable row level security;
+alter table public.challenges enable row level security;
+alter table public.challenge_turns enable row level security;
 
-drop policy if exists "Anyone can view games" on public.games;
-create policy "Anyone can view games"
-  on public.games for select using (true);
+drop policy if exists "Anyone can view challenges" on public.challenges;
+create policy "Anyone can view challenges"
+  on public.challenges for select using (true);
 
-drop policy if exists "Anyone can create games" on public.games;
-create policy "Anyone can create games"
-  on public.games for insert with check (true);
+drop policy if exists "Anyone can create challenges" on public.challenges;
+create policy "Anyone can create challenges"
+  on public.challenges for insert with check (true);
 
-drop policy if exists "Creators can update own games" on public.games;
-create policy "Creators can update own games"
-  on public.games for update using (
+drop policy if exists "Creators can update own challenges" on public.challenges;
+create policy "Creators can update own challenges"
+  on public.challenges for update using (
     auth.uid() = creator_user_id
     or (creator_user_id is null)
   );
 
-drop policy if exists "Anyone can view game turns" on public.game_turns;
-create policy "Anyone can view game turns"
-  on public.game_turns for select using (true);
+drop policy if exists "Anyone can view challenge turns" on public.challenge_turns;
+create policy "Anyone can view challenge turns"
+  on public.challenge_turns for select using (true);
 
-drop policy if exists "Game turns are server-inserted" on public.game_turns;
-create policy "Game turns are server-inserted"
-  on public.game_turns for insert with check (true);
+drop policy if exists "Challenge turns are server-inserted" on public.challenge_turns;
+create policy "Challenge turns are server-inserted"
+  on public.challenge_turns for insert with check (true);

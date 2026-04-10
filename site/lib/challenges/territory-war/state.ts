@@ -20,7 +20,7 @@ import {
   MAX_TICKS,
   SPAWN_CORNERS,
 } from './constants';
-import type { Tile, Piece, ModelState, GameState, TileType } from './types';
+import type { Tile, Piece, ModelState, ChallengeState, TileType } from './types';
 
 // --- Helpers ---
 
@@ -158,7 +158,7 @@ function spawnModel(
 /** Create a new Territory War game with the given model names.
  *  Supports 2-4 models. Models are assigned to corners in clockwise
  *  order: TL(1,1) → TR(28,1) → BR(28,28) → BL(1,28). */
-export function createGame(modelNames: string[]): GameState {
+export function createChallenge(modelNames: string[]): ChallengeState {
   if (modelNames.length < 2 || modelNames.length > 4) {
     throw new Error(`Territory War requires 2-4 models, got ${modelNames.length}`);
   }
