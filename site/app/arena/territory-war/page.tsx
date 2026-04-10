@@ -16,6 +16,8 @@ import { useState, useRef, useCallback } from 'react';
 import { getSessionId } from '@/lib/debates';
 import { getModelColour, getModelName, findModel, MODELS } from '@/lib/models';
 import { GRID_SIZE } from '@/lib/challenges/territory-war/constants';
+import { applyActions } from '@/lib/challenges/territory-war/actions';
+import { advanceTick } from '@/lib/challenges/territory-war/scoring';
 import type { ChallengeState, PieceAction, ChallengeEvent } from '@/lib/challenges/territory-war/types';
 import styles from './page.module.scss';
 
@@ -115,78 +117,120 @@ export default function TerritoryWarPage() {
       let buffer = '';
       let currentTickLog: TurnLog = { tick: 0, models: [] };
 
+      // We keep a mutable local copy of the state so we can apply
+      // actions immediately without waiting for the full-state
+      // tick_complete event (which is ~100KB and can get lost in
+      // chunk splitting). The React state is updated from this copy.
+      let localState: ChallengeState | null = null;
+
+      // Process a complete SSE event (after \n\n boundary is found)
+      function processEvent(eventType: string, dataStr: string) {
+        let data: Record<string, unknown>;
+        try {
+          data = JSON.parse(dataStr);
+        } catch {
+          return; // malformed JSON — skip
+        }
+
+        switch (eventType) {
+          case 'challenge_started':
+            setChallengeId((data.challengeId || data.gameId) as string);
+            localState = data.state as ChallengeState;
+            setChallengeState({ ...localState });
+            break;
+
+          case 'turn_start':
+            setThinkingModel(data.model as string);
+            break;
+
+          case 'turn_actions': {
+            const actions = (data.actions || []) as PieceAction[];
+            const modelName = data.model as string;
+
+            // Apply actions to local state so the grid updates
+            // immediately — don't wait for tick_complete
+            if (localState && actions.length > 0) {
+              applyActions(localState, modelName, actions);
+              setChallengeState({ ...localState });
+            }
+
+            const turnActions: TurnActions = {
+              tick: data.tick as number,
+              model: modelName,
+              modelId: data.modelId as string,
+              actions,
+              events: (data.events || []) as ChallengeEvent[],
+              error: (data.error as string) || undefined,
+            };
+            setCurrentTurn(turnActions);
+            setThinkingModel(null);
+
+            // Accumulate into tick log
+            if (currentTickLog.tick !== data.tick) {
+              if (currentTickLog.models.length > 0) {
+                setTurnLog(prev => [...prev, currentTickLog]);
+              }
+              currentTickLog = { tick: data.tick as number, models: [turnActions] };
+            } else {
+              currentTickLog.models.push(turnActions);
+            }
+            break;
+          }
+
+          case 'tick_complete':
+            // Advance the local state (territory claiming, dead
+            // piece removal, win check) — mirrors the server's
+            // advanceTick call
+            if (localState) {
+              advanceTick(localState);
+              setChallengeState({ ...localState });
+            }
+
+            // Flush the current tick log
+            if (currentTickLog.models.length > 0) {
+              setTurnLog(prev => [...prev, currentTickLog]);
+              currentTickLog = { tick: ((data.tick as number) || 0) + 1, models: [] };
+            }
+            break;
+
+          case 'challenge_complete':
+            setFinished(true);
+            setWinner((data.winner as string) || null);
+            break;
+
+          case 'error':
+            setError((data.message as string) || 'An error occurred');
+            break;
+        }
+      }
+
+      // Proper SSE parser: accumulate text until a complete event
+      // (terminated by \n\n) is found, then process it. This handles
+      // large payloads that span multiple read() chunks.
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
 
-        let eventType = '';
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7).trim();
-          } else if (line.startsWith('data: ') && eventType) {
-            try {
-              const data = JSON.parse(line.slice(6));
+        // Process all complete events in the buffer
+        let boundary: number;
+        while ((boundary = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
 
-              switch (eventType) {
-                case 'challenge_started':
-                  setChallengeId(data.challengeId || data.gameId);
-                  setChallengeState(data.state as ChallengeState);
-                  break;
+          // Parse the event block
+          let eventType = '';
+          let dataStr = '';
+          for (const line of rawEvent.split('\n')) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              dataStr += line.slice(6);
+            }
+          }
 
-                case 'turn_start':
-                  setThinkingModel(data.model);
-                  break;
-
-                case 'turn_actions': {
-                  const turnActions: TurnActions = {
-                    tick: data.tick,
-                    model: data.model,
-                    modelId: data.modelId,
-                    actions: data.actions || [],
-                    events: data.events || [],
-                    error: data.error,
-                  };
-                  setCurrentTurn(turnActions);
-                  setThinkingModel(null);
-
-                  // Accumulate into tick log
-                  if (currentTickLog.tick !== data.tick) {
-                    if (currentTickLog.models.length > 0) {
-                      setTurnLog(prev => [...prev, currentTickLog]);
-                    }
-                    currentTickLog = { tick: data.tick, models: [turnActions] };
-                  } else {
-                    currentTickLog.models.push(turnActions);
-                  }
-                  break;
-                }
-
-                case 'tick_complete':
-                  // Flush the current tick log
-                  if (currentTickLog.models.length > 0) {
-                    setTurnLog(prev => [...prev, currentTickLog]);
-                    currentTickLog = { tick: (data.tick || 0) + 1, models: [] };
-                  }
-                  // Update state from the latest persisted state
-                  if (data.state) {
-                    setChallengeState(data.state as ChallengeState);
-                  }
-                  break;
-
-                case 'challenge_complete':
-                  setFinished(true);
-                  setWinner(data.winner || null);
-                  break;
-
-                case 'error':
-                  setError(data.message || 'An error occurred');
-                  break;
-              }
-            } catch { /* skip malformed */ }
-            eventType = '';
+          if (eventType && dataStr) {
+            processEvent(eventType, dataStr);
           }
         }
       }

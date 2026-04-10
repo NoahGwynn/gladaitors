@@ -174,7 +174,7 @@
   border: 1px solid $border;
   border-radius: $radius-sm;
   // Size: each cell targets ~16-18px
-  width: min(100%, #{GRID_SIZE * 18}px);
+  width: min(100%, 540px); // 30 tiles × 18px
   aspect-ratio: 1;
 }
 
