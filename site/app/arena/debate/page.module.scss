@@ -110,6 +110,35 @@
   &:disabled { opacity: 0.5; }
 }
 
+// Starter topic chips — clickable suggestions shown below the empty topic
+// input. Disappear once the user starts typing. Solve the blank-page problem.
+.starterChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-xs;
+  margin-top: $space-sm;
+}
+
+.starterChip {
+  font-family: $font-ui;
+  font-size: $size-xs;
+  font-weight: 500;
+  padding: $space-xs $space-sm;
+  border-radius: 20px;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: rgba($ui-accent, 0.5);
+    color: $text-primary;
+    background: $bg-card;
+  }
+}
+
 .input {
   font-family: $font-ui;
   font-size: $size-sm;

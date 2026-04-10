@@ -40,6 +40,7 @@ import BuyTokensModal from '@/components/BuyTokensModal';
 import VotingPanel, { type VoteOption } from '@/components/VotingPanel';
 import UserTurnInput from '@/components/UserTurnInput';
 import ExtendDebateModal from '@/components/ExtendDebateModal';
+import { STARTER_TOPICS } from '@/lib/starter-topics';
 import { MODELS, findModel, getModelColour, getModelName, getModelTokenCost } from '@/lib/models';
 import { X, LockKeyhole, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
 import styles from './page.module.scss';
@@ -476,6 +477,23 @@ function DebateArenaContent() {
             onChange={e => setTopic(e.target.value)}
             disabled={generating}
           />
+          {/* Starter topic chips — shown when the topic input is empty
+              so the user doesn't have to think of a question from scratch.
+              Clicking a chip populates the input. */}
+          {!topic && !generating && (
+            <div className={styles.starterChips}>
+              {STARTER_TOPICS.map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  className={styles.starterChip}
+                  onClick={() => setTopic(t)}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className={styles.field}>
