@@ -621,6 +621,147 @@ details[open] > .optionalSummary > .detailsChevron {
   opacity: 0.2;
 }
 
+// ============================================================================
+// Hero empty state — replaces the placeholder when no debate is active.
+// Shows the marketing headline + a curated sample debate rendered read-only.
+// ============================================================================
+
+.heroPanel {
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+  padding: $space-2xl $space-lg;
+
+  @media (max-width: 600px) {
+    padding: $space-lg $space-md;
+    gap: $space-md;
+  }
+}
+
+.heroHeader {
+  text-align: center;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.heroTitle {
+  font-size: $size-xl;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0 0 $space-sm;
+
+  @media (max-width: 600px) {
+    font-size: $size-lg;
+  }
+}
+
+.heroSubtitle {
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.55;
+  margin: 0;
+}
+
+// --- Sample debate rendered as "Example" ---
+
+.exampleContainer {
+  position: relative;
+  max-width: 720px;
+  margin: 0 auto;
+  width: 100%;
+  border: 1px solid rgba($ui-accent, 0.2);
+  border-radius: $radius-lg;
+  padding: $space-xl $space-lg $space-lg;
+  background: rgba($ui-accent, 0.02);
+
+  @media (max-width: 600px) {
+    padding: $space-lg $space-md $space-md;
+  }
+}
+
+.exampleBadge {
+  position: absolute;
+  top: -10px;
+  left: $space-lg;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 12px;
+  border-radius: 10px;
+  background: $ui-accent;
+  color: white;
+}
+
+.exampleHeader {
+  text-align: center;
+  margin-bottom: $space-lg;
+
+  @media (max-width: 600px) {
+    margin-bottom: $space-md;
+  }
+}
+
+.exampleTopic {
+  font-size: $size-md;
+  font-weight: 700;
+  margin: 0 0 $space-sm;
+}
+
+.exampleDebaters {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.exampleDebater {
+  font-size: $size-xs;
+  font-weight: 500;
+}
+
+.exampleMore {
+  font-size: $size-xs;
+  color: $text-muted;
+  text-align: center;
+  margin: $space-md 0 0;
+  font-style: italic;
+}
+
+.exampleLink {
+  display: block;
+  text-align: center;
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $ui-accent;
+  text-decoration: none;
+  margin-top: $space-sm;
+
+  &:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
+// --- Hero signup nudge for anonymous visitors ---
+
+.heroSignup {
+  text-align: center;
+}
+
+.heroSignupButton {
+  font-size: $size-sm;
+  font-weight: 600;
+  padding: $space-sm $space-xl;
+  border-radius: $radius-md;
+  border: none;
+  background: $ui-accent;
+  color: white;
+  cursor: pointer;
+  transition: opacity $transition-fast;
+
+  &:hover { opacity: 0.92; }
+}
+
 .notFoundTitle {
   font-size: $size-xl;
   font-weight: 700;

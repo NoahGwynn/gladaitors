@@ -118,6 +118,20 @@ export async function saveDebate(params: {
   return id;
 }
 
+/** Fetch a debate by ID without side effects (no TTL extension, no view
+ *  count increment). Used for the sample-debate hero render where we
+ *  don't want every page load to inflate the debate's metrics. */
+export async function fetchDebateById(id: string): Promise<Debate | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('debates')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (error || !data) return null;
+  return data as Debate;
+}
+
 /** Load a debate by ID (and extend its TTL) */
 export async function loadDebate(id: string): Promise<Debate | null> {
   const supabase = createClient();

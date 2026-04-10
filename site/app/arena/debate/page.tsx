@@ -19,10 +19,11 @@
 
 import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import { config } from '@/lib/config';
 import {
-  getUserDebates, deleteDebate,
+  getUserDebates, deleteDebate, fetchDebateById,
 } from '@/lib/debates';
 import { fetchTokenBalance, notifyBalanceChanged, onBalanceChanged } from '@/lib/tokens';
 import { createClient } from '@/lib/supabase';
@@ -163,6 +164,15 @@ function DebateArenaContent() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // --- Sample debate (hero empty state) ---
+  const [sampleDebate, setSampleDebate] = useState<Debate | null>(null);
+  useEffect(() => {
+    if (!config.sampleDebateId) return;
+    fetchDebateById(config.sampleDebateId).then(d => {
+      if (d) setSampleDebate(d);
+    });
   }, []);
 
   // --- Refs ---
@@ -758,12 +768,102 @@ function DebateArenaContent() {
         )}
 
         {!hasDebate ? (
-          <div className={styles.debateEmpty}>
-            <img src="/brand/icon.png" alt="" className={styles.emptyIcon} />
-            <p className={styles.emptyText}>
-              Configure your debate and press Start.
-              Models will argue their positions in real time.
-            </p>
+          <div className={styles.heroPanel}>
+            <div className={styles.heroHeader}>
+              <h2 className={styles.heroTitle}>
+                Watch the models argue.
+              </h2>
+              <p className={styles.heroSubtitle}>
+                Pick a topic on the left to start — or read this example to see how it works.
+              </p>
+            </div>
+
+            {/* Sample debate rendered read-only. Falls back to text-only
+                hero if the sample fails to load or isn't configured. */}
+            {sampleDebate ? (() => {
+              const samplePositions = sampleDebate.positions as Record<string, string>;
+              const sampleArgs = sampleDebate.arguments as DebateArgument[];
+              const sampleNames = getDisplayNames(
+                sampleDebate.models.map((id, i) => ({
+                  modelId: id,
+                  position: samplePositions[String(i)] || '',
+                }))
+              );
+              const sampleMaxRound = sampleArgs.length > 0
+                ? Math.max(...sampleArgs.map(a => a.round)) : 0;
+
+              return (
+                <div className={styles.exampleContainer}>
+                  <span className={styles.exampleBadge}>Example</span>
+
+                  {/* Example header */}
+                  <div className={styles.exampleHeader}>
+                    <h3 className={styles.exampleTopic}>{sampleDebate.topic}</h3>
+                    <div className={styles.exampleDebaters}>
+                      {sampleDebate.models.map((modelId, i) => (
+                        <span
+                          key={i}
+                          className={styles.exampleDebater}
+                          style={{ color: getModelColour(modelId) }}
+                        >
+                          {sampleNames[i]}: {samplePositions[String(i)] || ''}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Example arguments — first round only to keep it compact */}
+                  {sampleArgs
+                    .filter(a => a.round === 1 && a.model_id !== 'moderator' && !a.refused)
+                    .map((arg, i) => (
+                      <div
+                        key={i}
+                        className={styles.argument}
+                        style={{ '--model-colour': getModelColour(arg.model_id) } as React.CSSProperties}
+                      >
+                        <div className={styles.argumentHeader}>
+                          <span className={styles.argumentModel}>{arg.model_name}</span>
+                          <span className={styles.argumentPosition}>
+                            {samplePositions[String(arg.debater_index)] || ''}
+                          </span>
+                        </div>
+                        <div className={styles.argumentContent}>
+                          <ReactMarkdown>{arg.content}</ReactMarkdown>
+                        </div>
+                      </div>
+                    ))
+                  }
+
+                  {sampleMaxRound > 1 && (
+                    <p className={styles.exampleMore}>
+                      + {sampleMaxRound - 1} more {sampleMaxRound - 1 === 1 ? 'round' : 'rounds'} in the full debate
+                    </p>
+                  )}
+
+                  <Link
+                    href={`/arena/debate/${sampleDebate.id}`}
+                    className={styles.exampleLink}
+                  >
+                    Read the full debate →
+                  </Link>
+                </div>
+              );
+            })() : (
+              <p className={styles.heroSubtitle}>
+                Claude, GPT-4o, and Gemini take sides on your topics. Vote on who made the better case.
+              </p>
+            )}
+
+            {!isLoggedIn && (
+              <div className={styles.heroSignup}>
+                <button
+                  className={styles.heroSignupButton}
+                  onClick={() => setShowAuth(true)}
+                >
+                  Sign up for {config.startingTokens} free tokens
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className={styles.debateThread}>
