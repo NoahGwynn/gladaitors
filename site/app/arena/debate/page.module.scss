@@ -686,26 +686,6 @@ details[open] > .optionalSummary > .detailsChevron {
   @media (max-width: 600px) {
     padding: $space-lg $space-md $space-md;
   }
-
-  // Clamp argument content inside the example container so the preview
-  // is scannable — both debaters fit in roughly one viewport. The fade
-  // communicates "there's more" without rendering the full essay.
-  .argumentContent {
-    max-height: 120px;
-    overflow: hidden;
-    position: relative;
-
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 48px;
-      background: linear-gradient(to bottom, transparent, rgba($bg-void, 0.95));
-      pointer-events: none;
-    }
-  }
 }
 
 .exampleBadge {
