@@ -392,9 +392,11 @@ export async function POST(request: NextRequest) {
             } : {}),
           }).eq('id', challengeId);
 
-          // Emit tick complete
+          // Emit tick complete with the full state so the frontend can
+          // update the grid and score cards
           controller.enqueue(encoder.encode(sseEvent('tick_complete', {
             tick: challengeState.tick,
+            state: challengeState,
             finished: challengeState.finished,
           })));
 
