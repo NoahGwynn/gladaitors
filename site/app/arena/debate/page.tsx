@@ -588,18 +588,22 @@ function DebateArenaContent() {
             )}
           </div>
 
-          <div className={styles.toggleGroup}>
-            <div className={styles.toggleRow}>
-              <span className={styles.toggleText}>Anonymous opponents</span>
-              <button
-                type="button"
-                className={`${styles.switch} ${!revealIdentities ? styles.switchOn : ''}`}
-                onClick={() => !generating && setRevealIdentities(!revealIdentities)}
-                disabled={generating}
-                aria-label="Toggle anonymous opponents"
-              >
-                <span className={styles.switchKnob} />
-              </button>
+          <div className={styles.field}>
+            <label className={styles.label}>Opponents</label>
+            <div className={styles.roundSelector}>
+              {(['named', 'anonymous'] as const).map(mode => (
+                <button
+                  key={mode}
+                  className={`${styles.roundOption} ${
+                    (mode === 'named' ? revealIdentities : !revealIdentities)
+                      ? styles.roundOptionActive : ''
+                  }`}
+                  onClick={() => !generating && setRevealIdentities(mode === 'named')}
+                  disabled={generating}
+                >
+                  {mode === 'named' ? 'Named' : 'Anonymous'}
+                </button>
+              ))}
             </div>
             <span className={styles.toggleDescription}>
               {revealIdentities
