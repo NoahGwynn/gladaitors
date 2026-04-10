@@ -190,6 +190,11 @@
   }
 }
 
+// Active link — current page highlighted in the nav
+.linkActive {
+  color: $text-primary;
+}
+
 .authButton {
   font-size: $size-sm;
   font-weight: 600;

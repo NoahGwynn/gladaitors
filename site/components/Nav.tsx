@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { config } from "@/lib/config";
 import { createClient } from "@/lib/supabase";
 import { signOut } from "@/lib/auth";
@@ -21,6 +22,7 @@ import { Coins, LogOut, Plus, Menu, X } from "lucide-react";
 import styles from "./Nav.module.scss";
 
 export default function Nav() {
+  const pathname = usePathname();
   const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   const [showAuth, setShowAuth] = useState(false);
@@ -28,6 +30,14 @@ export default function Nav() {
   const [menuOpen, setMenuOpen] = useState(false); // desktop user dropdown
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // mobile hamburger drawer
   const menuRef = useRef<HTMLDivElement>(null);
+
+  /** Returns the active class if the link matches the current route. */
+  const linkClass = (href: string, base: string) => {
+    const isActive = href === '/'
+      ? pathname === '/'
+      : pathname.startsWith(href);
+    return `${base} ${isActive ? styles.linkActive : ''}`;
+  };
 
   const loadBalance = useCallback(async () => {
     const balance = await fetchTokenBalance();
@@ -111,10 +121,10 @@ export default function Nav() {
               Series
             </Link>
           )}
-          <Link href="/arena/debate" className={styles.link}>
+          <Link href="/arena/debate" className={linkClass('/arena', styles.link)}>
             The Arena
           </Link>
-          <Link href="/explore" className={styles.link}>
+          <Link href="/explore" className={linkClass('/explore', styles.link)}>
             Explore
           </Link>
 
@@ -181,10 +191,10 @@ export default function Nav() {
               </div>
             )}
 
-            <Link href="/arena/debate" className={styles.mobileLink} onClick={closeMobileMenu}>
+            <Link href="/arena/debate" className={linkClass('/arena', styles.mobileLink)} onClick={closeMobileMenu}>
               The Arena
             </Link>
-            <Link href="/explore" className={styles.mobileLink} onClick={closeMobileMenu}>
+            <Link href="/explore" className={linkClass('/explore', styles.mobileLink)} onClick={closeMobileMenu}>
               Explore
             </Link>
             {config.seriesEnabled && (
