@@ -75,6 +75,79 @@
   line-height: 1.6;
 }
 
+// Hero topic input — the primary engagement point. Users type a question
+// here and hit Go to land on the arena with the topic pre-filled.
+.heroForm {
+  display: flex;
+  width: 100%;
+  max-width: 520px;
+  border-radius: $radius-md;
+  overflow: hidden;
+  border: 1px solid $border;
+  background: $bg-elevated;
+  transition: border-color $transition-fast;
+
+  &:focus-within {
+    border-color: rgba($ui-accent, 0.7);
+  }
+}
+
+.heroInput {
+  flex: 1;
+  min-width: 0;
+  font-family: $font-ui;
+  font-size: $size-md;
+  padding: $space-md $space-lg;
+  border: none;
+  background: transparent;
+  color: $text-primary;
+  outline: none;
+
+  &::placeholder {
+    color: $text-muted;
+  }
+
+  @media (max-width: 600px) {
+    font-size: $size-sm;
+    padding: $space-sm $space-md;
+  }
+}
+
+.heroSubmit {
+  flex-shrink: 0;
+  font-family: $font-ui;
+  font-size: $size-md;
+  font-weight: 600;
+  padding: $space-md $space-xl;
+  border: none;
+  background: $ui-accent;
+  color: white;
+  cursor: pointer;
+  transition: opacity $transition-fast;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  @media (max-width: 600px) {
+    font-size: $size-sm;
+    padding: $space-sm $space-md;
+  }
+}
+
+.heroSecondary {
+  font-size: $size-sm;
+  color: $text-muted;
+  text-decoration: none;
+  transition: color $transition-fast;
+
+  &:hover {
+    color: $text-secondary;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
 .ctaPrimary {
   font-size: $size-md;
   font-weight: 600;
