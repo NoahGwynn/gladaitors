@@ -163,6 +163,7 @@ export default function TerritoryWarPage() {
           case 'turn_actions': {
             const actions = (data.actions || []) as PieceAction[];
             const modelName = data.model as string;
+            console.log(`[TW] turn_actions: ${modelName}, ${actions.length} actions`, actions.map(a => `${a.action}${a.reasoning ? ` — "${a.reasoning}"` : ''}`));
 
             // Apply actions to local state so the grid updates
             // immediately — don't wait for tick_complete

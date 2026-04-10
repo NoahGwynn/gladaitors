@@ -142,29 +142,34 @@
   color: $text-secondary;
 }
 
-// Main layout: map on the left, strategy feedback on the right
+// Main layout: map on top, strategy feedback below. Vertical stack
+// ensures the feedback panel is always visible without scrolling past
+// the map (the side-by-side layout pushed the panel off screen).
 .mainLayout {
   display: flex;
+  flex-direction: column;
   flex: 1;
   overflow: hidden;
-
-  @media (max-width: 900px) {
-    flex-direction: column;
-  }
 }
 
 // ============================================================================
 // Map
 // ============================================================================
 
+// Map takes a fixed portion of the viewport height so the strategy
+// feedback panel is always visible below/beside it.
 .mapContainer {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: $space-md;
-  min-height: 400px;
-  overflow: auto;
+  width: 100%;
+  height: 60vh;
+  max-height: 600px;
+  min-height: 300px;
+  padding: $space-sm;
+  position: relative;
+
+  @media (max-width: 900px) {
+    height: 50vh;
+    max-height: 400px;
+  }
 }
 
 .grid {
@@ -235,20 +240,13 @@
 // ============================================================================
 
 .feedbackPanel {
-  width: 380px;
-  flex-shrink: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid $border;
+  border-top: 1px solid $border;
   background: $bg-surface;
   overflow: hidden;
-
-  @media (max-width: 900px) {
-    width: 100%;
-    border-left: none;
-    border-top: 1px solid $border;
-    max-height: 50vh;
-  }
+  min-height: 200px;
 }
 
 // --- Score cards (one per model, horizontal strip) ---
