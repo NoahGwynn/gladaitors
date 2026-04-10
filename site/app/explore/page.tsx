@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { findModel, getModelColour, getModelName } from '@/lib/models';
 import { config } from '@/lib/config';
+import { STARTER_TOPICS } from '@/lib/starter-topics';
 import styles from './page.module.scss';
 
 interface FeedDebate {
@@ -24,18 +25,8 @@ interface FeedDebate {
 
 type SortMode = 'recent' | 'votes' | 'views';
 
-/** Hand-picked starter topics shown in the empty-state grid. Mix of playful,
- *  pop-culture, philosophical, and practical so the empty state demonstrates
- *  the platform's range. Avoiding politics by design — empty state should
- *  feel friendly, not divisive. */
-const EXAMPLE_TOPICS: string[] = [
-  'Is cereal soup?',
-  'Is a hot dog a sandwich?',
-  'Are dogs better than cats?',
-  'Was Star Wars more important than Star Trek?',
-  'Is free will an illusion?',
-  'Should we have a four-day work week?',
-];
+// Starter topics shared with the debate form — see lib/starter-topics.ts
+const EXAMPLE_TOPICS = STARTER_TOPICS;
 
 /** Display name disambiguation for duplicates / user slots */
 function getDisplayNames(modelIds: string[]): string[] {

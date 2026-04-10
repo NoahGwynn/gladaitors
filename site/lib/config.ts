@@ -26,4 +26,14 @@ export const config = {
   maxTopicLength: 200,
   maxPositionLength: 100,
   maxContextLength: 300,
+
+  /** ID of the curated sample debate displayed in the debate page's empty
+   *  state (the hero). Fetch it on mount, render read-only. Pick a debate
+   *  that demonstrates the product well: universally relatable topic,
+   *  standard-tier models (so anonymous users see models they can try),
+   *  clear positions, decent argument quality.
+   *
+   *  Set to null to disable the sample debate and fall back to a text-only
+   *  hero (headline + starter topic chips, no live debate preview). */
+  sampleDebateId: '4f9c0b71-efbb-4b36-a063-efcbb19081a1' as string | null,
 };
