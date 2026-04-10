@@ -236,7 +236,7 @@ section('Harvest action');
 
   applyActions(g, 'A', [{ unitId: piece.id, action: 'harvest' }]);
   assert(g.models['A'].food === 2, `Harvested 2 food (capped by remainder), got ${g.models['A'].food}`);
-  assert(g.grid[15][15].tileType === 'empty', 'Depleted tile becomes empty');
+  assert((g.grid[15][15].tileType as string) === 'empty', 'Depleted tile becomes empty');
 }
 
 // Harvest on empty tile
@@ -268,7 +268,7 @@ section('Build action');
   g.models['A'].ore = FORT_COST;
 
   applyActions(g, 'A', [{ unitId: piece.id, action: 'build' }]);
-  assert(g.grid[10][10].tileType === 'fort', 'Fort built');
+  assert((g.grid[10][10].tileType as string) === 'fort', 'Fort built');
   assert(g.grid[10][10].fortHp === FORT_HP, `Fort HP = ${FORT_HP}`);
   assert(g.grid[10][10].owner === 'A', 'Fort owned by A');
   assert(g.models['A'].ore === 0, 'Ore deducted');
@@ -327,7 +327,7 @@ section('Attack fort');
   assert(g.grid[10][11].fortHp === 1, `Fort took damage: ${g.grid[10][11].fortHp} HP`);
 
   applyActions(g, 'A', [{ unitId: attacker.id, action: 'attack', targetX: 11, targetY: 10 }]);
-  assert(g.grid[10][11].tileType === 'empty', 'Fort destroyed → empty tile');
+  assert((g.grid[10][11].tileType as string) === 'empty', 'Fort destroyed → empty tile');
   assert(g.grid[10][11].fortHp === 0, 'Fort HP = 0');
   assert(g.grid[10][11].owner === null, 'Fort tile unclaimed');
 }
