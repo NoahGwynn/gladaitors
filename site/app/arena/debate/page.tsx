@@ -124,6 +124,7 @@ function DebateArenaContent() {
   const [rounds, setRounds] = useState(3);
   const [context, setContext] = useState('');
   const [revealIdentities, setRevealIdentities] = useState(true);
+  const [responseLength, setResponseLength] = useState<'concise' | 'detailed'>('detailed');
 
   // --- Debate state (sourced from the layout-mounted orchestrator provider) ---
   // Lifting this state out of the page is what allows in-app navigation
@@ -355,6 +356,7 @@ function DebateArenaContent() {
     setTopic('');
     setContext('');
     setRevealIdentities(true);
+    setResponseLength('detailed');
     setDebaters([
       { modelId: 'claude-sonnet', position: '' },
       { modelId: 'gpt-4o', position: '' },
@@ -412,6 +414,7 @@ function DebateArenaContent() {
     const debateRounds = effectiveRounds;
     const debateContext = context;
     const debateReveal = revealIdentities;
+    const debateResponseLength = responseLength;
 
     isNearBottomRef.current = true;
     argCountRef.current = 0;
@@ -423,6 +426,7 @@ function DebateArenaContent() {
       rounds: debateRounds,
       context: debateContext,
       revealIdentities: debateReveal,
+      responseLength: debateResponseLength,
     });
   }
 
@@ -603,6 +607,27 @@ function DebateArenaContent() {
                 : 'Models don\'t know their opponents — even if it\'s themselves.'}
             </span>
           </div>
+        </div>
+
+        <div className={styles.field}>
+          <label className={styles.label}>Response length</label>
+          <div className={styles.roundSelector}>
+            {(['concise', 'detailed'] as const).map(len => (
+              <button
+                key={len}
+                className={`${styles.roundOption} ${responseLength === len ? styles.roundOptionActive : ''}`}
+                onClick={() => setResponseLength(len)}
+                disabled={generating}
+              >
+                {len === 'concise' ? 'Concise' : 'Detailed'}
+              </button>
+            ))}
+          </div>
+          <span className={styles.toggleDescription}>
+            {responseLength === 'concise'
+              ? 'Short and punchy — 2-3 sentences per argument.'
+              : 'Substantive paragraphs — full reasoning and evidence.'}
+          </span>
         </div>
 
         {hasUserDebater ? (

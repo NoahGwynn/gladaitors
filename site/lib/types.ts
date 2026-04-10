@@ -1,5 +1,5 @@
 // ============================================================================
-// Shared types for the gladAItors public site
+// Shared types for the gladaitor public site
 // ============================================================================
 
 /** A single argument in a debate round */
@@ -19,7 +19,7 @@ export interface Debate {
   creator_user_id?: string;
   creator_session_id?: string;
   topic: string;
-  positions: Record<string, string>;  // keyed by debater index ("0", "1", "2")
+  positions: Record<string, string>; // keyed by debater index ("0", "1", "2")
   models: string[];
   rounds: number;
   context?: string;
@@ -30,7 +30,7 @@ export interface Debate {
   view_count?: number;
   is_public?: boolean;
   // --- Orchestrator status fields (set by the API as it runs) ---
-  status?: 'idle' | 'running' | 'awaiting_human' | 'complete' | 'error';
+  status?: "idle" | "running" | "awaiting_human" | "complete" | "error";
   current_round?: number;
   awaiting_debater_index?: number | null;
   driver_session_id?: string | null;
@@ -44,6 +44,9 @@ export interface Debate {
   /** Whether the models knew who their opponents were during generation.
    *  NULL on legacy rows. */
   reveal_identities?: boolean | null;
+  /** 'concise' (2-3 sentences) or 'detailed' (multi-paragraph, default).
+   *  NULL treated as 'detailed' for legacy rows. */
+  response_length?: 'concise' | 'detailed' | null;
 }
 
 /** User profile with token balance */

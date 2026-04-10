@@ -48,6 +48,9 @@ interface DebateRequest {
   existingArguments?: DebateArgument[];
   /** Optional: the debate's ID. Used to persist resolved auto-assigned positions. */
   debateId?: string;
+  /** 'concise' or 'detailed' (default). Modifies the system prompt's
+   *  body-format section so models produce shorter or longer arguments. */
+  responseLength?: 'concise' | 'detailed';
 }
 
 interface DebateArgument {
@@ -88,6 +91,7 @@ function buildSystemPrompt(
   displayNames: string[],
   revealIdentities: boolean,
   context?: string,
+  responseLength: 'concise' | 'detailed' = 'detailed',
 ): string {
   const opponents = allDebaters
     .map((d, i) => ({ debater: d, name: displayNames[i], index: i }))
@@ -136,7 +140,11 @@ TITLE FORMAT
   **Why scale is not the answer**
   **A simpler path forward**
 
-BODY FORMAT
+${responseLength === 'concise' ? `BODY FORMAT
+- 40 to 80 words MAXIMUM. Two to three sentences. Every sentence must land a point.
+- Be punchy, direct, and opinionated. No filler, no preamble, no hedging.
+- You MAY use **bold** for one key phrase per response. No other formatting.
+- Do not start with meta commentary. Open straight into the argument itself.` : `BODY FORMAT
 - 150 to 250 words. Do not pad to reach the upper end — write what is needed and stop.
 - Plain prose paragraphs. No bullet lists, no numbered lists, no sub-headings inside the body.
 - You MAY use **bold** sparingly (1-3 phrases per response) to emphasise the strongest words
@@ -146,7 +154,7 @@ BODY FORMAT
 - Do not include section labels like "Argument:", "Rebuttal:", "Conclusion:" — let the prose
   do the structural work.
 - Do not start with meta commentary ("I'll argue that...", "In this round I will...",
-  "Let me address..."). Open straight into the argument itself.
+  "Let me address..."). Open straight into the argument itself.`}
 
 VOICE
 - Write in first person. You are the debater, not a narrator describing the debater.
@@ -767,7 +775,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body: DebateRequest = await request.json();
-  const { topic, debaters, rounds, currentRound, context, revealIdentities = true, existingArguments, debateId } = body;
+  const { topic, debaters, rounds, currentRound, context, revealIdentities = true, existingArguments, debateId, responseLength = 'detailed' } = body;
 
   // Validate
   if (!topic || topic.length > 200) {
@@ -1056,7 +1064,7 @@ export async function POST(request: NextRequest) {
           }
           const systemPrompt = buildSystemPrompt(
             displayName, debater.position, topic, rounds,
-            di, debaters, displayNames, revealIdentities, context,
+            di, debaters, displayNames, revealIdentities, context, responseLength,
           );
           const chatMessages = buildMessages(
             currentRound, rounds, di, allArguments, displayNames, revealIdentities,

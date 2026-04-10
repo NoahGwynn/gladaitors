@@ -38,29 +38,20 @@
 // See REALTIME_ORCHESTRATOR_REFACTOR.md at the repo root for the full plan.
 // ============================================================================
 
-'use client';
+"use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   createDebateRecord,
   completeDebate as dbCompleteDebate,
   extendDebate as dbExtendDebate,
   deleteDebate,
   getSessionId,
-} from '@/lib/debates';
-import { fetchTokenBalance, notifyBalanceChanged } from '@/lib/tokens';
-import { getModelName } from '@/lib/models';
-import { createClient } from '@/lib/supabase';
-import type { Debate, DebateArgument } from '@/lib/types';
+} from "@/lib/debates";
+import { fetchTokenBalance, notifyBalanceChanged } from "@/lib/tokens";
+import { getModelName } from "@/lib/models";
+import { createClient } from "@/lib/supabase";
+import type { Debate, DebateArgument } from "@/lib/types";
 
 // ----------------------------------------------------------------------------
 // Lease constants
@@ -87,8 +78,8 @@ const STALE_LEASE_THRESHOLD_SECS = 15;
  *  the orchestrator can reclaim immediately after a reload.
  */
 function getTabId(): string {
-  if (typeof window === 'undefined') return '';
-  const KEY = 'gladaitors_tab_id';
+  if (typeof window === "undefined") return "";
+  const KEY = "gladaitor_tab_id";
   let id = sessionStorage.getItem(KEY);
   if (!id) {
     id = crypto.randomUUID();
@@ -105,7 +96,7 @@ export interface DebaterConfig {
   modelId: string;
   position: string;
   /** 'manual' = user typed the position; 'auto' = AI picks its own stance on round 1 */
-  assignmentMode?: 'manual' | 'auto';
+  assignmentMode?: "manual" | "auto";
 }
 
 export interface ActiveDebate {
@@ -116,6 +107,7 @@ export interface ActiveDebate {
   context?: string;
   isComplete: boolean;
   isPublic?: boolean;
+  responseLength?: 'concise' | 'detailed';
 }
 
 export interface LiveArgument extends DebateArgument {
@@ -136,9 +128,10 @@ export interface StartDebateConfig {
   rounds: number;
   context: string;
   revealIdentities: boolean;
+  responseLength: 'concise' | 'detailed';
 }
 
-export type ErrorReason = 'insufficient_tokens' | 'safety' | 'auth' | 'other';
+export type ErrorReason = "insufficient_tokens" | "safety" | "auth" | "other";
 
 export type SubmitResult = { ok: true } | { ok: false; error: string };
 
@@ -165,9 +158,7 @@ interface RoundResult {
   } | null;
 }
 
-type UserTurnResult =
-  | { kind: 'submitted'; arg: DebateArgument }
-  | { kind: 'ended'; arg: DebateArgument };
+type UserTurnResult = { kind: "submitted"; arg: DebateArgument } | { kind: "ended"; arg: DebateArgument };
 
 // ----------------------------------------------------------------------------
 // Context shapes
@@ -185,7 +176,7 @@ interface StatusContextValue {
   isDriver: boolean;
   /** Orchestrator status from the DB. Followers (non-driver tabs) read this
    *  to render their "what is the driver doing" indicator. */
-  dbStatus: 'idle' | 'running' | 'awaiting_human' | 'complete' | 'error' | null;
+  dbStatus: "idle" | "running" | "awaiting_human" | "complete" | "error" | null;
   /** Current round number from the DB. Used for progress display in follower mode. */
   dbCurrentRound: number;
   /** True if the driver tab is paused on a human turn (its own user, not us). */
@@ -229,7 +220,7 @@ interface ActionsContextValue {
   takeOverDebate(): Promise<SubmitResult>;
 
   /** Submit the user's argument for a pending human turn. Returns ok or an error message. */
-  submitUserTurn(text: string, intent: 'continue' | 'end'): Promise<SubmitResult>;
+  submitUserTurn(text: string, intent: "continue" | "end"): Promise<SubmitResult>;
   /** Cancel the pending human turn. The orchestrator stops cleanly; the debate stays incomplete. */
   cancelUserTurn(): void;
 
@@ -252,19 +243,19 @@ const ActionsContext = createContext<ActionsContextValue | null>(null);
 
 export function useDebateStatus(): StatusContextValue {
   const v = useContext(StatusContext);
-  if (!v) throw new Error('useDebateStatus must be used inside DebateOrchestratorProvider');
+  if (!v) throw new Error("useDebateStatus must be used inside DebateOrchestratorProvider");
   return v;
 }
 
 export function useDebateStream(): StreamContextValue {
   const v = useContext(StreamContext);
-  if (!v) throw new Error('useDebateStream must be used inside DebateOrchestratorProvider');
+  if (!v) throw new Error("useDebateStream must be used inside DebateOrchestratorProvider");
   return v;
 }
 
 export function useDebateActions(): ActionsContextValue {
   const v = useContext(ActionsContext);
-  if (!v) throw new Error('useDebateActions must be used inside DebateOrchestratorProvider');
+  if (!v) throw new Error("useDebateActions must be used inside DebateOrchestratorProvider");
   return v;
 }
 
@@ -283,7 +274,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   const [pendingUserTurn, setPendingUserTurn] = useState<PendingUserTurn | null>(null);
   const [justCompleted, setJustCompleted] = useState(false);
   const [isDriver, setIsDriver] = useState(false);
-  const [dbStatus, setDbStatus] = useState<StatusContextValue['dbStatus']>(null);
+  const [dbStatus, setDbStatus] = useState<StatusContextValue["dbStatus"]>(null);
   const [dbCurrentRound, setDbCurrentRound] = useState(0);
   const [dbAwaitingHuman, setDbAwaitingHuman] = useState(false);
   const [dbDriverSessionId, setDbDriverSessionId] = useState<string | null>(null);
@@ -299,7 +290,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   const userTurnResolverRef = useRef<((result: UserTurnResult | null) => void) | null>(null);
   /** Per-tab id used as the driver lease key. NOT the same as the per-browser
    *  session id from getSessionId() — see the comment on getTabId(). */
-  const tabIdRef = useRef<string>('');
+  const tabIdRef = useRef<string>("");
   /** Heartbeat timer handle while we hold the lease. */
   const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -315,28 +306,29 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   // ========================================================================
 
   /** Claim the driver lease for the current debateIdRef. Returns the RPC verdict. */
-  const claimLease = useCallback(async (
-    forceIfStaleSecs: number = STALE_LEASE_THRESHOLD_SECS,
-  ): Promise<{ claimed: boolean; reason: string }> => {
-    const debateId = debateIdRef.current;
-    if (!debateId) return { claimed: false, reason: 'no_debate_id' };
-    if (!tabIdRef.current) tabIdRef.current = getTabId();
+  const claimLease = useCallback(
+    async (forceIfStaleSecs: number = STALE_LEASE_THRESHOLD_SECS): Promise<{ claimed: boolean; reason: string }> => {
+      const debateId = debateIdRef.current;
+      if (!debateId) return { claimed: false, reason: "no_debate_id" };
+      if (!tabIdRef.current) tabIdRef.current = getTabId();
 
-    const supabase = createClient();
-    const { data, error } = await supabase.rpc('claim_debate_lease', {
-      p_debate_id: debateId,
-      p_session_id: tabIdRef.current,
-      p_force_if_stale_secs: forceIfStaleSecs,
-    });
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("claim_debate_lease", {
+        p_debate_id: debateId,
+        p_session_id: tabIdRef.current,
+        p_force_if_stale_secs: forceIfStaleSecs,
+      });
 
-    if (error) {
-      console.error('[LEASE CLAIM] RPC error:', error);
-      return { claimed: false, reason: 'rpc_error' };
-    }
+      if (error) {
+        console.error("[LEASE CLAIM] RPC error:", error);
+        return { claimed: false, reason: "rpc_error" };
+      }
 
-    const verdict = (data ?? {}) as { claimed?: boolean; reason?: string };
-    return { claimed: !!verdict.claimed, reason: verdict.reason ?? 'unknown' };
-  }, []);
+      const verdict = (data ?? {}) as { claimed?: boolean; reason?: string };
+      return { claimed: !!verdict.claimed, reason: verdict.reason ?? "unknown" };
+    },
+    [],
+  );
 
   /** Refresh the heartbeat. Returns the current driver session id from the DB
    *  (which we compare against ours to detect being kicked off). */
@@ -345,12 +337,12 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     if (!debateId || !tabIdRef.current) return null;
 
     const supabase = createClient();
-    const { data, error } = await supabase.rpc('heartbeat_debate_lease', {
+    const { data, error } = await supabase.rpc("heartbeat_debate_lease", {
       p_debate_id: debateId,
       p_session_id: tabIdRef.current,
     });
     if (error) {
-      console.error('[LEASE HEARTBEAT] RPC error:', error);
+      console.error("[LEASE HEARTBEAT] RPC error:", error);
       return null;
     }
     return (data as string | null) ?? null;
@@ -361,7 +353,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     const debateId = debateIdRef.current;
     if (!debateId || !tabIdRef.current) return;
     const supabase = createClient();
-    await supabase.rpc('release_debate_lease', {
+    await supabase.rpc("release_debate_lease", {
       p_debate_id: debateId,
       p_session_id: tabIdRef.current,
     });
@@ -417,9 +409,9 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
       if (!debateId || !tabId) return;
       try {
         // keepalive lets the POST survive the unload — fire-and-forget.
-        fetch('/api/debate/release-lease', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        fetch("/api/debate/release-lease", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ debateId, tabId }),
           keepalive: true,
         });
@@ -427,8 +419,8 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
         // Best-effort. Heartbeat staleness is the backup.
       }
     };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
   }, [isDriver]);
 
   // ========================================================================
@@ -457,11 +449,11 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     const channel = supabase
       .channel(`debate-${debateId}`)
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'debates',
+          event: "UPDATE",
+          schema: "public",
+          table: "debates",
           filter: `id=eq.${debateId}`,
         },
         (payload) => {
@@ -480,44 +472,39 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   }, [activeDebate?.id]);
 
   /** Strict-merge incoming row arguments into local liveArguments. */
-  const mergeRealtimeArgs = useCallback((
-    local: LiveArgument[],
-    incoming: DebateArgument[] | undefined,
-  ): LiveArgument[] => {
-    if (!incoming || incoming.length === 0) return local;
+  const mergeRealtimeArgs = useCallback(
+    (local: LiveArgument[], incoming: DebateArgument[] | undefined): LiveArgument[] => {
+      if (!incoming || incoming.length === 0) return local;
 
-    // Streaming arg in local always wins — never overwritten by Realtime echo
-    const streamingArg = local.find(a => a.streaming);
-    const localKeys = new Set(
-      local.filter(a => !a.streaming).map(a => `${a.round}-${a.debater_index}`),
-    );
+      // Streaming arg in local always wins — never overwritten by Realtime echo
+      const streamingArg = local.find((a) => a.streaming);
+      const localKeys = new Set(local.filter((a) => !a.streaming).map((a) => `${a.round}-${a.debater_index}`));
 
-    const result = [...local];
-    let added = false;
-    for (const arg of incoming) {
-      const key = `${arg.round}-${arg.debater_index}`;
-      // Already have a complete local copy
-      if (localKeys.has(key)) continue;
-      // Don't clobber the in-flight streaming arg
-      if (
-        streamingArg &&
-        streamingArg.round === arg.round &&
-        streamingArg.debater_index === arg.debater_index
-      ) continue;
-      result.push({ ...arg, streaming: false });
-      added = true;
-    }
-    // Avoid creating a new array reference if nothing actually changed —
-    // prevents unnecessary re-renders.
-    if (!added) return local;
-    // Sort by (round, debater_index) so the rendered thread stays in order
-    // even when args arrive out of sequence over the wire.
-    result.sort((a, b) => {
-      if (a.round !== b.round) return a.round - b.round;
-      return a.debater_index - b.debater_index;
-    });
-    return result;
-  }, []);
+      const result = [...local];
+      let added = false;
+      for (const arg of incoming) {
+        const key = `${arg.round}-${arg.debater_index}`;
+        // Already have a complete local copy
+        if (localKeys.has(key)) continue;
+        // Don't clobber the in-flight streaming arg
+        if (streamingArg && streamingArg.round === arg.round && streamingArg.debater_index === arg.debater_index)
+          continue;
+        result.push({ ...arg, streaming: false });
+        added = true;
+      }
+      // Avoid creating a new array reference if nothing actually changed —
+      // prevents unnecessary re-renders.
+      if (!added) return local;
+      // Sort by (round, debater_index) so the rendered thread stays in order
+      // even when args arrive out of sequence over the wire.
+      result.sort((a, b) => {
+        if (a.round !== b.round) return a.round - b.round;
+        return a.debater_index - b.debater_index;
+      });
+      return result;
+    },
+    [],
+  );
 
   /** Apply a Realtime row update to local state.
    *
@@ -534,59 +521,58 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
    *  (setIsDriver, setPendingUserTurn) don't suffer this problem because
    *  React provides stable setter references.
    */
-  const reconcileRealtimeUpdate = useCallback((row: Debate) => {
-    const newDriver = row.driver_session_id ?? null;
+  const reconcileRealtimeUpdate = useCallback(
+    (row: Debate) => {
+      const newDriver = row.driver_session_id ?? null;
 
-    // If the row says someone else owns the lease and we have a heartbeat
-    // running (= we thought we were the driver), tear it down.
-    if (newDriver !== tabIdRef.current && heartbeatTimerRef.current) {
-      stopHeartbeat();
-      setIsDriver(false);
-    }
+      // If the row says someone else owns the lease and we have a heartbeat
+      // running (= we thought we were the driver), tear it down.
+      if (newDriver !== tabIdRef.current && heartbeatTimerRef.current) {
+        stopHeartbeat();
+        setIsDriver(false);
+      }
 
-    // If the row says someone else owns the lease and we have a pending
-    // user-turn resolver, we just got kicked off mid-pause. Cancel the
-    // pending turn so the orchestrator's runDebate loop unwinds cleanly
-    // — otherwise the input box would stay visible in this tab forever.
-    if (
-      newDriver &&
-      newDriver !== tabIdRef.current &&
-      userTurnResolverRef.current
-    ) {
-      const resolver = userTurnResolverRef.current;
-      userTurnResolverRef.current = null;
-      setPendingUserTurn(null);
-      resolver(null);
-    }
+      // If the row says someone else owns the lease and we have a pending
+      // user-turn resolver, we just got kicked off mid-pause. Cancel the
+      // pending turn so the orchestrator's runDebate loop unwinds cleanly
+      // — otherwise the input box would stay visible in this tab forever.
+      if (newDriver && newDriver !== tabIdRef.current && userTurnResolverRef.current) {
+        const resolver = userTurnResolverRef.current;
+        userTurnResolverRef.current = null;
+        setPendingUserTurn(null);
+        resolver(null);
+      }
 
-    // Status fields — DB always wins
-    if (row.status !== undefined) setDbStatus(row.status);
-    if (row.current_round !== undefined) setDbCurrentRound(row.current_round);
-    setDbAwaitingHuman(row.status === 'awaiting_human');
-    setDbDriverSessionId(row.driver_session_id ?? null);
-    setDbDriverHeartbeatAt(row.driver_heartbeat_at ?? null);
+      // Status fields — DB always wins
+      if (row.status !== undefined) setDbStatus(row.status);
+      if (row.current_round !== undefined) setDbCurrentRound(row.current_round);
+      setDbAwaitingHuman(row.status === "awaiting_human");
+      setDbDriverSessionId(row.driver_session_id ?? null);
+      setDbDriverHeartbeatAt(row.driver_heartbeat_at ?? null);
 
-    // 3. is_complete — followers learn the debate is done from here
-    if (row.is_complete) {
-      setActiveDebate(prev => prev && !prev.isComplete ? { ...prev, isComplete: true } : prev);
-    }
+      // 3. is_complete — followers learn the debate is done from here
+      if (row.is_complete) {
+        setActiveDebate((prev) => (prev && !prev.isComplete ? { ...prev, isComplete: true } : prev));
+      }
 
-    // 4. Positions (driver may have just resolved auto-assign)
-    if (row.positions) {
-      const positions = row.positions as Record<string, string>;
-      setActiveDebate(prev => {
-        if (!prev) return prev;
-        const updatedDebaters = prev.debaters.map((d, i) => ({
-          ...d,
-          position: positions[String(i)] ?? d.position,
-        }));
-        return { ...prev, debaters: updatedDebaters };
-      });
-    }
+      // 4. Positions (driver may have just resolved auto-assign)
+      if (row.positions) {
+        const positions = row.positions as Record<string, string>;
+        setActiveDebate((prev) => {
+          if (!prev) return prev;
+          const updatedDebaters = prev.debaters.map((d, i) => ({
+            ...d,
+            position: positions[String(i)] ?? d.position,
+          }));
+          return { ...prev, debaters: updatedDebaters };
+        });
+      }
 
-    // 5. Arguments — strict merge
-    setLiveArguments(prev => mergeRealtimeArgs(prev, row.arguments));
-  }, [stopHeartbeat, mergeRealtimeArgs]);
+      // 5. Arguments — strict merge
+      setLiveArguments((prev) => mergeRealtimeArgs(prev, row.arguments));
+    },
+    [stopHeartbeat, mergeRealtimeArgs],
+  );
 
   // ========================================================================
   // SSE event handler
@@ -594,30 +580,30 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
 
   const handleSSE = useCallback((event: string, data: Record<string, unknown>) => {
     switch (event) {
-      case 'positions_resolved': {
+      case "positions_resolved": {
         const positions = data.positions as string[];
-        setActiveDebate(prev => {
+        setActiveDebate((prev) => {
           if (!prev) return prev;
           const updatedDebaters = prev.debaters.map((d, i) => ({
             ...d,
             position: positions[i] ?? d.position,
-            assignmentMode: 'manual' as const,
+            assignmentMode: "manual" as const,
           }));
           return { ...prev, debaters: updatedDebaters };
         });
         break;
       }
 
-      case 'thinking':
+      case "thinking":
         setCurrentThinking(data.model_name as string);
         activeRoundRef.current = (data.round as number) || activeRoundRef.current;
         break;
 
-      case 'token': {
+      case "token": {
         const debaterIndex = data.debater_index as number;
         const modelId = data.model_id as string;
         const token = data.token as string;
-        setLiveArguments(prev => {
+        setLiveArguments((prev) => {
           const last = prev[prev.length - 1];
           if (last && last.debater_index === debaterIndex && last.streaming) {
             const updated = [...prev];
@@ -625,25 +611,28 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
             return updated;
           } else {
             setCurrentThinking(null);
-            return [...prev, {
-              debater_index: debaterIndex,
-              model_id: modelId,
-              model_name: getModelName(modelId),
-              round: activeRoundRef.current,
-              content: token,
-              refused: false,
-              streaming: true,
-            }];
+            return [
+              ...prev,
+              {
+                debater_index: debaterIndex,
+                model_id: modelId,
+                model_name: getModelName(modelId),
+                round: activeRoundRef.current,
+                content: token,
+                refused: false,
+                streaming: true,
+              },
+            ];
           }
         });
         break;
       }
 
-      case 'argument': {
+      case "argument": {
         const arg = data as unknown as DebateArgument;
-        setLiveArguments(prev => {
+        setLiveArguments((prev) => {
           const updated = [...prev];
-          const idx = updated.findIndex(a => a.debater_index === arg.debater_index && a.streaming);
+          const idx = updated.findIndex((a) => a.debater_index === arg.debater_index && a.streaming);
           const final_: LiveArgument = { ...arg, streaming: false };
           if (idx >= 0) updated[idx] = final_;
           else updated.push(final_);
@@ -658,37 +647,40 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
       // 'round_complete' is handled implicitly — the stream closes after it
       // and the orchestrator advances. No state to update here.
 
-      case 'model_error': {
+      case "model_error": {
         const errIndex = data.debater_index as number;
         const errModelId = data.model_id as string;
         const errModelName = data.model_name as string;
         const errRound = data.round as number;
         const errMsg = data.message as string;
-        setLiveArguments(prev => {
-          const cleaned = prev.filter(a => !(a.debater_index === errIndex && a.streaming));
-          return [...cleaned, {
-            debater_index: errIndex,
-            model_id: errModelId,
-            model_name: errModelName,
-            round: errRound,
-            content: `[Failed to respond: ${errMsg}]`,
-            refused: true,
-            refusal_reason: `API error: ${errMsg}`,
-            streaming: false,
-          }];
+        setLiveArguments((prev) => {
+          const cleaned = prev.filter((a) => !(a.debater_index === errIndex && a.streaming));
+          return [
+            ...cleaned,
+            {
+              debater_index: errIndex,
+              model_id: errModelId,
+              model_name: errModelName,
+              round: errRound,
+              content: `[Failed to respond: ${errMsg}]`,
+              refused: true,
+              refusal_reason: `API error: ${errMsg}`,
+              streaming: false,
+            },
+          ];
         });
         setCurrentThinking(null);
         break;
       }
 
-      case 'insufficient_tokens':
-        setError('You ran out of tokens. Top up to continue debating.');
-        setErrorReason('insufficient_tokens');
+      case "insufficient_tokens":
+        setError("You ran out of tokens. Top up to continue debating.");
+        setErrorReason("insufficient_tokens");
         break;
 
-      case 'error':
-        setError((data.message as string) || 'An error occurred');
-        setErrorReason('other');
+      case "error":
+        setError((data.message as string) || "An error occurred");
+        setErrorReason("other");
         break;
     }
   }, []);
@@ -697,288 +689,311 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   // Single round (one POST to /api/debate)
   // ========================================================================
 
-  const runOneRound = useCallback(async (
-    config: RunDebateConfig,
-    existingArguments: DebateArgument[],
-    currentRound: number,
-  ): Promise<RoundResult> => {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    const sid = getSessionId();
-    if (sid) headers['x-session-id'] = sid;
+  const runOneRound = useCallback(
+    async (
+      config: RunDebateConfig,
+      existingArguments: DebateArgument[],
+      currentRound: number,
+    ): Promise<RoundResult> => {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const sid = getSessionId();
+      if (sid) headers["x-session-id"] = sid;
 
-    const res = await fetch('/api/debate', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        topic: config.topic,
-        debaters: config.debaters,
-        rounds: config.rounds,
-        currentRound,
-        context: config.context || undefined,
-        revealIdentities: config.revealIdentities,
-        existingArguments,
-        debateId: debateIdRef.current || undefined,
-      }),
-    });
+      const res = await fetch("/api/debate", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          topic: config.topic,
+          debaters: config.debaters,
+          rounds: config.rounds,
+          currentRound,
+          context: config.context || undefined,
+          revealIdentities: config.revealIdentities,
+          responseLength: config.responseLength,
+          existingArguments,
+          debateId: debateIdRef.current || undefined,
+        }),
+      });
 
-    if (!res.ok) {
-      const text = await res.text();
-      let message = 'Something went wrong';
-      try { message = JSON.parse(text).error || message; } catch { message = text || message; }
-      const isInsufficient = res.status === 402;
-      return { newArgs: [], insufficientTokens: isInsufficient, error: message, userTurnNeeded: null };
-    }
+      if (!res.ok) {
+        const text = await res.text();
+        let message = "Something went wrong";
+        try {
+          message = JSON.parse(text).error || message;
+        } catch {
+          message = text || message;
+        }
+        const isInsufficient = res.status === 402;
+        return { newArgs: [], insufficientTokens: isInsufficient, error: message, userTurnNeeded: null };
+      }
 
-    const reader = res.body?.getReader();
-    if (!reader) {
-      return { newArgs: [], insufficientTokens: false, error: 'No response stream', userTurnNeeded: null };
-    }
+      const reader = res.body?.getReader();
+      if (!reader) {
+        return { newArgs: [], insufficientTokens: false, error: "No response stream", userTurnNeeded: null };
+      }
 
-    const newArgs: DebateArgument[] = [];
-    let insufficientTokens = false;
-    let userTurnNeeded: RoundResult['userTurnNeeded'] = null;
-    const decoder = new TextDecoder();
-    let buffer = '';
+      const newArgs: DebateArgument[] = [];
+      let insufficientTokens = false;
+      let userTurnNeeded: RoundResult["userTurnNeeded"] = null;
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
-      let eventType = '';
-      for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          eventType = line.slice(7).trim();
-        } else if (line.startsWith('data: ') && eventType) {
-          try {
-            const data = JSON.parse(line.slice(6));
-            handleSSE(eventType, data);
-            if (eventType === 'argument') {
-              newArgs.push(data as DebateArgument);
-            } else if (eventType === 'insufficient_tokens') {
-              insufficientTokens = true;
-            } else if (eventType === 'user_turn_needed') {
-              userTurnNeeded = {
-                debaterIndex: data.debater_index as number,
-                displayName: data.model_name as string,
-                position: data.position as string,
-                round: data.round as number,
-              };
+        let eventType = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            eventType = line.slice(7).trim();
+          } else if (line.startsWith("data: ") && eventType) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              handleSSE(eventType, data);
+              if (eventType === "argument") {
+                newArgs.push(data as DebateArgument);
+              } else if (eventType === "insufficient_tokens") {
+                insufficientTokens = true;
+              } else if (eventType === "user_turn_needed") {
+                userTurnNeeded = {
+                  debaterIndex: data.debater_index as number,
+                  displayName: data.model_name as string,
+                  position: data.position as string,
+                  round: data.round as number,
+                };
+              }
+            } catch {
+              /* skip malformed */
             }
-          } catch { /* skip malformed */ }
-          eventType = '';
+            eventType = "";
+          }
         }
       }
-    }
 
-    return { newArgs, insufficientTokens, error: null, userTurnNeeded };
-  }, [handleSSE]);
+      return { newArgs, insufficientTokens, error: null, userTurnNeeded };
+    },
+    [handleSSE],
+  );
 
   // ========================================================================
   // User-turn prompt — pause the orchestrator until the user submits
   // ========================================================================
 
-  const promptUserTurn = useCallback((
-    turn: NonNullable<RoundResult['userTurnNeeded']>,
-    isLastInRound: boolean,
-  ): Promise<UserTurnResult | null> => {
-    return new Promise(resolve => {
-      setPendingUserTurn({ ...turn, isLastInRound });
-      userTurnResolverRef.current = resolve;
-    });
-  }, []);
+  const promptUserTurn = useCallback(
+    (turn: NonNullable<RoundResult["userTurnNeeded"]>, isLastInRound: boolean): Promise<UserTurnResult | null> => {
+      return new Promise((resolve) => {
+        setPendingUserTurn({ ...turn, isLastInRound });
+        userTurnResolverRef.current = resolve;
+      });
+    },
+    [],
+  );
 
   // ========================================================================
   // Run the full multi-round loop
   // ========================================================================
 
-  const runDebate = useCallback(async (config: RunDebateConfig) => {
-    // Claim the lease before doing anything else. If another tab is currently
-    // driving this debate (fresh heartbeat), refuse to start — single-driver
-    // is enforced at the orchestrator level. The page surfaces the error.
-    const claim = await claimLease();
-    if (!claim.claimed) {
-      const message = claim.reason === 'active_driver'
-        ? 'This debate is already running in another tab. Switch to that tab to see it.'
-        : claim.reason === 'rpc_error'
-          ? 'Could not start the debate (database error).'
-          : 'Could not claim this debate.';
-      setError(message);
-      setErrorReason('other');
-      return;
-    }
-    setIsDriver(true);
-    startHeartbeat();
+  const runDebate = useCallback(
+    async (config: RunDebateConfig) => {
+      // Claim the lease before doing anything else. If another tab is currently
+      // driving this debate (fresh heartbeat), refuse to start — single-driver
+      // is enforced at the orchestrator level. The page surfaces the error.
+      const claim = await claimLease();
+      if (!claim.claimed) {
+        const message =
+          claim.reason === "active_driver"
+            ? "This debate is already running in another tab. Switch to that tab to see it."
+            : claim.reason === "rpc_error"
+              ? "Could not start the debate (database error)."
+              : "Could not claim this debate.";
+        setError(message);
+        setErrorReason("other");
+        return;
+      }
+      setIsDriver(true);
+      startHeartbeat();
 
-    setGenerating(true);
-    setError(null);
-    setErrorReason(null);
-    setCurrentThinking(null);
+      setGenerating(true);
+      setError(null);
+      setErrorReason(null);
+      setCurrentThinking(null);
 
-    const allArgs: DebateArgument[] = [...config.initialArgs];
-    let currentRound = config.startRound;
-    let endRequested = false;
+      const allArgs: DebateArgument[] = [...config.initialArgs];
+      let currentRound = config.startRound;
+      let endRequested = false;
 
-    try {
-      outer: while (currentRound <= config.rounds) {
-        let roundDone = false;
-        while (!roundDone) {
-          const result = await runOneRound(config, allArgs, currentRound);
+      try {
+        outer: while (currentRound <= config.rounds) {
+          let roundDone = false;
+          while (!roundDone) {
+            const result = await runOneRound(config, allArgs, currentRound);
 
-          if (result.error) {
-            // First-round failure on a brand-new debate: clean up the empty record
-            if (config.isNewDebate && currentRound === config.startRound && allArgs.length === 0) {
-              if (debateIdRef.current) {
-                deleteDebate(debateIdRef.current);
-                debateIdRef.current = null;
+            if (result.error) {
+              // First-round failure on a brand-new debate: clean up the empty record
+              if (config.isNewDebate && currentRound === config.startRound && allArgs.length === 0) {
+                if (debateIdRef.current) {
+                  deleteDebate(debateIdRef.current);
+                  debateIdRef.current = null;
+                }
+                setActiveDebate(null);
               }
-              setActiveDebate(null);
-            }
-            if (result.insufficientTokens) {
-              setErrorReason('insufficient_tokens');
-            } else {
-              setErrorReason('other');
-            }
-            setError(result.error);
-            return;
-          }
-
-          if (result.insufficientTokens) {
-            // SSE handler already set the error / errorReason. Stop the loop.
-            return;
-          }
-
-          allArgs.push(...result.newArgs);
-
-          if (result.userTurnNeeded) {
-            const isLastInRound = result.userTurnNeeded.debaterIndex === config.debaters.length - 1;
-            const userResult = await promptUserTurn(result.userTurnNeeded, isLastInRound);
-            if (!userResult) {
-              // Cancelled by the user — stop cleanly. Debate stays incomplete.
+              if (result.insufficientTokens) {
+                setErrorReason("insufficient_tokens");
+              } else {
+                setErrorReason("other");
+              }
+              setError(result.error);
               return;
             }
-            allArgs.push(userResult.arg);
-            // The user's argument is sent to the server in the next round POST
-            // as part of `existingArguments`; the server merges and persists
-            // it before generating the next AI argument.
-            if (userResult.kind === 'ended') {
-              endRequested = true;
-              if (isLastInRound) {
-                roundDone = true;
-              }
-              // else: continue inner loop, API will fill in the rest of the round
+
+            if (result.insufficientTokens) {
+              // SSE handler already set the error / errorReason. Stop the loop.
+              return;
             }
-          } else {
-            roundDone = true;
+
+            allArgs.push(...result.newArgs);
+
+            if (result.userTurnNeeded) {
+              const isLastInRound = result.userTurnNeeded.debaterIndex === config.debaters.length - 1;
+              const userResult = await promptUserTurn(result.userTurnNeeded, isLastInRound);
+              if (!userResult) {
+                // Cancelled by the user — stop cleanly. Debate stays incomplete.
+                return;
+              }
+              allArgs.push(userResult.arg);
+              // The user's argument is sent to the server in the next round POST
+              // as part of `existingArguments`; the server merges and persists
+              // it before generating the next AI argument.
+              if (userResult.kind === "ended") {
+                endRequested = true;
+                if (isLastInRound) {
+                  roundDone = true;
+                }
+                // else: continue inner loop, API will fill in the rest of the round
+              }
+            } else {
+              roundDone = true;
+            }
           }
+
+          if (endRequested) break outer;
+
+          currentRound++;
+          // Surface the live token balance update via the global event bus.
+          notifyBalanceChanged();
+          void fetchTokenBalance();
         }
 
-        if (endRequested) break outer;
-
-        currentRound++;
-        // Surface the live token balance update via the global event bus.
+        // Either all rounds completed naturally, or the user explicitly ended the
+        // debate after the current round finished. Server marks is_complete=true
+        // on the natural-end path; on the early-end path the page will fall back
+        // to dbCompleteDebate via the justCompleted observer.
+        setJustCompleted(true);
+        setActiveDebate((prev) => (prev ? { ...prev, isComplete: true } : prev));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Something went wrong");
+        setErrorReason("other");
+      } finally {
+        setGenerating(false);
+        setCurrentThinking(null);
+        // The lease is held for the entire runDebate lifecycle, including
+        // human-turn pauses (promptUserTurn awaits inside the loop, so the
+        // finally block doesn't run until the user submits or cancels).
+        // Always release here so other tabs can claim immediately.
+        stopHeartbeat();
+        await releaseLease();
+        setIsDriver(false);
         notifyBalanceChanged();
-        void fetchTokenBalance();
       }
-
-      // Either all rounds completed naturally, or the user explicitly ended the
-      // debate after the current round finished. Server marks is_complete=true
-      // on the natural-end path; on the early-end path the page will fall back
-      // to dbCompleteDebate via the justCompleted observer.
-      setJustCompleted(true);
-      setActiveDebate(prev => prev ? { ...prev, isComplete: true } : prev);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong');
-      setErrorReason('other');
-    } finally {
-      setGenerating(false);
-      setCurrentThinking(null);
-      // The lease is held for the entire runDebate lifecycle, including
-      // human-turn pauses (promptUserTurn awaits inside the loop, so the
-      // finally block doesn't run until the user submits or cancels).
-      // Always release here so other tabs can claim immediately.
-      stopHeartbeat();
-      await releaseLease();
-      setIsDriver(false);
-      notifyBalanceChanged();
-    }
-  }, [runOneRound, promptUserTurn, claimLease, startHeartbeat, stopHeartbeat, releaseLease]);
+    },
+    [runOneRound, promptUserTurn, claimLease, startHeartbeat, stopHeartbeat, releaseLease],
+  );
 
   // ========================================================================
   // Public actions
   // ========================================================================
 
-  const startDebate = useCallback(async (config: StartDebateConfig): Promise<SubmitResult> => {
-    if (generating) {
-      return { ok: false, error: 'A debate is already running. Please wait or end it first.' };
-    }
+  const startDebate = useCallback(
+    async (config: StartDebateConfig): Promise<SubmitResult> => {
+      if (generating) {
+        return { ok: false, error: "A debate is already running. Please wait or end it first." };
+      }
 
-    setActiveDebate({
-      id: null,
-      topic: config.topic,
-      debaters: config.debaters,
-      rounds: config.rounds,
-      context: config.context,
-      isComplete: false,
-    });
-    setLiveArguments([]);
-    setError(null);
-    setErrorReason(null);
-    setPendingUserTurn(null);
-    userTurnResolverRef.current = null;
-    debateIdRef.current = null;
-    activeRoundRef.current = 1;
+      setActiveDebate({
+        id: null,
+        topic: config.topic,
+        debaters: config.debaters,
+        rounds: config.rounds,
+        context: config.context,
+        isComplete: false,
+        responseLength: config.responseLength,
+      });
+      setLiveArguments([]);
+      setError(null);
+      setErrorReason(null);
+      setPendingUserTurn(null);
+      userTurnResolverRef.current = null;
+      debateIdRef.current = null;
+      activeRoundRef.current = 1;
 
-    // Create the database record up-front (positions keyed by index)
-    const positions: Record<string, string> = {};
-    config.debaters.forEach((d, i) => { positions[String(i)] = d.position; });
-    const newId = await createDebateRecord({
-      topic: config.topic,
-      positions,
-      models: config.debaters.map(d => d.modelId),
-      rounds: config.rounds,
-      context: config.context || undefined,
-      // Per-debater "AI picked its own stance" flags + the anonymous-mode
-      // flag, recorded once at creation so the shared debate view can
-      // surface them later.
-      autoAssigned: config.debaters.map(d => d.assignmentMode === 'auto'),
-      revealIdentities: config.revealIdentities,
-    });
-    if (newId) {
-      debateIdRef.current = newId;
-      setActiveDebate(prev => prev ? { ...prev, id: newId } : prev);
-    }
+      // Create the database record up-front (positions keyed by index)
+      const positions: Record<string, string> = {};
+      config.debaters.forEach((d, i) => {
+        positions[String(i)] = d.position;
+      });
+      const newId = await createDebateRecord({
+        topic: config.topic,
+        positions,
+        models: config.debaters.map((d) => d.modelId),
+        rounds: config.rounds,
+        context: config.context || undefined,
+        // Per-debater "AI picked its own stance" flags + the anonymous-mode
+        // flag, recorded once at creation so the shared debate view can
+        // surface them later.
+        autoAssigned: config.debaters.map((d) => d.assignmentMode === "auto"),
+        responseLength: config.responseLength,
+        revealIdentities: config.revealIdentities,
+      });
+      if (newId) {
+        debateIdRef.current = newId;
+        setActiveDebate((prev) => (prev ? { ...prev, id: newId } : prev));
+      }
 
-    await runDebate({
-      ...config,
-      initialArgs: [],
-      startRound: 1,
-      isNewDebate: true,
-    });
+      await runDebate({
+        ...config,
+        initialArgs: [],
+        startRound: 1,
+        isNewDebate: true,
+      });
 
-    return { ok: true };
-  }, [generating, runDebate]);
+      return { ok: true };
+    },
+    [generating, runDebate],
+  );
 
   const continueDebate = useCallback(async () => {
     if (!activeDebate || generating || activeDebate.isComplete) return;
 
     // Build prior args from current state (drop streaming placeholders)
-    const existingArgs: DebateArgument[] = liveArguments.filter(a => !a.streaming).map(a => ({
-      debater_index: a.debater_index,
-      model_id: a.model_id,
-      model_name: a.model_name,
-      round: a.round,
-      content: a.content,
-      refused: a.refused,
-      refusal_reason: a.refusal_reason,
-    }));
+    const existingArgs: DebateArgument[] = liveArguments
+      .filter((a) => !a.streaming)
+      .map((a) => ({
+        debater_index: a.debater_index,
+        model_id: a.model_id,
+        model_name: a.model_name,
+        round: a.round,
+        content: a.content,
+        refused: a.refused,
+        refusal_reason: a.refusal_reason,
+      }));
 
     // Find the first round where not all debaters have argued (ignoring moderator notes)
     let resumeRound = activeDebate.rounds + 1;
     for (let r = 1; r <= activeDebate.rounds; r++) {
-      const argsInRound = existingArgs.filter(a => a.round === r && a.model_id !== 'moderator').length;
+      const argsInRound = existingArgs.filter((a) => a.round === r && a.model_id !== "moderator").length;
       if (argsInRound < activeDebate.debaters.length) {
         resumeRound = r;
         break;
@@ -990,110 +1005,124 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
       topic: activeDebate.topic,
       debaters: activeDebate.debaters,
       rounds: activeDebate.rounds,
-      context: activeDebate.context || '',
+      context: activeDebate.context || "",
       revealIdentities: true,
+      responseLength: activeDebate.responseLength ?? 'detailed',
       initialArgs: existingArgs,
       startRound: resumeRound,
       isNewDebate: false,
     });
   }, [activeDebate, generating, liveArguments, runDebate]);
 
-  const extendActiveDebate = useCallback(async (extraRounds: number, moderatorNote: string) => {
-    if (!activeDebate || !debateIdRef.current) return;
+  const extendActiveDebate = useCallback(
+    async (extraRounds: number, moderatorNote: string) => {
+      if (!activeDebate || !debateIdRef.current) return;
 
-    const newTotalRounds = activeDebate.rounds + extraRounds;
-    const firstNewRound = activeDebate.rounds + 1;
+      const newTotalRounds = activeDebate.rounds + extraRounds;
+      const firstNewRound = activeDebate.rounds + 1;
 
-    const existingArgs: DebateArgument[] = liveArguments.filter(a => !a.streaming).map(a => ({
-      debater_index: a.debater_index,
-      model_id: a.model_id,
-      model_name: a.model_name,
-      round: a.round,
-      content: a.content,
-      refused: a.refused,
-      refusal_reason: a.refusal_reason,
-    }));
+      const existingArgs: DebateArgument[] = liveArguments
+        .filter((a) => !a.streaming)
+        .map((a) => ({
+          debater_index: a.debater_index,
+          model_id: a.model_id,
+          model_name: a.model_name,
+          round: a.round,
+          content: a.content,
+          refused: a.refused,
+          refusal_reason: a.refusal_reason,
+        }));
 
-    if (moderatorNote) {
-      existingArgs.push({
-        debater_index: -1,
-        model_id: 'moderator',
-        model_name: 'Moderator note',
-        round: firstNewRound,
-        content: moderatorNote,
-        refused: false,
+      if (moderatorNote) {
+        existingArgs.push({
+          debater_index: -1,
+          model_id: "moderator",
+          model_name: "Moderator note",
+          round: firstNewRound,
+          content: moderatorNote,
+          refused: false,
+        });
+      }
+
+      await dbExtendDebate(debateIdRef.current, newTotalRounds, existingArgs);
+
+      setActiveDebate((prev) => (prev ? { ...prev, rounds: newTotalRounds, isComplete: false } : prev));
+      if (moderatorNote) {
+        setLiveArguments((prev) => [
+          ...prev,
+          {
+            debater_index: -1,
+            model_id: "moderator",
+            model_name: "Moderator note",
+            round: firstNewRound,
+            content: moderatorNote,
+            refused: false,
+            streaming: false,
+          },
+        ]);
+      }
+
+      void runDebate({
+        topic: activeDebate.topic,
+        debaters: activeDebate.debaters,
+        rounds: newTotalRounds,
+        context: activeDebate.context || "",
+        revealIdentities: true,
+        responseLength: activeDebate.responseLength ?? 'detailed',
+        initialArgs: existingArgs,
+        startRound: firstNewRound,
+        isNewDebate: false,
       });
-    }
+    },
+    [activeDebate, liveArguments, runDebate],
+  );
 
-    await dbExtendDebate(debateIdRef.current, newTotalRounds, existingArgs);
+  const loadDebate = useCallback(
+    (debate: Debate) => {
+      // If we held a lease on a different debate, release it first.
+      if (debateIdRef.current && debateIdRef.current !== debate.id && isDriver) {
+        stopHeartbeat();
+        void releaseLease();
+        setIsDriver(false);
+      }
 
-    setActiveDebate(prev => prev ? { ...prev, rounds: newTotalRounds, isComplete: false } : prev);
-    if (moderatorNote) {
-      setLiveArguments(prev => [...prev, {
-        debater_index: -1,
-        model_id: 'moderator',
-        model_name: 'Moderator note',
-        round: firstNewRound,
-        content: moderatorNote,
-        refused: false,
-        streaming: false,
-      }]);
-    }
+      const positions = debate.positions as Record<string, string>;
+      const debateDebaters = debate.models.map((id, i) => ({
+        modelId: id,
+        position: positions[String(i)] || "",
+      }));
 
-    void runDebate({
-      topic: activeDebate.topic,
-      debaters: activeDebate.debaters,
-      rounds: newTotalRounds,
-      context: activeDebate.context || '',
-      revealIdentities: true,
-      initialArgs: existingArgs,
-      startRound: firstNewRound,
-      isNewDebate: false,
-    });
-  }, [activeDebate, liveArguments, runDebate]);
+      setActiveDebate({
+        id: debate.id,
+        topic: debate.topic,
+        debaters: debateDebaters,
+        rounds: debate.rounds,
+        context: debate.context,
+        isComplete: debate.is_complete,
+        isPublic: debate.is_public ?? false,
+        responseLength: (debate.response_length as 'concise' | 'detailed') ?? 'detailed',
+      });
+      debateIdRef.current = debate.id;
 
-  const loadDebate = useCallback((debate: Debate) => {
-    // If we held a lease on a different debate, release it first.
-    if (debateIdRef.current && debateIdRef.current !== debate.id && isDriver) {
-      stopHeartbeat();
-      void releaseLease();
-      setIsDriver(false);
-    }
+      const args = debate.arguments as Array<DebateArgument>;
+      setLiveArguments(args.map((a) => ({ ...a, streaming: false })));
+      setGenerating(false);
+      setCurrentThinking(null);
+      setError(null);
+      setErrorReason(null);
+      setPendingUserTurn(null);
+      userTurnResolverRef.current = null;
 
-    const positions = debate.positions as Record<string, string>;
-    const debateDebaters = debate.models.map((id, i) => ({
-      modelId: id,
-      position: positions[String(i)] || '',
-    }));
-
-    setActiveDebate({
-      id: debate.id,
-      topic: debate.topic,
-      debaters: debateDebaters,
-      rounds: debate.rounds,
-      context: debate.context,
-      isComplete: debate.is_complete,
-      isPublic: debate.is_public ?? false,
-    });
-    debateIdRef.current = debate.id;
-
-    const args = debate.arguments as Array<DebateArgument>;
-    setLiveArguments(args.map(a => ({ ...a, streaming: false })));
-    setGenerating(false);
-    setCurrentThinking(null);
-    setError(null);
-    setErrorReason(null);
-    setPendingUserTurn(null);
-    userTurnResolverRef.current = null;
-
-    // Seed DB status from the loaded row. The Realtime subscription will
-    // keep these fresh from now on.
-    setDbStatus(debate.status ?? (debate.is_complete ? 'complete' : 'idle'));
-    setDbCurrentRound(debate.current_round ?? 0);
-    setDbAwaitingHuman(debate.status === 'awaiting_human');
-    setDbDriverSessionId(debate.driver_session_id ?? null);
-    setDbDriverHeartbeatAt(debate.driver_heartbeat_at ?? null);
-  }, [isDriver, stopHeartbeat, releaseLease]);
+      // Seed DB status from the loaded row. The Realtime subscription will
+      // keep these fresh from now on.
+      setDbStatus(debate.status ?? (debate.is_complete ? "complete" : "idle"));
+      setDbCurrentRound(debate.current_round ?? 0);
+      setDbAwaitingHuman(debate.status === "awaiting_human");
+      setDbDriverSessionId(debate.driver_session_id ?? null);
+      setDbDriverHeartbeatAt(debate.driver_heartbeat_at ?? null);
+    },
+    [isDriver, stopHeartbeat, releaseLease],
+  );
 
   const resetDebate = useCallback(() => {
     if (isDriver) {
@@ -1118,44 +1147,44 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     setDbDriverHeartbeatAt(null);
   }, [isDriver, stopHeartbeat, releaseLease]);
 
-  const submitUserTurn = useCallback(async (
-    text: string,
-    intent: 'continue' | 'end',
-  ): Promise<SubmitResult> => {
-    if (!pendingUserTurn) return { ok: false, error: 'No pending turn' };
+  const submitUserTurn = useCallback(
+    async (text: string, intent: "continue" | "end"): Promise<SubmitResult> => {
+      if (!pendingUserTurn) return { ok: false, error: "No pending turn" };
 
-    // Safety check
-    const res = await fetch('/api/debate/check-argument', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    });
-    if (!res.ok) return { ok: false, error: 'Safety check failed. Please try again.' };
-    const { safe } = await res.json();
-    if (!safe) {
-      return { ok: false, error: 'This argument violates our usage policy. Please rewrite and try again.' };
-    }
+      // Safety check
+      const res = await fetch("/api/debate/check-argument", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) return { ok: false, error: "Safety check failed. Please try again." };
+      const { safe } = await res.json();
+      if (!safe) {
+        return { ok: false, error: "This argument violates our usage policy. Please rewrite and try again." };
+      }
 
-    const arg: DebateArgument = {
-      debater_index: pendingUserTurn.debaterIndex,
-      model_id: 'user',
-      model_name: pendingUserTurn.displayName,
-      round: pendingUserTurn.round,
-      content: text,
-      refused: false,
-    };
+      const arg: DebateArgument = {
+        debater_index: pendingUserTurn.debaterIndex,
+        model_id: "user",
+        model_name: pendingUserTurn.displayName,
+        round: pendingUserTurn.round,
+        content: text,
+        refused: false,
+      };
 
-    setLiveArguments(prev => [...prev, { ...arg, streaming: false }]);
+      setLiveArguments((prev) => [...prev, { ...arg, streaming: false }]);
 
-    setPendingUserTurn(null);
-    const resolver = userTurnResolverRef.current;
-    userTurnResolverRef.current = null;
-    if (resolver) {
-      resolver(intent === 'end' ? { kind: 'ended', arg } : { kind: 'submitted', arg });
-    }
+      setPendingUserTurn(null);
+      const resolver = userTurnResolverRef.current;
+      userTurnResolverRef.current = null;
+      if (resolver) {
+        resolver(intent === "end" ? { kind: "ended", arg } : { kind: "submitted", arg });
+      }
 
-    return { ok: true };
-  }, [pendingUserTurn]);
+      return { ok: true };
+    },
+    [pendingUserTurn],
+  );
 
   const cancelUserTurn = useCallback(() => {
     setPendingUserTurn(null);
@@ -1168,8 +1197,8 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
    *  state. The page should only call this when canTakeOver is true (the
    *  button is hidden otherwise). */
   const takeOverDebate = useCallback(async (): Promise<SubmitResult> => {
-    if (!activeDebate) return { ok: false, error: 'No active debate' };
-    if (isDriver) return { ok: false, error: 'You already control this debate' };
+    if (!activeDebate) return { ok: false, error: "No active debate" };
+    if (isDriver) return { ok: false, error: "You already control this debate" };
 
     // Force-claim regardless of heartbeat freshness — explicit user action.
     // The button visibility rules upstream (canTakeOver) already enforce
@@ -1178,9 +1207,8 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     if (!claim.claimed) {
       return {
         ok: false,
-        error: claim.reason === 'rpc_error'
-          ? 'Could not take over (database error).'
-          : 'Could not take over the debate.',
+        error:
+          claim.reason === "rpc_error" ? "Could not take over (database error)." : "Could not take over the debate.",
       };
     }
 
@@ -1193,7 +1221,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   }, [activeDebate, isDriver, claimLease, continueDebate]);
 
   const updateActiveDebate = useCallback((patch: Partial<ActiveDebate>) => {
-    setActiveDebate(prev => prev ? { ...prev, ...patch } : prev);
+    setActiveDebate((prev) => (prev ? { ...prev, ...patch } : prev));
   }, []);
 
   const acknowledgeJustCompleted = useCallback(() => {
@@ -1232,7 +1260,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
     !generating &&
     !!dbDriverSessionId &&
     dbDriverSessionId !== tabIdRef.current &&
-    (dbStatus === 'running' || dbStatus === 'awaiting_human');
+    (dbStatus === "running" || dbStatus === "awaiting_human");
 
   // Periodically re-evaluate whether the current driver lease is stale.
   // The DB heartbeat updates every 5s under normal operation, so a 5s
@@ -1240,7 +1268,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   // staleness threshold (total ~20s before take-over becomes available).
   useEffect(() => {
     if (!dbDriverHeartbeatAt) return;
-    const id = setInterval(() => setStaleTick(t => t + 1), 5_000);
+    const id = setInterval(() => setStaleTick((t) => t + 1), 5_000);
     return () => clearInterval(id);
   }, [dbDriverHeartbeatAt]);
 
@@ -1259,13 +1287,8 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
    *  driver lease has gone stale. Hidden during active streaming with a
    *  fresh heartbeat — explicit interruption isn't worth the token cost
    *  of re-running the in-progress argument. */
-  const canTakeOver = !!activeDebate
-    && !isDriver
-    && !generating
-    && (
-      (isFollowing && dbStatus === 'awaiting_human') ||
-      dbDriverStale
-    );
+  const canTakeOver =
+    !!activeDebate && !isDriver && !generating && ((isFollowing && dbStatus === "awaiting_human") || dbDriverStale);
 
   const statusValue: StatusContextValue = {
     activeDebate,
@@ -1305,9 +1328,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
   return (
     <StatusContext.Provider value={statusValue}>
       <StreamContext.Provider value={streamValue}>
-        <ActionsContext.Provider value={actionsValue}>
-          {children}
-        </ActionsContext.Provider>
+        <ActionsContext.Provider value={actionsValue}>{children}</ActionsContext.Provider>
       </StreamContext.Provider>
     </StatusContext.Provider>
   );

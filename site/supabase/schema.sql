@@ -1,5 +1,5 @@
 -- ============================================================================
--- GladAItors Public Site — Database Schema
+-- gladaitor Public Site — Database Schema
 -- ============================================================================
 -- Run this in the Supabase SQL Editor (Dashboard → SQL Editor → New Query)
 -- Safe to re-run — uses IF NOT EXISTS and DROP IF EXISTS throughout.
@@ -451,6 +451,12 @@ alter table public.debates
 -- "models had no idea who they were arguing with" is a compelling angle.
 alter table public.debates
   add column if not exists reveal_identities boolean;
+
+-- Response length preference: 'concise' (2-3 sentences, punchy) or
+-- 'detailed' (150-250 words, substantive). NULL treated as 'detailed'
+-- (the original default). Modifies the system prompt's body-format rules.
+alter table public.debates
+  add column if not exists response_length text;
 
 create table if not exists public.notifications (
   id uuid primary key default gen_random_uuid(),
