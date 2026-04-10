@@ -6,27 +6,27 @@
 //          containing all the same actions in a vertical stack.
 // ============================================================================
 
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import Link from 'next/link';
-import { config } from '@/lib/config';
-import { createClient } from '@/lib/supabase';
-import { signOut } from '@/lib/auth';
-import { fetchTokenBalance, notifyBalanceChanged, onBalanceChanged } from '@/lib/tokens';
-import AuthModal from './AuthModal';
-import BuyTokensModal from './BuyTokensModal';
-import NotificationsBell from './NotificationsBell';
-import { Coins, LogOut, Plus, Menu, X } from 'lucide-react';
-import styles from './Nav.module.scss';
+import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
+import { config } from "@/lib/config";
+import { createClient } from "@/lib/supabase";
+import { signOut } from "@/lib/auth";
+import { fetchTokenBalance, notifyBalanceChanged, onBalanceChanged } from "@/lib/tokens";
+import AuthModal from "./AuthModal";
+import BuyTokensModal from "./BuyTokensModal";
+import NotificationsBell from "./NotificationsBell";
+import { Coins, LogOut, Plus, Menu, X } from "lucide-react";
+import styles from "./Nav.module.scss";
 
 export default function Nav() {
   const [user, setUser] = useState<{ id: string; email?: string } | null>(null);
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   const [showAuth, setShowAuth] = useState(false);
   const [showBuyTokens, setShowBuyTokens] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);              // desktop user dropdown
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);  // mobile hamburger drawer
+  const [menuOpen, setMenuOpen] = useState(false); // desktop user dropdown
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false); // mobile hamburger drawer
   const menuRef = useRef<HTMLDivElement>(null);
 
   const loadBalance = useCallback(async () => {
@@ -42,7 +42,9 @@ export default function Nav() {
       setUser(u ? { id: u.id, email: u.email || undefined } : null);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       const u = session?.user;
       setUser(u ? { id: u.id, email: u.email || undefined } : null);
       loadBalance();
@@ -64,16 +66,18 @@ export default function Nav() {
         setMenuOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpen]);
 
   // Lock body scroll while the mobile drawer is open
   useEffect(() => {
     if (mobileMenuOpen) {
       const original = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = original; };
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = original;
+      };
     }
   }, [mobileMenuOpen]);
 
@@ -92,9 +96,9 @@ export default function Nav() {
   return (
     <>
       <nav className={styles.nav}>
-        <Link href="/" className={styles.logo} aria-label="GladAItors" onClick={closeMobileMenu}>
+        <Link href="/" className={styles.logo} aria-label="gladaitor" onClick={closeMobileMenu}>
           <span className={styles.logoText}>
-            Glad<span className={styles.logoAi}>AI</span>tors
+            Glad<span className={styles.logoAi}>AI</span>tor
           </span>
         </Link>
 
@@ -103,42 +107,45 @@ export default function Nav() {
         {/* ============================================================ */}
         <div className={styles.links}>
           {config.seriesEnabled && (
-            <Link href="/series" className={styles.link}>Series</Link>
+            <Link href="/series" className={styles.link}>
+              Series
+            </Link>
           )}
-          <Link href="/explore" className={styles.link}>Explore</Link>
-          <Link href="/arena/debate" className={styles.link}>The Arena</Link>
+          <Link href="/arena/debate" className={styles.link}>
+            The Arena
+          </Link>
+          <Link href="/explore" className={styles.link}>
+            Explore
+          </Link>
 
           {user ? (
             <>
-            <NotificationsBell />
-            <div className={styles.userMenu} ref={menuRef}>
-              <button
-                className={styles.tokenButton}
-                onClick={() => setMenuOpen(!menuOpen)}
-              >
-                <Coins size={14} />
-                <span className={styles.tokenCount}>{tokenBalance ?? '–'}</span>
-              </button>
+              <NotificationsBell />
+              <div className={styles.userMenu} ref={menuRef}>
+                <button className={styles.tokenButton} onClick={() => setMenuOpen(!menuOpen)}>
+                  <Coins size={14} />
+                  <span className={styles.tokenCount}>{tokenBalance ?? "–"}</span>
+                </button>
 
-              {menuOpen && (
-                <div className={styles.dropdown}>
-                  <button
-                    className={styles.dropdownItem}
-                    onClick={() => { setMenuOpen(false); setShowBuyTokens(true); }}
-                  >
-                    <Plus size={14} />
-                    Buy Tokens
-                  </button>
-                  <button
-                    className={styles.dropdownItem}
-                    onClick={handleSignOut}
-                  >
-                    <LogOut size={14} />
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
+                {menuOpen && (
+                  <div className={styles.dropdown}>
+                    <button
+                      className={styles.dropdownItem}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setShowBuyTokens(true);
+                      }}
+                    >
+                      <Plus size={14} />
+                      Buy Tokens
+                    </button>
+                    <button className={styles.dropdownItem} onClick={handleSignOut}>
+                      <LogOut size={14} />
+                      Sign Out
+                    </button>
+                  </div>
+                )}
+              </div>
             </>
           ) : (
             <button className={styles.authButton} onClick={() => setShowAuth(true)}>
@@ -153,7 +160,7 @@ export default function Nav() {
         <button
           className={styles.hamburger}
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
         >
           {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
@@ -169,16 +176,16 @@ export default function Nav() {
             {user && (
               <div className={styles.mobileTokenRow}>
                 <Coins size={16} />
-                <span className={styles.mobileTokenCount}>{tokenBalance ?? '–'}</span>
+                <span className={styles.mobileTokenCount}>{tokenBalance ?? "–"}</span>
                 <span className={styles.mobileTokenLabel}>tokens</span>
               </div>
             )}
 
-            <Link href="/explore" className={styles.mobileLink} onClick={closeMobileMenu}>
-              Explore
-            </Link>
             <Link href="/arena/debate" className={styles.mobileLink} onClick={closeMobileMenu}>
               The Arena
+            </Link>
+            <Link href="/explore" className={styles.mobileLink} onClick={closeMobileMenu}>
+              Explore
             </Link>
             {config.seriesEnabled && (
               <Link href="/series" className={styles.mobileLink} onClick={closeMobileMenu}>
@@ -192,15 +199,15 @@ export default function Nav() {
               <>
                 <button
                   className={styles.mobileLink}
-                  onClick={() => { closeMobileMenu(); setShowBuyTokens(true); }}
+                  onClick={() => {
+                    closeMobileMenu();
+                    setShowBuyTokens(true);
+                  }}
                 >
                   <Plus size={16} />
                   Buy Tokens
                 </button>
-                <button
-                  className={styles.mobileLink}
-                  onClick={handleSignOut}
-                >
+                <button className={styles.mobileLink} onClick={handleSignOut}>
                   <LogOut size={16} />
                   Sign Out
                 </button>
@@ -208,7 +215,10 @@ export default function Nav() {
             ) : (
               <button
                 className={styles.mobileSignIn}
-                onClick={() => { closeMobileMenu(); setShowAuth(true); }}
+                onClick={() => {
+                  closeMobileMenu();
+                  setShowAuth(true);
+                }}
               >
                 Sign In
               </button>
@@ -220,14 +230,22 @@ export default function Nav() {
       {showAuth && (
         <AuthModal
           onClose={() => setShowAuth(false)}
-          onSuccess={() => { setShowAuth(false); loadBalance(); notifyBalanceChanged(); }}
+          onSuccess={() => {
+            setShowAuth(false);
+            loadBalance();
+            notifyBalanceChanged();
+          }}
         />
       )}
 
       {showBuyTokens && (
         <BuyTokensModal
           onClose={() => setShowBuyTokens(false)}
-          onSuccess={() => { loadBalance(); notifyBalanceChanged(); setShowBuyTokens(false); }}
+          onSuccess={() => {
+            loadBalance();
+            notifyBalanceChanged();
+            setShowBuyTokens(false);
+          }}
         />
       )}
     </>
