@@ -96,12 +96,12 @@ export const MODELS: ModelDefinition[] = [
   // --- Human player ---
   // Token cost is 0 — the user isn't consuming an AI call.
   // providerModelId is empty because there's no provider; the API skips this slot.
-  // The display name in prompts and the debate UI is "Human" (or "Human 1" / "Human 2"
-  // for multiples), but the picker dropdown shows "Me".
+  // Picker label and rendered display name both use "Human" (with " 1" / " 2"
+  // suffixes for duplicates) so the model picker and the debate thread agree.
   {
     id: 'user',
     family: 'user',
-    name: 'Me',
+    name: 'Human',
     version: '',
     tier: 'standard',
     tokenCost: 0,

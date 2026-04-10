@@ -92,6 +92,8 @@ export default function ModelSelect({
                     <LockKeyhole size={11} />
                     Sign up
                   </span>
+                ) : model.tokenCost === 0 ? (
+                  <span className={styles.optionCost}>Free</span>
                 ) : (
                   <span className={styles.optionCost}>
                     {model.tokenCost} {model.tokenCost === 1 ? 'token' : 'tokens'}
