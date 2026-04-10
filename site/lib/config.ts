@@ -35,5 +35,5 @@ export const config = {
    *
    *  Set to null to disable the sample debate and fall back to a text-only
    *  hero (headline + starter topic chips, no live debate preview). */
-  sampleDebateId: '4f9c0b71-efbb-4b36-a063-efcbb19081a1' as string | null,
+  sampleDebateId: '50925839-5527-4838-ad9d-68a4e43a54a3' as string | null,
 };
