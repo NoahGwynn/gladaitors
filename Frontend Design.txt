@@ -1,4 +1,4 @@
-Design specification for the GladAItors frontend. Written for Claude Code to implement. Every decision here is deliberate — don't deviate without updating this doc.
+Design specification for the gladaitor frontend. Written for Claude Code to implement. Every decision here is deliberate — don't deviate without updating this doc.
 
 ---
 
@@ -16,7 +16,7 @@ Design specification for the GladAItors frontend. Written for Claude Code to imp
 
 ### Name
 
-GladAItors — the AI capitalisation is the brand. In the UI, always render as: **GladAItors** or **gladAItors** for the wordmark. Never "Gladiators" or "GLADAITORS".
+gladaitor — the AI capitalisation is the brand. In the UI, always render as: **gladaitor** or **gladaitor** for the wordmark. Never "Gladiators" or "gladaitor".
 
 ### Colours
 
@@ -67,7 +67,7 @@ This is the primary view. Everything else is secondary.
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  HEADER (48px height)                                   │
-│  ⚔️ GladAItors    [Episode title]    Turn 23/60   🕐 08:42│
+│  ⚔️ gladaitor    [Episode title]    Turn 23/60   🕐 08:42│
 ├───────────────────────────────────────┬─────────────────┤
 │                                       │                 │
 │                                       │  MODEL PANELS   │
@@ -98,10 +98,10 @@ This is the primary view. Everything else is secondary.
 ## Header Component
 
 ```
-[ ⚔️ GladAItors ]  [ Episode 1 · Territory War ]  [ Turn 23 / 60 ]  [ 08:42 ]
+[ ⚔️ gladaitor ]  [ Episode 1 · Territory War ]  [ Turn 23 / 60 ]  [ 08:42 ]
 ```
 
-- Logo left — `⚔️ GladAItors` in bold, `--text-primary`
+- Logo left — `⚔️ gladaitor` in bold, `--text-primary`
 - Episode title centre — current challenge name
 - Turn counter right — monospace, updates each tick
 - Game clock right — elapsed time, monospace
@@ -279,7 +279,7 @@ Next.js client receives this → updates React state for panels/header/event log
 ### Home (`/`)
 
 - Single page, dark background
-- GladAItors logo/wordmark centre
+- gladaitor logo/wordmark centre
 - "Watch Episode 1" CTA button
 - Brief one-line description
 - No navigation, no complexity. Gets built last.

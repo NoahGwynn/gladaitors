@@ -42,7 +42,7 @@ async def main():
     engine = TerritoryWarEngine(model_names)
     adapter = AIAdapter(response_schema=TerritoryWarResponse)
 
-    print("gladAItors -- Territory War Adapter Test")
+    print("gladaitor -- Territory War Adapter Test")
     print(f"Models: {', '.join(m.name for m in adapter.models)}")
     print(f"Grid: 20x20, Pieces per model: 3")
 

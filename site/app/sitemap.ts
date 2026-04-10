@@ -1,35 +1,35 @@
-import type { MetadataRoute } from 'next';
+import type { MetadataRoute } from "next";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: 'https://gladaitors.ai',
+      url: "https://gladaitor.ai",
       lastModified: new Date(),
-      changeFrequency: 'weekly',
+      changeFrequency: "weekly",
       priority: 1,
     },
     {
-      url: 'https://gladaitors.ai/arena/debate',
+      url: "https://gladaitor.ai/arena/debate",
       lastModified: new Date(),
-      changeFrequency: 'daily',
+      changeFrequency: "daily",
       priority: 0.9,
     },
     {
-      url: 'https://gladaitors.ai/explore',
+      url: "https://gladaitor.ai/explore",
       lastModified: new Date(),
-      changeFrequency: 'daily',
+      changeFrequency: "daily",
       priority: 0.8,
     },
     {
-      url: 'https://gladaitors.ai/terms',
+      url: "https://gladaitor.ai/terms",
       lastModified: new Date(),
-      changeFrequency: 'monthly',
+      changeFrequency: "monthly",
       priority: 0.3,
     },
     {
-      url: 'https://gladaitors.ai/privacy',
+      url: "https://gladaitor.ai/privacy",
       lastModified: new Date(),
-      changeFrequency: 'monthly',
+      changeFrequency: "monthly",
       priority: 0.3,
     },
   ];

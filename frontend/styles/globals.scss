@@ -1,5 +1,5 @@
 // ============================================================================
-// GLADAITORS — Global Styles
+// gladaitor — Global Styles
 // ============================================================================
 // Base reset, CSS custom properties, and app-wide defaults.
 // This file is imported once in layout.tsx.
@@ -9,8 +9,7 @@
 // For mixins, import _mixins.scss.
 // ============================================================================
 
-@use 'variables' as *;
-
+@use "variables" as *;
 
 // ----------------------------------------------------------------------------
 // CSS CUSTOM PROPERTIES
@@ -47,7 +46,6 @@
   --font-mono: #{$ga-font-mono};
 }
 
-
 // ----------------------------------------------------------------------------
 // RESET & BASE
 // Minimal reset — Next.js handles most defaults
@@ -74,7 +72,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-
 // ----------------------------------------------------------------------------
 // SCROLLBAR STYLING
 // Thin dark scrollbar for event log and any overflow areas
@@ -97,7 +94,6 @@ body {
     background: $ga-text-muted;
   }
 }
-
 
 // ----------------------------------------------------------------------------
 // UTILITY CLASSES

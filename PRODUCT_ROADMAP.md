@@ -1,4 +1,4 @@
-# GladAItors — Product Roadmap
+# gladaitor — Product Roadmap
 
 Ordered by impact-to-effort. Build top-down.
 
@@ -109,7 +109,7 @@ This is the step that fully retires the `backend/` Python service.
 **Why not do this at the same time as step 0:**
 
 The Python backend works today and the producer tool depends on it for documentary
-recording. Migrating both at once means *all* game-related functionality is broken until
+recording. Migrating both at once means _all_ game-related functionality is broken until
 both halves are done. Doing the site first means the new engine can be validated by real
 users before the producer tool is touched, which is much safer than trusting an
 unvalidated rewrite.
@@ -167,7 +167,7 @@ readers into participants and gives creators/players a reason to share.
 **Priority: Critical — runs parallel to #1**
 
 Make Territory War (and later Trading Pit) playable as token-gated spectator
-experiences on gladaitors.com. User hits "Run Game", watches it play out live.
+experiences on gladaitor.com. User hits "Run Game", watches it play out live.
 
 - Adapt the existing Phaser scenes for the public site (the rendering is built)
 - Expand the strategy/reasoning display: add a round-level `strategy` field to
@@ -202,7 +202,7 @@ These items turn individual sessions into a community.
 - Human leaderboard: top human players vs AI
 - Filter by challenge type, model, time period
 
-**Why:** This turns GladAItors from "a tool I used once" into "a place I check."
+**Why:** This turns gladaitor from "a tool I used once" into "a place I check."
 The difference between £200/month and £2k/month is almost always community, not features.
 
 ---
@@ -244,11 +244,13 @@ peaks. You don't produce it as a documentary — just run the game, post the res
 **Priority: Medium — reduces friction on repeat usage**
 
 For debates:
+
 - **Templates:** Pre-built topic + position combos ("Is AI art real art?", "Tabs vs spaces")
 - **Trending:** What others are debating/playing this week
 - **Remix:** Button on any shared content to re-run with different models or settings
 
 For games:
+
 - **Scenario presets:** "Aggressive start", "Resource race", "3-way war"
 - **Rematch:** Re-run the same matchup to see if results differ
 
@@ -309,7 +311,7 @@ Roll out additional challenges from the library:
 Each new challenge is a new reason to return and a new piece of shareable content.
 
 **Why:** Don't ship these all at once. Each new challenge is a marketing event —
-"New on GladAItors: Prisoner's Dilemma." Space them out for sustained attention.
+"New on gladaitor: Prisoner's Dilemma." Space them out for sustained attention.
 
 ---
 
@@ -326,7 +328,7 @@ Each new challenge is a new reason to return and a new piece of shareable conten
 
 ---
 
-## 12. Weekly Digest — "This Week on GladAItors"
+## 12. Weekly Digest — "This Week on gladaitor"
 
 **Priority: Medium — content marketing + re-engagement**
 
@@ -386,37 +388,37 @@ These require established model personalities and an engaged audience to land.
 
 # Summary
 
-| # | Feature | Effort | Impact | Phase |
-|---|---------|--------|--------|-------|
-| 0 | Port game engine to TS in `site/` | Medium | Foundation | 1 |
-| 0b | Migrate producer tool, retire Python backend | Low-Med | Foundation | 1 |
-| 1 | Human vs AI games | Medium | Critical | 1 |
-| 2 | Audience voting | Low | Critical | 1 |
-| 3 | Standalone AI-vs-AI games | Medium | Critical | 1 |
-| 4 | Public feed + leaderboards | Medium | High | 2 |
-| 5 | Notifications | Low-Med | High | 2 |
-| 6 | New model release events | Low | High | 2 |
-| 7 | Templates + trending + remix | Medium | Medium | 2 |
-| 8 | East vs West models | Medium | High | 3 |
-| 9 | Follow-up rounds / extend | Low | Medium | 3 |
-| 10 | More challenges | Med-High | Medium | 3 |
-| 11 | Public profiles | Medium | Medium | 3 |
-| 12 | Weekly digest | Low | Medium | 3 |
-| 13 | Subscription tier | Low | Medium | 4 |
-| 14 | Documentary series | High | Medium | 4 |
-| 15 | Advanced challenges | High | Low | 4 |
+| #   | Feature                                      | Effort   | Impact     | Phase |
+| --- | -------------------------------------------- | -------- | ---------- | ----- |
+| 0   | Port game engine to TS in `site/`            | Medium   | Foundation | 1     |
+| 0b  | Migrate producer tool, retire Python backend | Low-Med  | Foundation | 1     |
+| 1   | Human vs AI games                            | Medium   | Critical   | 1     |
+| 2   | Audience voting                              | Low      | Critical   | 1     |
+| 3   | Standalone AI-vs-AI games                    | Medium   | Critical   | 1     |
+| 4   | Public feed + leaderboards                   | Medium   | High       | 2     |
+| 5   | Notifications                                | Low-Med  | High       | 2     |
+| 6   | New model release events                     | Low      | High       | 2     |
+| 7   | Templates + trending + remix                 | Medium   | Medium     | 2     |
+| 8   | East vs West models                          | Medium   | High       | 3     |
+| 9   | Follow-up rounds / extend                    | Low      | Medium     | 3     |
+| 10  | More challenges                              | Med-High | Medium     | 3     |
+| 11  | Public profiles                              | Medium   | Medium     | 3     |
+| 12  | Weekly digest                                | Low      | Medium     | 3     |
+| 13  | Subscription tier                            | Low      | Medium     | 4     |
+| 14  | Documentary series                           | High     | Medium     | 4     |
+| 15  | Advanced challenges                          | High     | Low        | 4     |
 
 ---
 
 # The path to £2k/month
 
-| Source | Users | Activity | Net revenue |
-|---|---|---|---|
-| Human vs AI games | 100 | 3 games/month | ~£360 |
-| AI-vs-AI spectator games | 80 | 2 games/month | ~£240 |
-| Debates | 150 | 4 debates/month | ~£720 |
-| Subscriptions (Phase 4) | 80 | £9.99/month | ~£800 |
-| **Total** | | | **~£2,120** |
+| Source                   | Users | Activity        | Net revenue |
+| ------------------------ | ----- | --------------- | ----------- |
+| Human vs AI games        | 100   | 3 games/month   | ~£360       |
+| AI-vs-AI spectator games | 80    | 2 games/month   | ~£240       |
+| Debates                  | 150   | 4 debates/month | ~£720       |
+| Subscriptions (Phase 4)  | 80    | £9.99/month     | ~£800       |
+| **Total**                |       |                 | **~£2,120** |
 
 API costs at this scale: ~£400-500/month. Gross revenue needed: ~£2,500.
 

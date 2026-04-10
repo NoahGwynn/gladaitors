@@ -76,7 +76,7 @@ async def main():
     adapter = AIAdapter()
     model_names = [m.name for m in adapter.models]
 
-    print(f"gladAItors — AI Adapter PoC")
+    print(f"gladaitor — AI Adapter PoC")
     print(f"Models: {', '.join(model_names)}")
     print(f"Runs: {num_runs}")
     print(f"Timeout: 60s per call")

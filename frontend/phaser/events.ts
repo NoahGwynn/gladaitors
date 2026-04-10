@@ -1,5 +1,5 @@
 // ============================================================================
-// GLADAITORS — Phaser EventEmitter Event Names
+// gladaitor — Phaser EventEmitter Event Names
 // ============================================================================
 // Constants for events passed between React (WebSocket) and Phaser scenes.
 //
@@ -7,7 +7,7 @@
 // ============================================================================
 
 /** Fired each tick with the full canvas_data from game state */
-export const GAME_STATE_UPDATE = 'game:state-update';
+export const GAME_STATE_UPDATE = "game:state-update";
 
 /** Fired when the game ends */
-export const GAME_OVER = 'game:over';
+export const GAME_OVER = "game:over";

@@ -1,68 +1,68 @@
 // ============================================================================
-// GLADAITORS PUBLIC SITE — Design Tokens
+// gladaitor PUBLIC SITE — Design Tokens
 // ============================================================================
 // Same brand colours as the producer tool, adapted for a public-facing site.
 // ============================================================================
 
 // Background palette — dark cinematic
-$bg-void:      #0A0A0F;
-$bg-surface:   #12121A;
-$bg-elevated:  #1A1A26;
-$bg-card:      #16161F;
-$border:       #2A2A3A;
+$bg-void: #0a0a0f;
+$bg-surface: #12121a;
+$bg-elevated: #1a1a26;
+$bg-card: #16161f;
+$border: #2a2a3a;
 
 // Model identity colours
 // Model identity colours — must match FAMILY_COLOURS in lib/models.ts
-$model-claude:  #D97757;  // Anthropic orange
-$model-gpt:     #10A37F;  // ChatGPT teal
-$model-gemini:  #4285F4;  // Google blue
-$model-grok:    #F59E0B;
+$model-claude: #d97757; // Anthropic orange
+$model-gpt: #10a37f; // ChatGPT teal
+$model-gemini: #4285f4; // Google blue
+$model-grok: #f59e0b;
 
 // Text
-$text-primary:    #F0F0F5;
-$text-secondary:  #B8B8D0;  // was #9A9AB8 — bumped for stronger contrast
-$text-muted:      #8E8EAE;  // was #6A6A8A — bumped from failing AA to passing
+$text-primary: #f0f0f5;
+$text-secondary: #b8b8d0; // was #9A9AB8 — bumped for stronger contrast
+$text-muted: #8e8eae; // was #6A6A8A — bumped from failing AA to passing
 
 // UI
-$ui-success:    #22C55E;
-$ui-warning:    #F59E0B;
-$ui-danger:     #EF4444;
-$ui-gold:       #FFD700;
-$ui-accent:     #E5253F;  // brand red — middle ground: brighter than the original crimson, less aggressive than vivid
+$ui-success: #22c55e;
+$ui-warning: #f59e0b;
+$ui-danger: #ef4444;
+$ui-gold: #ffd700;
+$ui-accent: #e5253f; // brand red — middle ground: brighter than the original crimson, less aggressive than vivid
 
 // Typography
-$font-ui:    'Inter', sans-serif;
-$font-mono:  'JetBrains Mono', monospace;
+$font-ui: "Inter", sans-serif;
+$font-mono: "JetBrains Mono", monospace;
 
 // Sizes
-$size-xs:   11px;
-$size-sm:   13px;
+$size-xs: 11px;
+$size-sm: 13px;
 $size-base: 15px;
-$size-md:   17px;
-$size-lg:   22px;
-$size-xl:   28px;
-$size-2xl:  36px;
-$size-3xl:  48px;
+$size-md: 17px;
+$size-lg: 22px;
+$size-xl: 28px;
+$size-2xl: 36px;
+$size-3xl: 48px;
 $size-hero: 64px;
 
 // Spacing
-$space-xs:   4px;
-$space-sm:   8px;
-$space-md:   16px;
-$space-lg:   24px;
-$space-xl:   40px;
-$space-2xl:  64px;
-$space-3xl:  96px;
+$space-xs: 4px;
+$space-sm: 8px;
+$space-md: 16px;
+$space-lg: 24px;
+$space-xl: 40px;
+$space-2xl: 64px;
+$space-3xl: 96px;
 
 // Layout
-$max-width:     1200px;
-$nav-height:    64px;
+$max-width: 1200px;
+$nav-height: 64px;
 
 // Radius
-$radius-sm:  6px;
-$radius-md:  10px;
-$radius-lg:  16px;
-$radius-xl:  24px;
+$radius-sm: 6px;
+$radius-md: 10px;
+$radius-lg: 16px;
+$radius-xl: 24px;
 
 // Transitions
 $transition-fast: 150ms ease;

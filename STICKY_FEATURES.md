@@ -1,4 +1,4 @@
-# GladAItors — Sticky Features Roadmap (Debate Section)
+# gladaitor — Sticky Features Roadmap (Debate Section)
 
 These are the features that turn the debate arena from a one-shot tool into a
 platform people return to. Listed in build order. Each item is self-contained —
@@ -141,7 +141,7 @@ stays exactly the same.
 ## Decisions made
 
 - **One API call per round, not per turn.** Within a round, the AI debaters still go
-  sequentially in one streaming response. The pause point is *between* rounds.
+  sequentially in one streaming response. The pause point is _between_ rounds.
 - **Frontend orchestrates the round loop.** After each round ends, the frontend either
   triggers the next round automatically, or pauses to wait for user input (feature #3),
   or stops because the debate is complete.
@@ -338,7 +338,7 @@ returns 400 with the reason.
 ## Frontend changes
 
 - Add a `'user'` model entry to the registry: `{ id: 'user', family: 'user', name: 'Me',
-  tokenCost: 0, providerModelId: '' }`. Family colour: gold (`$ui-gold`).
+tokenCost: 0, providerModelId: '' }`. Family colour: gold (`$ui-gold`).
 - The model registry's `family` enum gains `'user'`.
 - `getDisplayNames` special-cases the user family: base label is "Human" instead of
   the registry name, with the same numbering rule for multiples.
@@ -585,14 +585,14 @@ create index if not exists debates_public on public.debates(is_public, created_a
 
 # Summary
 
-| # | Feature | Effort | Depends on |
-|---|---------|--------|------------|
-| 1 | Voting | 1-2 days | nothing |
-| 2 | API refactor (round-per-call) | 2-3 days | nothing |
-| 3 | AI auto-assign position | 1-2 days | #2 |
-| 4 | User as participant | 3-5 days | #2 |
-| 5 | Extend debates + moderator notes | 1-2 days | #2, #4 |
-| 6 | Notifications | 3-5 days | #1 |
-| 7 | Public feed opt-in | 2-3 days | nothing (any time) |
+| #   | Feature                          | Effort   | Depends on         |
+| --- | -------------------------------- | -------- | ------------------ |
+| 1   | Voting                           | 1-2 days | nothing            |
+| 2   | API refactor (round-per-call)    | 2-3 days | nothing            |
+| 3   | AI auto-assign position          | 1-2 days | #2                 |
+| 4   | User as participant              | 3-5 days | #2                 |
+| 5   | Extend debates + moderator notes | 1-2 days | #2, #4             |
+| 6   | Notifications                    | 3-5 days | #1                 |
+| 7   | Public feed opt-in               | 2-3 days | nothing (any time) |
 
 **Total: ~2-3 weeks of focused work.**

@@ -1,4 +1,4 @@
-# GladAItors
+# GladAItor
 
 ## What this project is
 
@@ -8,16 +8,18 @@ Each model controls an agent in a shared visual environment. Decisions are made 
 API calls. The game never pauses.
 
 This repo contains two products:
+
 - **Producer Tool** (`frontend/`) — localhost game renderer captured by OBS
 - **Backend** (`backend/`) — game engine, AI adapter, and WebSocket server
 
-The public viewer site (gladaitors.com) is a separate repo — it embeds a stream, not the game.
+The public viewer site (gladaitor.ai) is a separate repo — it embeds a stream, not the game.
 
 ---
 
 ## Planning docs (Notion)
 
 Refer to these before making any architectural changes:
+
 - Overview: https://www.notion.so/337d4b78674381758ad3e7a1a3ff3107
 - Two Products Architecture: https://www.notion.so/337d4b78674381cd9c49cb952709c961
 - Frontend Design Spec: https://www.notion.so/337d4b786743819d9d5fddff7f52874b
@@ -32,7 +34,7 @@ Refer to these before making any architectural changes:
 
 ### What it is
 
-The local game rendering tool for GladAItors. Runs at localhost:3000.
+The local game rendering tool for gladaitor. Runs at localhost:3000.
 Never deployed. Never public. Captured by OBS via Browser Source.
 
 ### Stack
@@ -43,7 +45,7 @@ Never deployed. Never public. Captured by OBS via Browser Source.
 - Phaser mounts inside a `'use client'` component via `useRef` div
 - CRITICAL: always clean up with `game.destroy(true)` in useEffect return
 - Phaser EventEmitter handles communication between React and Phaser
-- WebSocket client connects to gladaitors-backend on localhost:8000
+- WebSocket client connects to gladaitor-backend on localhost:8000
 - Designed for 1920x1080 — OBS Browser Source captures at this resolution
 
 ### Two routes
@@ -88,25 +90,25 @@ frontend/
 
 ```typescript
 type GameState = {
-  tick: number
-  max_ticks: number
-  elapsed_seconds: number
-  challenge: 'territory_war' | 'trading_pit'
-  models: ModelState[]
-  events: GameEvent[]
-  canvas_data: object           // passed directly to active Phaser scene
-}
+  tick: number;
+  max_ticks: number;
+  elapsed_seconds: number;
+  challenge: "territory_war" | "trading_pit";
+  models: ModelState[];
+  events: GameEvent[];
+  canvas_data: object; // passed directly to active Phaser scene
+};
 
 type ModelState = {
-  id: string                    // 'claude' | 'gpt4o' | 'gemini'
-  name: string
-  colour: string                // hex
-  status: 'active' | 'thinking' | 'timeout' | 'rate_limited' | 'invalid' | 'winner' | 'eliminated'
-  primary_metric: number
-  primary_metric_label: string
-  stats: Record<string, string | number>
-  last_action: string
-}
+  id: string; // 'claude' | 'gpt4o' | 'gemini'
+  name: string;
+  colour: string; // hex
+  status: "active" | "thinking" | "timeout" | "rate_limited" | "invalid" | "winner" | "eliminated";
+  primary_metric: number;
+  primary_metric_label: string;
+  stats: Record<string, string | number>;
+  last_action: string;
+};
 ```
 
 ### Model colours — never deviate from these
@@ -121,7 +123,7 @@ type ModelState = {
 
 ### What it is
 
-The game engine, AI adapter, and WebSocket server for GladAItors.
+The game engine, AI adapter, and WebSocket server for gladaitor.
 Runs locally during recording. Deployed to Railway for live broadcasts.
 
 ### Stack
@@ -177,7 +179,7 @@ backend/
 - Lock model version strings in config per episode for attributability.
 - Phaser `useEffect` must always clean up with `game.destroy(true)` to prevent duplicate instances on hot reload.
 - The producer tool is NEVER deployed. Localhost only.
-- Phaser on the public site (gladaitors-site) is forbidden — that site only embeds a stream.
+- Phaser on the public site (gladaitor-site) is forbidden — that site only embeds a stream.
 - ResultsScene must be dramatic — it's the thumbnail moment for every episode.
 
 ---

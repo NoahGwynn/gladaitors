@@ -1,5 +1,5 @@
 // ============================================================================
-// GLADAITORS — Reusable Mixins
+// gladaitor — Reusable Mixins
 // ============================================================================
 // Mixins for common patterns used across components.
 // Import alongside variables: @use 'mixins' as *;
@@ -12,8 +12,7 @@
 //   - Model colour utilities
 // ============================================================================
 
-@use 'variables' as *;
-
+@use "variables" as *;
 
 // ----------------------------------------------------------------------------
 // SURFACE STYLES
@@ -38,7 +37,6 @@
   width: 100%;
   height: 100%;
 }
-
 
 // ----------------------------------------------------------------------------
 // TYPOGRAPHY
@@ -76,7 +74,6 @@
   color: $ga-text-muted;
 }
 
-
 // ----------------------------------------------------------------------------
 // LAYOUT HELPERS
 // ----------------------------------------------------------------------------
@@ -105,7 +102,6 @@
   flex-shrink: 0;
 }
 
-
 // ----------------------------------------------------------------------------
 // ANIMATIONS
 // Reusable keyframe patterns for status indicators
@@ -115,8 +111,13 @@
 /// Apply with: animation: ga-pulse 2s infinite;
 @mixin ga-pulse-animation {
   @keyframes ga-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
   }
   animation: ga-pulse 2s ease-in-out infinite;
 }
@@ -125,12 +126,18 @@
 /// Apply with: animation: ga-glow 1.5s infinite;
 @mixin ga-glow-animation($colour: $ga-ui-gold) {
   @keyframes ga-glow {
-    0%, 100% { box-shadow: 0 0 4px $colour; }
-    50% { box-shadow: 0 0 16px $colour, 0 0 24px rgba($colour, 0.3); }
+    0%,
+    100% {
+      box-shadow: 0 0 4px $colour;
+    }
+    50% {
+      box-shadow:
+        0 0 16px $colour,
+        0 0 24px rgba($colour, 0.3);
+    }
   }
   animation: ga-glow 1.5s ease-in-out infinite;
 }
-
 
 // ----------------------------------------------------------------------------
 // MODEL COLOUR UTILITIES

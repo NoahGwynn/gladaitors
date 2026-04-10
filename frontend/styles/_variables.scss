@@ -1,11 +1,11 @@
 // ============================================================================
-// GLADAITORS — Design Tokens
+// gladaitor — Design Tokens
 // ============================================================================
 // Central source of truth for all colours, spacing, typography, and layout.
 // Import this file in any SCSS file that needs access to design tokens.
 //
 // NAMING CONVENTION:
-//   $ga-{category}-{name}  (ga = gladAItors prefix)
+//   $ga-{category}-{name}  (ga = gladaitor prefix)
 //   Categories: bg, text, model, ui, font, size, layout, radius, z
 //
 // USAGE:
@@ -14,17 +14,15 @@
 //   color: $ga-text-primary;
 // ============================================================================
 
-
 // ----------------------------------------------------------------------------
 // BACKGROUND PALETTE
 // Dark cinematic theme — deepest to lightest
 // ----------------------------------------------------------------------------
 
-$ga-bg-void:      #0A0A0F;   // Near-black, primary page background
-$ga-bg-surface:   #12121A;   // Card/panel backgrounds
-$ga-bg-elevated:  #1A1A26;   // Slightly lifted surfaces (hover states, popups)
-$ga-border:       #2A2A3A;   // Subtle borders between sections
-
+$ga-bg-void: #0a0a0f; // Near-black, primary page background
+$ga-bg-surface: #12121a; // Card/panel backgrounds
+$ga-bg-elevated: #1a1a26; // Slightly lifted surfaces (hover states, popups)
+$ga-border: #2a2a3a; // Subtle borders between sections
 
 // ----------------------------------------------------------------------------
 // MODEL IDENTITY COLOURS
@@ -33,42 +31,39 @@ $ga-border:       #2A2A3A;   // Subtle borders between sections
 // Viewers learn to track colour, not read names.
 // ----------------------------------------------------------------------------
 
-$ga-model-claude:  #7C3AED;  // Purple — Anthropic Claude
-$ga-model-gpt:     #10B981;  // Emerald — OpenAI GPT-4o
-$ga-model-gemini:  #3B82F6;  // Blue — Google Gemini
-$ga-model-grok:    #F59E0B;  // Amber — reserved for future (xAI Grok)
+$ga-model-claude: #7c3aed; // Purple — Anthropic Claude
+$ga-model-gpt: #10b981; // Emerald — OpenAI GPT-4o
+$ga-model-gemini: #3b82f6; // Blue — Google Gemini
+$ga-model-grok: #f59e0b; // Amber — reserved for future (xAI Grok)
 
 // Model colour map — for dynamic lookups in components
 // Usage: map-get($ga-model-colours, 'claude')
 $ga-model-colours: (
-  'claude':  $ga-model-claude,
-  'gpt4o':   $ga-model-gpt,
-  'gemini':  $ga-model-gemini,
-  'grok':    $ga-model-grok,
+  "claude": $ga-model-claude,
+  "gpt4o": $ga-model-gpt,
+  "gemini": $ga-model-gemini,
+  "grok": $ga-model-grok,
 );
-
 
 // ----------------------------------------------------------------------------
 // TEXT COLOURS
 // Three tiers of text prominence
 // ----------------------------------------------------------------------------
 
-$ga-text-primary:    #F0F0F5;   // Headings, key values, active text
-$ga-text-secondary:  #8888A8;   // Labels, descriptions, supporting text
-$ga-text-muted:      #4A4A6A;   // Disabled, eliminated, de-emphasised
-
+$ga-text-primary: #f0f0f5; // Headings, key values, active text
+$ga-text-secondary: #8888a8; // Labels, descriptions, supporting text
+$ga-text-muted: #4a4a6a; // Disabled, eliminated, de-emphasised
 
 // ----------------------------------------------------------------------------
 // UI / STATUS COLOURS
 // Used for badges, alerts, and state indicators
 // ----------------------------------------------------------------------------
 
-$ga-ui-success:    #22C55E;   // Active, healthy, positive
-$ga-ui-warning:    #F59E0B;   // Thinking, caution
-$ga-ui-danger:     #EF4444;   // Timeout, error, invalid
-$ga-ui-gold:       #FFD700;   // Winner highlight only
-$ga-ui-rate-limit: #F97316;   // Rate limited (distinct from warning)
-
+$ga-ui-success: #22c55e; // Active, healthy, positive
+$ga-ui-warning: #f59e0b; // Thinking, caution
+$ga-ui-danger: #ef4444; // Timeout, error, invalid
+$ga-ui-gold: #ffd700; // Winner highlight only
+$ga-ui-rate-limit: #f97316; // Rate limited (distinct from warning)
 
 // ----------------------------------------------------------------------------
 // TYPOGRAPHY
@@ -76,77 +71,71 @@ $ga-ui-rate-limit: #F97316;   // Rate limited (distinct from warning)
 // Fonts loaded via Google Fonts in layout.tsx
 // ----------------------------------------------------------------------------
 
-$ga-font-ui:       'Inter', sans-serif;
-$ga-font-mono:     'JetBrains Mono', monospace;
-
+$ga-font-ui: "Inter", sans-serif;
+$ga-font-mono: "JetBrains Mono", monospace;
 
 // ----------------------------------------------------------------------------
 // FONT SIZES
 // Consistent scale used across all components
 // ----------------------------------------------------------------------------
 
-$ga-size-xs:    11px;   // Fine print, unit IDs
-$ga-size-sm:    12px;   // Badges, small labels
-$ga-size-base:  14px;   // Default body text
-$ga-size-md:    16px;   // Panel headings
-$ga-size-lg:    20px;   // Section titles
-$ga-size-xl:    24px;   // Turn counter, key metrics
-$ga-size-2xl:   28px;   // Score values, hero numbers
-$ga-size-3xl:   36px;   // Display text, winner announcements
-
+$ga-size-xs: 11px; // Fine print, unit IDs
+$ga-size-sm: 12px; // Badges, small labels
+$ga-size-base: 14px; // Default body text
+$ga-size-md: 16px; // Panel headings
+$ga-size-lg: 20px; // Section titles
+$ga-size-xl: 24px; // Turn counter, key metrics
+$ga-size-2xl: 28px; // Score values, hero numbers
+$ga-size-3xl: 36px; // Display text, winner announcements
 
 // ----------------------------------------------------------------------------
 // SPACING
 // 4px base unit for consistent rhythm
 // ----------------------------------------------------------------------------
 
-$ga-space-xs:   4px;
-$ga-space-sm:   8px;
-$ga-space-md:   12px;
-$ga-space-lg:   16px;
-$ga-space-xl:   24px;
-$ga-space-2xl:  32px;
-$ga-space-3xl:  48px;
-
+$ga-space-xs: 4px;
+$ga-space-sm: 8px;
+$ga-space-md: 12px;
+$ga-space-lg: 16px;
+$ga-space-xl: 24px;
+$ga-space-2xl: 32px;
+$ga-space-3xl: 48px;
 
 // ----------------------------------------------------------------------------
 // LAYOUT — Game View dimensions
 // Fixed layout optimised for 1920×1080 broadcast
 // ----------------------------------------------------------------------------
 
-$ga-layout-header-height:    48px;
+$ga-layout-header-height: 48px;
 $ga-layout-event-log-height: 80px;
-$ga-layout-canvas-width:     70%;    // Phaser game canvas
-$ga-layout-panel-width:      30%;    // Model panels sidebar
-
+$ga-layout-canvas-width: 70%; // Phaser game canvas
+$ga-layout-panel-width: 30%; // Model panels sidebar
 
 // ----------------------------------------------------------------------------
 // BORDER RADIUS
 // Minimal rounding — esports aesthetic, not bubbly
 // ----------------------------------------------------------------------------
 
-$ga-radius-sm:   4px;   // Badges, small elements
-$ga-radius-md:   6px;   // Cards, panels
-$ga-radius-lg:   8px;   // Modals, larger containers
-
+$ga-radius-sm: 4px; // Badges, small elements
+$ga-radius-md: 6px; // Cards, panels
+$ga-radius-lg: 8px; // Modals, larger containers
 
 // ----------------------------------------------------------------------------
 // Z-INDEX LAYERS
 // Ordered stack for overlapping elements
 // ----------------------------------------------------------------------------
 
-$ga-z-canvas:    1;     // Phaser game canvas (base layer)
-$ga-z-panels:    10;    // Side panels, header
-$ga-z-event-log: 20;    // Bottom event ticker
-$ga-z-banner:    50;    // Event banners (slides over canvas)
-$ga-z-overlay:   100;   // Modals, winner screen
-
+$ga-z-canvas: 1; // Phaser game canvas (base layer)
+$ga-z-panels: 10; // Side panels, header
+$ga-z-event-log: 20; // Bottom event ticker
+$ga-z-banner: 50; // Event banners (slides over canvas)
+$ga-z-overlay: 100; // Modals, winner screen
 
 // ----------------------------------------------------------------------------
 // TRANSITIONS
 // Consistent timing for all animations
 // ----------------------------------------------------------------------------
 
-$ga-transition-fast:   150ms ease;
-$ga-transition-base:   250ms ease;
-$ga-transition-slow:   400ms ease;
+$ga-transition-fast: 150ms ease;
+$ga-transition-base: 250ms ease;
+$ga-transition-slow: 400ms ease;

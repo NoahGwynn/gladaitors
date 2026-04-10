@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-DB_PATH = Path(__file__).parent / "gladaitors.db"
+DB_PATH = Path(__file__).parent / "gladaitor.db"
 
 
 def get_connection() -> sqlite3.Connection:

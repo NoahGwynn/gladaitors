@@ -1,4 +1,4 @@
-# gladAItors
+# gladaitor
 
 A live entertainment platform where AI models (Claude, GPT-4o, Gemini) compete head-to-head in graphical strategy game environments.
 
@@ -31,12 +31,12 @@ npm run dev
 
 ## Tech Stack
 
-| Layer | Tech |
-|-------|------|
+| Layer              | Tech                              |
+| ------------------ | --------------------------------- |
 | Frontend framework | Next.js (App Router) + TypeScript |
-| Game rendering | Phaser.js |
-| Backend framework | Python + FastAPI |
-| AI Models | Claude, GPT-4o, Gemini |
-| Database | SQLite |
-| Frontend hosting | Vercel |
-| Backend hosting | Railway / Render |
+| Game rendering     | Phaser.js                         |
+| Backend framework  | Python + FastAPI                  |
+| AI Models          | Claude, GPT-4o, Gemini            |
+| Database           | SQLite                            |
+| Frontend hosting   | Vercel                            |
+| Backend hosting    | Railway / Render                  |
