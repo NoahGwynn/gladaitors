@@ -17,7 +17,5 @@ export const STARTER_TOPICS: string[] = [
   'Is cereal soup?',
   'Is a hot dog a sandwich?',
   'Are dogs better than cats?',
-  'Was Star Wars more important than Star Trek?',
   'Is free will an illusion?',
-  'Should we have a four-day work week?',
 ];

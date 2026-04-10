@@ -476,6 +476,7 @@ function DebateArenaContent() {
       {/* LEFT PANEL: Form                                                 */}
       {/* ================================================================ */}
       <div className={`${styles.formPanel} ${hasDebate ? styles.formPanelHidden : ''}`}>
+        <h2 className={styles.formHeading}>Create a debate</h2>
         <div className={styles.field}>
           <label className={styles.label}>What should they debate?</label>
           <input
