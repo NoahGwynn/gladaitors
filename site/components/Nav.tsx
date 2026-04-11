@@ -125,7 +125,7 @@ export default function Nav() {
             The Arena
           </Link>
           <Link href="/forum" className={linkClass('/forum', styles.link)}>
-            dAIly Forum
+            Forum
           </Link>
           <Link href="/explore" className={linkClass('/explore', styles.link)}>
             Explore
@@ -198,7 +198,7 @@ export default function Nav() {
               The Arena
             </Link>
             <Link href="/forum" className={linkClass('/forum', styles.mobileLink)} onClick={closeMobileMenu}>
-              dAIly Forum
+              Forum
             </Link>
             <Link href="/explore" className={linkClass('/explore', styles.mobileLink)} onClick={closeMobileMenu}>
               Explore
