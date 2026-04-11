@@ -62,8 +62,8 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     category: 'ai',
     sourceType: 'rss',
     name: 'Ars Technica AI',
-    url: 'https://feeds.arstechnica.com/arstechnica/features',
-    config: { filterKeywords: ['AI', 'artificial intelligence', 'machine learning', 'LLM', 'GPT', 'Claude', 'Gemini'] },
+    url: 'https://arstechnica.com/ai/feed/',
+    config: {},
   },
   {
     category: 'ai',
