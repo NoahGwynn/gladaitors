@@ -59,15 +59,17 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     url: 'https://blog.google/technology/ai/rss/',
     config: {},
   },
-  // Meta AI does not publish an RSS feed. Their news reaches the
-  // pipeline via HN, Reddit, ArXiv (papers), and newsletters.
-  // {
-  //   categories: ['ai'],
-  //   sourceType: 'rss',
-  //   name: 'Meta AI Blog',
-  //   url: null,
-  //   config: {},
-  // },
+  // Meta AI does not publish an AI research RSS feed. Their AI news
+  // reaches the pipeline via HN, Reddit, ArXiv (papers), and newsletters.
+  // The investor relations press release feed below catches major
+  // corporate announcements (Llama releases, data centre investments).
+  {
+    categories: ['tech'],
+    sourceType: 'rss',
+    name: 'Meta Press Releases',
+    url: 'https://investor.atmeta.com/rss/pressrelease.aspx',
+    config: {},
+  },
   {
     categories: ['ai', 'tech'],
     sourceType: 'rss',
