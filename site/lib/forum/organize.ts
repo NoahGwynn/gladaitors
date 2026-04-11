@@ -19,6 +19,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@/lib/supabase';
+import { findAgreedMerges, applyMerges } from './thread-merge';
 
 // --- Types ---
 
@@ -69,6 +70,7 @@ export interface OrganizeResult {
   organizerBShortlist: number;
   mergedShortlist: MergedShortlistEntry[];
   proposedMerges: { threadA: string; threadB: string; reason: string }[];
+  appliedMerges: { applied: number; details: { survivor: string; merged: string; reason: string }[] };
   errors: string[];
 }
 
@@ -341,6 +343,7 @@ export async function organizeThreads(category: string): Promise<OrganizeResult>
       organizerBShortlist: 0,
       mergedShortlist: [],
       proposedMerges: [],
+      appliedMerges: { applied: 0, details: [] },
       errors: [`Failed to load threads: ${error?.message || 'no data'}`],
     };
   }
@@ -353,6 +356,7 @@ export async function organizeThreads(category: string): Promise<OrganizeResult>
       organizerBShortlist: 0,
       mergedShortlist: [],
       proposedMerges: [],
+      appliedMerges: { applied: 0, details: [] },
       errors: ['No active threads in the last 7 days'],
     };
   }
@@ -411,13 +415,39 @@ export async function organizeThreads(category: string): Promise<OrganizeResult>
 
   console.log(`[ORGANIZE] Merged shortlist: ${merged.length} threads (${merged.filter(m => m.organizerAgreement === 2).length} agreed by both)`);
 
+  // Apply merges that both organizers agree on
+  const agreedMerges = findAgreedMerges(
+    responseA.proposedMerges || [],
+    responseB.proposedMerges || [],
+  );
+
+  let mergeResult = { applied: 0, details: [] as { survivor: string; merged: string; reason: string }[] };
+  if (agreedMerges.length > 0) {
+    console.log(`[ORGANIZE] ${agreedMerges.length} merges agreed by both organizers — applying...`);
+    const fullMergeResult = await applyMerges(agreedMerges);
+    mergeResult = { applied: fullMergeResult.applied, details: fullMergeResult.details };
+    allErrors.push(...fullMergeResult.errors);
+    console.log(`[ORGANIZE] ${fullMergeResult.applied} merges applied`);
+  }
+
+  // Single-organizer merge proposals are NOT applied — passed through
+  // as notes for the pool/moderator to consider
+  const unappliedMerges = proposedMerges.filter(pm => {
+    const key = [pm.threadA, pm.threadB].sort().join('::');
+    return !agreedMerges.some(am => {
+      const amKey = [am.threadA, am.threadB].sort().join('::');
+      return amKey === key;
+    });
+  });
+
   return {
     category,
     threadsEvaluated: threadSummaries.length,
     organizerAShortlist: responseA.shortlist.length,
     organizerBShortlist: responseB.shortlist.length,
     mergedShortlist: merged,
-    proposedMerges,
+    proposedMerges: unappliedMerges,
+    appliedMerges: mergeResult,
     errors: allErrors,
   };
 }
