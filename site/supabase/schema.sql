@@ -837,6 +837,24 @@ create table if not exists public.forum_sources (
 create index if not exists forum_sources_category on public.forum_sources(category)
   where enabled = true;
 
+-- Threads — clustered narratives, the core data model.
+-- MUST be created before forum_items because items reference threads via FK.
+create table if not exists public.forum_threads (
+  id uuid primary key default gen_random_uuid(),
+  category text not null,
+  title text not null,                   -- human-readable thread title (set by the first item or the organizer)
+  summary text,                          -- running summary, updated as items accumulate
+  status text not null default 'new',    -- 'new', 'active', 'ready', 'discussed', 'dormant', 'revisited'
+  embedding vector(1536),                -- aggregate embedding for matching new items to this thread
+  item_count int not null default 0,
+  first_seen_at timestamptz not null default now(),
+  last_event_at timestamptz not null default now(),
+  discussed_at timestamptz,              -- when this thread was last used in a forum session
+  session_id uuid,                       -- FK to the forum session that discussed it (null if not yet discussed)
+  tags text[],                           -- topic tags from the tag taxonomy (set by organizers)
+  created_at timestamptz not null default now()
+);
+
 -- Raw ingested items — one row per article/paper/post discovered
 create table if not exists public.forum_items (
   id uuid primary key default gen_random_uuid(),
@@ -863,23 +881,6 @@ create unique index if not exists forum_items_url_dedup on public.forum_items(ca
 create index if not exists forum_items_category_date on public.forum_items(category, ingested_at desc);
 create index if not exists forum_items_thread on public.forum_items(thread_id)
   where thread_id is not null;
-
--- Threads — clustered narratives, the core data model
-create table if not exists public.forum_threads (
-  id uuid primary key default gen_random_uuid(),
-  category text not null,
-  title text not null,                   -- human-readable thread title (set by the first item or the organizer)
-  summary text,                          -- running summary, updated as items accumulate
-  status text not null default 'new',    -- 'new', 'active', 'ready', 'discussed', 'dormant', 'revisited'
-  embedding vector(1536),                -- aggregate embedding for matching new items to this thread
-  item_count int not null default 0,
-  first_seen_at timestamptz not null default now(),
-  last_event_at timestamptz not null default now(),
-  discussed_at timestamptz,              -- when this thread was last used in a forum session
-  session_id uuid,                       -- FK to the forum session that discussed it (null if not yet discussed)
-  tags text[],                           -- topic tags from the tag taxonomy (set by organizers)
-  created_at timestamptz not null default now()
-);
 
 create index if not exists forum_threads_category_status on public.forum_threads(category, status);
 create index if not exists forum_threads_last_event on public.forum_threads(category, last_event_at desc);
