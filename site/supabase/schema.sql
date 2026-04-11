@@ -834,6 +834,7 @@ create table if not exists public.forum_sources (
   created_at timestamptz not null default now()
 );
 
+create unique index if not exists forum_sources_name_dedup on public.forum_sources(category, name);
 create index if not exists forum_sources_category on public.forum_sources(category)
   where enabled = true;
 

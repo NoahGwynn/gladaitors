@@ -93,6 +93,48 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     url: 'https://www.technologyreview.com/topic/artificial-intelligence/feed',
     config: {},
   },
+  {
+    category: 'ai',
+    sourceType: 'rss',
+    name: 'Microsoft AI Blog',
+    url: 'https://blogs.microsoft.com/ai/feed/',
+    config: {},
+  },
+  {
+    category: 'ai',
+    sourceType: 'rss',
+    name: 'Nvidia AI Blog',
+    url: 'https://blogs.nvidia.com/feed/',
+    config: {},
+  },
+  {
+    category: 'ai',
+    sourceType: 'rss',
+    name: 'TechCrunch AI',
+    url: 'https://techcrunch.com/category/artificial-intelligence/feed/',
+    config: {},
+  },
+  {
+    category: 'ai',
+    sourceType: 'rss',
+    name: 'Wired AI',
+    url: 'https://www.wired.com/feed/tag/ai/latest/rss',
+    config: {},
+  },
+  {
+    category: 'ai',
+    sourceType: 'rss',
+    name: 'The Decoder',
+    url: 'https://the-decoder.com/feed/',
+    config: {},
+  },
+  {
+    category: 'ai',
+    sourceType: 'rss',
+    name: 'AWS AI Blog',
+    url: 'https://aws.amazon.com/blogs/machine-learning/feed/',
+    config: {},
+  },
 
   // --- APIs ---
   {
