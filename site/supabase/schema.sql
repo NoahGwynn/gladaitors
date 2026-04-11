@@ -895,6 +895,36 @@ create index if not exists forum_threads_categories on public.forum_threads usin
 create index if not exists forum_threads_status on public.forum_threads(status);
 create index if not exists forum_threads_last_event on public.forum_threads(last_event_at desc);
 
+-- Thread matching RPC — finds the closest existing thread to a given
+-- embedding using pgvector cosine distance. Used by the thread-match
+-- module after ingestion to cluster items into threads.
+create or replace function public.match_thread(
+  query_embedding vector(1536),
+  match_threshold float default 0.20,
+  match_count int default 1
+) returns table (
+  id uuid,
+  title text,
+  categories text[],
+  status text,
+  item_count int,
+  distance float
+) language sql stable as $$
+  select
+    t.id,
+    t.title,
+    t.categories,
+    t.status,
+    t.item_count,
+    (t.embedding <=> query_embedding) as distance
+  from public.forum_threads t
+  where t.embedding is not null
+    and t.status in ('new', 'active', 'ready', 'dormant')
+    and (t.embedding <=> query_embedding) < match_threshold
+  order by t.embedding <=> query_embedding
+  limit match_count;
+$$;
+
 -- RLS — server-managed for the pipeline, readable by anyone (for the
 -- forum pages to display thread/session data)
 alter table public.forum_sources enable row level security;

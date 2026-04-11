@@ -13,6 +13,8 @@ import { ingestAllRss } from '@/lib/forum/ingest-rss';
 import { ingestArxiv } from '@/lib/forum/ingest-arxiv';
 import { ingestHackerNews } from '@/lib/forum/ingest-hn';
 import { ingestReddit } from '@/lib/forum/ingest-reddit';
+import { embedNewItems } from '@/lib/forum/embed';
+import { matchItemsToThreads, markDormantThreads } from '@/lib/forum/thread-match';
 import { createServerSupabase } from '@/lib/supabase-server';
 
 interface IngestResult {
@@ -92,5 +94,29 @@ export async function POST() {
 
   console.log(`[INGEST] Done: ${summary.totalInserted} new items from ${summary.sources} sources`);
 
-  return Response.json(summary);
+  // 3. Generate embeddings for new items
+  console.log('[INGEST] --- Embedding generation ---');
+  const embedded = await embedNewItems();
+  console.log(`[INGEST] ${embedded} items embedded`);
+
+  // 4. Match items to threads
+  console.log('[INGEST] --- Thread matching ---');
+  const threadResult = await matchItemsToThreads();
+  console.log(`[INGEST] Threads: ${threadResult.matchedToExisting} matched, ${threadResult.newThreadsCreated} new, ${threadResult.dormantRevived} revived`);
+
+  // 5. Mark stale threads as dormant
+  const dormant = await markDormantThreads();
+
+  return Response.json({
+    ...summary,
+    embedding: { embedded },
+    threading: {
+      processed: threadResult.itemsProcessed,
+      matchedToExisting: threadResult.matchedToExisting,
+      newThreadsCreated: threadResult.newThreadsCreated,
+      dormantRevived: threadResult.dormantRevived,
+      markedDormant: dormant,
+      errors: threadResult.errors.length,
+    },
+  });
 }
