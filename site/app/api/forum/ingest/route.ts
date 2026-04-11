@@ -1,29 +1,87 @@
 // ============================================================================
-// POST /api/forum/ingest — Trigger data ingestion (all sources)
+// POST /api/forum/ingest — Trigger full data ingestion
 // ============================================================================
-// Manually triggers the RSS ingestion pipeline for testing. In
-// production this will be replaced by a cron job.
-//
-// No body required — ingests from ALL enabled RSS sources. Items are
-// pre-tagged with candidate categories from their source config.
+// Runs all ingesters (RSS, ArXiv, Hacker News, Reddit) across all
+// enabled sources. Items are pre-tagged with candidate categories
+// from their source config.
 //
 // No auth for now — this is an internal tool. Add auth before deploy.
+// In production this will be triggered by a cron job.
 // ============================================================================
 
 import { ingestAllRss } from '@/lib/forum/ingest-rss';
+import { ingestArxiv } from '@/lib/forum/ingest-arxiv';
+import { ingestHackerNews } from '@/lib/forum/ingest-hn';
+import { ingestReddit } from '@/lib/forum/ingest-reddit';
+import { createServerSupabase } from '@/lib/supabase-server';
+
+interface IngestResult {
+  sourceId: string;
+  sourceName: string;
+  fetched: number;
+  inserted: number;
+  skipped: number;
+  errors: string[];
+}
 
 export async function POST() {
-  console.log('[INGEST] Starting RSS ingestion (all sources)');
+  console.log('[INGEST] Starting full ingestion (all source types)');
 
-  const results = await ingestAllRss();
+  const allResults: IngestResult[] = [];
+
+  // 1. RSS feeds
+  console.log('[INGEST] --- RSS feeds ---');
+  const rssResults = await ingestAllRss();
+  allResults.push(...rssResults);
+
+  // 2. API sources (ArXiv, HN) + Reddit
+  const supabase = await createServerSupabase();
+  const { data: apiSources } = await supabase
+    .from('forum_sources')
+    .select('id, categories, name, url, config, source_type')
+    .in('source_type', ['api', 'reddit'])
+    .eq('enabled', true);
+
+  if (apiSources) {
+    for (const source of apiSources) {
+      const s = source as {
+        id: string;
+        categories: string[];
+        name: string;
+        url: string;
+        config: Record<string, unknown>;
+        source_type: string;
+      };
+
+      console.log(`[INGEST] ${s.name} (${s.source_type})...`);
+
+      let result: IngestResult;
+
+      if (s.name === 'ArXiv AI' || s.source_type === 'api' && s.url?.includes('arxiv')) {
+        result = await ingestArxiv(s);
+      } else if (s.name === 'Hacker News' || s.source_type === 'api' && s.url?.includes('hacker-news')) {
+        result = await ingestHackerNews(s);
+      } else if (s.source_type === 'reddit') {
+        result = await ingestReddit(s);
+      } else {
+        console.log(`[INGEST] Skipping unknown API source: ${s.name}`);
+        continue;
+      }
+
+      console.log(
+        `[INGEST] ${s.name}: ${result.fetched} fetched, ${result.inserted} inserted, ${result.skipped} skipped${result.errors.length ? `, ${result.errors.length} errors` : ''}`
+      );
+      allResults.push(result);
+    }
+  }
 
   const summary = {
-    sources: results.length,
-    totalFetched: results.reduce((s, r) => s + r.fetched, 0),
-    totalInserted: results.reduce((s, r) => s + r.inserted, 0),
-    totalSkipped: results.reduce((s, r) => s + r.skipped, 0),
-    totalErrors: results.reduce((s, r) => s + r.errors.length, 0),
-    details: results.map(r => ({
+    sources: allResults.length,
+    totalFetched: allResults.reduce((s, r) => s + r.fetched, 0),
+    totalInserted: allResults.reduce((s, r) => s + r.inserted, 0),
+    totalSkipped: allResults.reduce((s, r) => s + r.skipped, 0),
+    totalErrors: allResults.reduce((s, r) => s + r.errors.length, 0),
+    details: allResults.map(r => ({
       source: r.sourceName,
       fetched: r.fetched,
       inserted: r.inserted,
