@@ -75,9 +75,9 @@ export interface OrganizeResult {
 // --- Build the prompt for organizers ---
 
 function buildOrganizerPrompt(threads: ThreadSummary[], category: string): string {
-  const threadList = threads.map((t, i) => {
+  const threadList = threads.map((t) => {
     const sources = t.sources.length > 0 ? t.sources.join(', ') : 'unknown';
-    return `[${i + 1}] ID: ${t.id}
+    return `THREAD_ID: ${t.id}
     Title: ${t.title}
     Items: ${t.itemCount} from ${sources}
     First seen: ${t.firstSeen}
@@ -116,11 +116,12 @@ WHAT NOT TO DO:
 - Do not take a stance on any thread. You are an editor, not a participant.
 - Do not include threads that aren't genuinely ready — a short list of strong candidates is better than a long list of weak ones.
 
-Respond with JSON:
+Respond with JSON only. IMPORTANT: "threadId" must be the full UUID from the THREAD_ID field above — not a line number or abbreviation.
+
 {
   "shortlist": [
     {
-      "threadId": "<thread UUID>",
+      "threadId": "<full UUID from THREAD_ID field>",
       "threadTitle": "<thread title>",
       "rank": 1,
       "readyReason": "<why this thread is ready for discussion today>",
@@ -130,8 +131,8 @@ Respond with JSON:
   ],
   "proposedMerges": [
     {
-      "threadA": "<thread UUID>",
-      "threadB": "<thread UUID>",
+      "threadA": "<full UUID>",
+      "threadB": "<full UUID>",
       "reason": "<why these should be merged>"
     }
   ]
@@ -162,7 +163,12 @@ async function callGemini(prompt: string): Promise<OrganizerResponse> {
     const response = await client.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
-      config: { maxOutputTokens: 4000 },
+      config: {
+        // Flash uses thinking tokens from the output budget by default.
+        // 16k gives enough room for internal reasoning + the full JSON
+        // shortlist. 4k was too tight — Flash ran out before producing output.
+        maxOutputTokens: 16000,
+      },
     });
 
     const text = response.text || '';
@@ -185,9 +191,45 @@ function parseOrganizerResponse(raw: string): OrganizerResponse {
       return { shortlist: [], errors: ['No JSON found in response'] };
     }
 
-    const parsed = JSON.parse(text.slice(jsonStart, jsonEnd + 1));
+    let jsonStr = text.slice(jsonStart, jsonEnd + 1);
+
+    // Repair common JSON issues from LLM output:
+    // 1. Trailing commas before ] or }
+    jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
+    // 2. Unescaped newlines inside strings (replace with spaces)
+    jsonStr = jsonStr.replace(/(?<=":[ ]*"[^"]*)\n(?=[^"]*")/g, ' ');
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      // If full parse fails, try to extract just the shortlist array
+      const listMatch = jsonStr.match(/"shortlist"\s*:\s*(\[[\s\S]*?\])\s*[,}]/);
+      if (listMatch) {
+        try {
+          const shortlistStr = listMatch[1].replace(/,\s*([}\]])/g, '$1');
+          const shortlist = JSON.parse(shortlistStr);
+          return {
+            shortlist: (shortlist || []).map((e: Record<string, unknown>, i: number) => ({
+              threadId: (e.threadId || e.thread_id || '') as string,
+              threadTitle: (e.threadTitle || e.thread_title || '') as string,
+              rank: (e.rank as number) || i + 1,
+              readyReason: (e.readyReason || e.ready_reason || '') as string,
+              keyQuestions: (e.keyQuestions || e.key_questions || []) as string[],
+              significance: (e.significance || '') as string,
+            })),
+            errors: ['Partial parse — extracted shortlist only'],
+          };
+        } catch {
+          return { shortlist: [], errors: ['JSON repair failed on shortlist extraction'] };
+        }
+      }
+      return { shortlist: [], errors: ['JSON parse failed after repair attempts'] };
+    }
+
+    const parsed2 = parsed;
     return {
-      shortlist: (parsed.shortlist || []).map((e: Record<string, unknown>, i: number) => ({
+      shortlist: ((parsed2.shortlist || []) as Record<string, unknown>[]).map((e, i) => ({
         threadId: (e.threadId || e.thread_id || '') as string,
         threadTitle: (e.threadTitle || e.thread_title || '') as string,
         rank: (e.rank as number) || i + 1,
@@ -195,8 +237,8 @@ function parseOrganizerResponse(raw: string): OrganizerResponse {
         keyQuestions: (e.keyQuestions || e.key_questions || []) as string[],
         significance: (e.significance || '') as string,
       })),
-      proposedMerges: (parsed.proposedMerges || parsed.proposed_merges || []).map(
-        (m: Record<string, unknown>) => ({
+      proposedMerges: ((parsed2.proposedMerges || parsed2.proposed_merges || []) as Record<string, unknown>[]).map(
+        (m) => ({
           threadA: (m.threadA || m.thread_a || '') as string,
           threadB: (m.threadB || m.thread_b || '') as string,
           reason: (m.reason || '') as string,
