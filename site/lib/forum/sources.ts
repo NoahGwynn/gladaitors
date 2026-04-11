@@ -27,7 +27,7 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     category: 'ai',
     sourceType: 'rss',
     name: 'Anthropic Blog',
-    url: 'https://www.anthropic.com/rss',
+    url: 'https://www.anthropic.com/feed.xml',
     config: {},
   },
   {
@@ -55,7 +55,7 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     category: 'ai',
     sourceType: 'rss',
     name: 'Meta AI Blog',
-    url: 'https://ai.meta.com/blog/rss/',
+    url: 'https://ai.meta.com/blog/rss',
     config: {},
   },
   {

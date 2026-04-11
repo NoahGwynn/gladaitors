@@ -8,11 +8,17 @@
 // Or called from an API route during setup.
 // ============================================================================
 
+import dotenv from 'dotenv';
+import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { ALL_SOURCES } from './sources';
 
+// Load .env.local since this runs outside Next.js
+// Try .env.local first, fall back to .env
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
 async function seed() {
-  // Use env vars directly since this runs outside Next.js
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
