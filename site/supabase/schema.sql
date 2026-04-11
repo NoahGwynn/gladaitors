@@ -5,6 +5,9 @@
 -- Safe to re-run — uses IF NOT EXISTS and DROP IF EXISTS throughout.
 -- ============================================================================
 
+-- Extensions required by the forum ingestion layer (embedding similarity)
+create extension if not exists vector;
+
 -- ----------------------------------------------------------------------------
 -- Token economy constants
 -- ----------------------------------------------------------------------------
@@ -802,3 +805,99 @@ create policy "Anyone can view challenge turns"
 drop policy if exists "Challenge turns are server-inserted" on public.challenge_turns;
 create policy "Challenge turns are server-inserted"
   on public.challenge_turns for insert with check (true);
+
+-- ============================================================================
+-- dAIly Forum — Ingestion Layer
+-- ============================================================================
+-- Three tables for the data pipeline that feeds the dAIly Forum:
+--   forum_sources  — registry of configured data sources per category
+--   forum_items    — raw ingested items (articles, papers, posts)
+--   forum_threads  — clustered narratives built from related items
+--
+-- The core data model is the THREAD, not the individual item. A thread
+-- represents an ongoing story or narrative that accumulates events over
+-- days or weeks. Items are matched to threads via embedding similarity.
+-- The organizers, pool, and moderator always work with threads.
+-- ============================================================================
+
+-- Source registry — one row per configured feed/API/newsletter source
+create table if not exists public.forum_sources (
+  id uuid primary key default gen_random_uuid(),
+  category text not null,                -- 'ai', 'science', 'tech', etc.
+  source_type text not null,             -- 'rss', 'api', 'newsletter', 'reddit'
+  name text not null,                    -- human label e.g. "Anthropic Blog"
+  url text,                              -- feed URL, API endpoint, or null for newsletters
+  config jsonb not null default '{}'::jsonb,  -- source-specific config (subreddit, arxiv categories, keywords, etc.)
+  enabled boolean not null default true,
+  last_fetched_at timestamptz,
+  last_error text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists forum_sources_category on public.forum_sources(category)
+  where enabled = true;
+
+-- Raw ingested items — one row per article/paper/post discovered
+create table if not exists public.forum_items (
+  id uuid primary key default gen_random_uuid(),
+  source_id uuid not null references public.forum_sources(id) on delete cascade,
+  category text not null,                -- denormalised from source for fast queries
+  external_id text,                      -- source-specific unique id (RSS guid, arxiv id, HN id, etc.)
+  title text not null,
+  summary text,                          -- RSS description, abstract, or first paragraph
+  url text not null,                     -- canonical link to the original content
+  author text,
+  published_at timestamptz,              -- when the source published it
+  engagement jsonb,                      -- source-specific signals: { upvotes, comments, trending_rank, editorial_flag }
+  embedding vector(1536),                -- text-embedding-3-small of title + summary, for thread matching
+  thread_id uuid references public.forum_threads(id) on delete set null,  -- which thread this item belongs to (null = unmatched)
+  raw_payload jsonb,                     -- full source response for debugging
+  ingested_at timestamptz not null default now()
+);
+
+-- Deduplication: same source + same external id = same item
+create unique index if not exists forum_items_dedup on public.forum_items(source_id, external_id)
+  where external_id is not null;
+-- Also deduplicate by URL across sources (same article from multiple feeds)
+create unique index if not exists forum_items_url_dedup on public.forum_items(category, url);
+create index if not exists forum_items_category_date on public.forum_items(category, ingested_at desc);
+create index if not exists forum_items_thread on public.forum_items(thread_id)
+  where thread_id is not null;
+
+-- Threads — clustered narratives, the core data model
+create table if not exists public.forum_threads (
+  id uuid primary key default gen_random_uuid(),
+  category text not null,
+  title text not null,                   -- human-readable thread title (set by the first item or the organizer)
+  summary text,                          -- running summary, updated as items accumulate
+  status text not null default 'new',    -- 'new', 'active', 'ready', 'discussed', 'dormant', 'revisited'
+  embedding vector(1536),                -- aggregate embedding for matching new items to this thread
+  item_count int not null default 0,
+  first_seen_at timestamptz not null default now(),
+  last_event_at timestamptz not null default now(),
+  discussed_at timestamptz,              -- when this thread was last used in a forum session
+  session_id uuid,                       -- FK to the forum session that discussed it (null if not yet discussed)
+  tags text[],                           -- topic tags from the tag taxonomy (set by organizers)
+  created_at timestamptz not null default now()
+);
+
+create index if not exists forum_threads_category_status on public.forum_threads(category, status);
+create index if not exists forum_threads_last_event on public.forum_threads(category, last_event_at desc);
+
+-- RLS — server-managed for the pipeline, readable by anyone (for the
+-- forum pages to display thread/session data)
+alter table public.forum_sources enable row level security;
+alter table public.forum_items enable row level security;
+alter table public.forum_threads enable row level security;
+
+drop policy if exists "Forum sources are server-managed" on public.forum_sources;
+create policy "Forum sources are server-managed"
+  on public.forum_sources for all using (true);
+
+drop policy if exists "Forum items are server-managed" on public.forum_items;
+create policy "Forum items are server-managed"
+  on public.forum_items for all using (true);
+
+drop policy if exists "Forum threads are server-managed" on public.forum_threads;
+create policy "Forum threads are server-managed"
+  on public.forum_threads for all using (true);
