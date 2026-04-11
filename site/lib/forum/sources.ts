@@ -148,6 +148,71 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     config: {},
   },
 
+  // --- Editorial / analysis / independent ---
+  {
+    categories: ['ai', 'tech'],
+    sourceType: 'rss',
+    name: 'The Guardian AI',
+    url: 'https://www.theguardian.com/technology/artificialintelligenceai/rss',
+    config: {},
+  },
+  {
+    categories: ['ai', 'science', 'tech'],
+    sourceType: 'rss',
+    name: 'IEEE Spectrum AI',
+    url: 'https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss',
+    config: {},
+  },
+  {
+    categories: ['tech'],
+    sourceType: 'rss',
+    name: 'Bloomberg Technology',
+    url: 'https://feeds.bloomberg.com/technology/news.rss',
+    config: {},
+  },
+  {
+    categories: ['ai'],
+    sourceType: 'rss',
+    name: 'Interconnects',
+    url: 'https://www.interconnects.ai/feed',
+    config: {},
+  },
+  {
+    categories: ['ai', 'code'],
+    sourceType: 'rss',
+    name: 'Latent Space',
+    url: 'https://www.latent.space/feed',
+    config: {},
+  },
+  {
+    categories: ['ai'],
+    sourceType: 'rss',
+    name: 'Last Week in AI',
+    url: 'https://lastweekin.ai/feed',
+    config: {},
+  },
+  {
+    categories: ['ai', 'science'],
+    sourceType: 'rss',
+    name: 'AI Snake Oil',
+    url: 'https://aisnakeoil.substack.com/feed',
+    config: {},
+  },
+  {
+    categories: ['ai', 'science'],
+    sourceType: 'rss',
+    name: 'The Conversation AI',
+    url: 'https://theconversation.com/europe/topics/artificial-intelligence-ai-90/articles.atom',
+    config: {},
+  },
+  {
+    categories: ['ai', 'code'],
+    sourceType: 'rss',
+    name: 'LangChain Blog',
+    url: 'https://blog.langchain.dev/rss/',
+    config: {},
+  },
+
   // --- APIs ---
   {
     categories: ['ai', 'science'],
