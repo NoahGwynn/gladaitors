@@ -53,7 +53,7 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     config: {},
   },
   {
-    categories: ['ai'],
+    categories: ['ai', 'tech'],
     sourceType: 'rss',
     name: 'Google AI Blog',
     url: 'https://blog.google/technology/ai/rss/',
@@ -90,7 +90,7 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     config: {},
   },
   {
-    categories: ['ai'],
+    categories: ['ai', 'code'],
     sourceType: 'rss',
     name: 'Hugging Face Blog',
     url: 'https://huggingface.co/blog/feed.xml',
@@ -139,7 +139,7 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     config: {},
   },
   {
-    categories: ['ai'],
+    categories: ['ai', 'tech', 'code'],
     sourceType: 'rss',
     name: 'AWS AI Blog',
     url: 'https://aws.amazon.com/blogs/machine-learning/feed/',
@@ -160,7 +160,7 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     },
   },
   {
-    categories: ['ai', 'tech'],
+    categories: ['ai', 'tech', 'code'],
     sourceType: 'api',
     name: 'Hacker News',
     url: 'https://hacker-news.firebaseio.com/v0',
@@ -179,7 +179,7 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     config: { subreddit: 'MachineLearning', limit: 25 },
   },
   {
-    categories: ['ai'],
+    categories: ['ai', 'code'],
     sourceType: 'reddit',
     name: 'r/LocalLLaMA',
     url: 'https://www.reddit.com/r/LocalLLaMA/hot.json',
