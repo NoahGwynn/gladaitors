@@ -820,10 +820,13 @@ create policy "Challenge turns are server-inserted"
 -- The organizers, pool, and moderator always work with threads.
 -- ============================================================================
 
--- Source registry — one row per configured feed/API/newsletter source
+-- Source registry — one row per configured feed/API/newsletter source.
+-- Each source is pre-tagged with candidate categories (e.g., an ArXiv AI
+-- feed gets ['ai', 'science']). Items inherit these tags at ingestion
+-- time. Category organizers query by their tag to find candidates.
 create table if not exists public.forum_sources (
   id uuid primary key default gen_random_uuid(),
-  category text not null,                -- 'ai', 'science', 'tech', etc.
+  categories text[] not null default '{}', -- candidate categories: ['ai'], ['ai','science'], etc.
   source_type text not null,             -- 'rss', 'api', 'newsletter', 'reddit'
   name text not null,                    -- human label e.g. "Anthropic Blog"
   url text,                              -- feed URL, API endpoint, or null for newsletters
@@ -834,15 +837,16 @@ create table if not exists public.forum_sources (
   created_at timestamptz not null default now()
 );
 
-create unique index if not exists forum_sources_name_dedup on public.forum_sources(category, name);
-create index if not exists forum_sources_category on public.forum_sources(category)
+create unique index if not exists forum_sources_name_dedup on public.forum_sources(name);
+create index if not exists forum_sources_categories on public.forum_sources using gin(categories)
   where enabled = true;
 
 -- Threads — clustered narratives, the core data model.
 -- MUST be created before forum_items because items reference threads via FK.
+-- Threads can belong to multiple categories (same story relevant to AI + Science).
 create table if not exists public.forum_threads (
   id uuid primary key default gen_random_uuid(),
-  category text not null,
+  categories text[] not null default '{}', -- which categories this thread is relevant to
   title text not null,                   -- human-readable thread title (set by the first item or the organizer)
   summary text,                          -- running summary, updated as items accumulate
   status text not null default 'new',    -- 'new', 'active', 'ready', 'discussed', 'dormant', 'revisited'
@@ -856,11 +860,13 @@ create table if not exists public.forum_threads (
   created_at timestamptz not null default now()
 );
 
--- Raw ingested items — one row per article/paper/post discovered
+-- Raw ingested items — one row per article/paper/post discovered.
+-- Items are shared across categories — an article from ArXiv AI might
+-- be tagged ['ai', 'science']. No duplication; each URL exists once.
 create table if not exists public.forum_items (
   id uuid primary key default gen_random_uuid(),
   source_id uuid not null references public.forum_sources(id) on delete cascade,
-  category text not null,                -- denormalised from source for fast queries
+  categories text[] not null default '{}', -- inherited from source, editable by organizers
   external_id text,                      -- source-specific unique id (RSS guid, arxiv id, HN id, etc.)
   title text not null,
   summary text,                          -- RSS description, abstract, or first paragraph
@@ -877,14 +883,17 @@ create table if not exists public.forum_items (
 -- Deduplication: same source + same external id = same item
 create unique index if not exists forum_items_dedup on public.forum_items(source_id, external_id)
   where external_id is not null;
--- Also deduplicate by URL across sources (same article from multiple feeds)
-create unique index if not exists forum_items_url_dedup on public.forum_items(category, url);
-create index if not exists forum_items_category_date on public.forum_items(category, ingested_at desc);
+-- Deduplicate by URL across all sources (same article from multiple feeds)
+create unique index if not exists forum_items_url_dedup on public.forum_items(url);
+-- Category lookup for organizers (GIN index for array containment queries)
+create index if not exists forum_items_categories on public.forum_items using gin(categories);
+create index if not exists forum_items_date on public.forum_items(ingested_at desc);
 create index if not exists forum_items_thread on public.forum_items(thread_id)
   where thread_id is not null;
 
-create index if not exists forum_threads_category_status on public.forum_threads(category, status);
-create index if not exists forum_threads_last_event on public.forum_threads(category, last_event_at desc);
+create index if not exists forum_threads_categories on public.forum_threads using gin(categories);
+create index if not exists forum_threads_status on public.forum_threads(status);
+create index if not exists forum_threads_last_event on public.forum_threads(last_event_at desc);
 
 -- RLS — server-managed for the pipeline, readable by anyone (for the
 -- forum pages to display thread/session data)

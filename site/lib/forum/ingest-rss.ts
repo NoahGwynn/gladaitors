@@ -34,7 +34,7 @@ interface IngestResult {
 /** Ingest all items from a single RSS source. Returns a summary. */
 export async function ingestRssSource(source: {
   id: string;
-  category: string;
+  categories: string[];
   name: string;
   url: string;
   config: Record<string, unknown>;
@@ -90,7 +90,7 @@ export async function ingestRssSource(source: {
         .from('forum_items')
         .insert({
           source_id: source.id,
-          category: source.category,
+          categories: source.categories,
           external_id: externalId,
           title,
           summary: summary || null,
@@ -100,7 +100,7 @@ export async function ingestRssSource(source: {
           engagement: null,
           raw_payload: {
             guid: item.guid,
-            categories: item.categories,
+            rss_categories: item.categories,
             content: (item.content || '').slice(0, 5000),
           },
         })
@@ -139,14 +139,14 @@ export async function ingestRssSource(source: {
   return result;
 }
 
-/** Ingest all enabled RSS sources for a given category. */
-export async function ingestAllRss(category: string): Promise<IngestResult[]> {
+/** Ingest all enabled RSS sources. Shared pool — no category filter.
+ *  Each item inherits its source's candidate categories. */
+export async function ingestAllRss(): Promise<IngestResult[]> {
   const supabase = createClient();
 
   const { data: sources, error } = await supabase
     .from('forum_sources')
-    .select('id, category, name, url, config')
-    .eq('category', category)
+    .select('id, categories, name, url, config')
     .eq('source_type', 'rss')
     .eq('enabled', true);
 
@@ -161,7 +161,7 @@ export async function ingestAllRss(category: string): Promise<IngestResult[]> {
     console.log(`[INGEST RSS] ${source.name}...`);
     const result = await ingestRssSource(source as {
       id: string;
-      category: string;
+      categories: string[];
       name: string;
       url: string;
       config: Record<string, unknown>;

@@ -1,28 +1,23 @@
 // ============================================================================
-// POST /api/forum/ingest — Trigger data ingestion for a category
+// POST /api/forum/ingest — Trigger data ingestion (all sources)
 // ============================================================================
 // Manually triggers the RSS ingestion pipeline for testing. In
 // production this will be replaced by a cron job.
 //
-// Body: { category: string }  (e.g., "ai")
-// Returns: summary of what was fetched/inserted/skipped per source.
+// No body required — ingests from ALL enabled RSS sources. Items are
+// pre-tagged with candidate categories from their source config.
 //
 // No auth for now — this is an internal tool. Add auth before deploy.
 // ============================================================================
 
-import { NextRequest } from 'next/server';
 import { ingestAllRss } from '@/lib/forum/ingest-rss';
 
-export async function POST(request: NextRequest) {
-  const body = await request.json() as { category?: string };
-  const category = body.category || 'ai';
+export async function POST() {
+  console.log('[INGEST] Starting RSS ingestion (all sources)');
 
-  console.log(`[INGEST] Starting RSS ingestion for category: ${category}`);
-
-  const results = await ingestAllRss(category);
+  const results = await ingestAllRss();
 
   const summary = {
-    category,
     sources: results.length,
     totalFetched: results.reduce((s, r) => s + r.fetched, 0),
     totalInserted: results.reduce((s, r) => s + r.inserted, 0),

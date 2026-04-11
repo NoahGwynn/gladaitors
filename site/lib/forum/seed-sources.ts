@@ -38,7 +38,7 @@ async function seed() {
     const { error } = await supabase
       .from('forum_sources')
       .insert({
-        category: source.category,
+        categories: source.categories,
         source_type: source.sourceType,
         name: source.name,
         url: source.url,
