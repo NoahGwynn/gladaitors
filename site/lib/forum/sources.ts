@@ -23,13 +23,15 @@ export interface SourceDef {
 
 export const DAILY_AI_SOURCES: SourceDef[] = [
   // --- RSS feeds ---
-  {
-    category: 'ai',
-    sourceType: 'rss',
-    name: 'Anthropic Blog',
-    url: 'https://www.anthropic.com/feed.xml',
-    config: {},
-  },
+  // Anthropic does not publish an RSS feed. Their news reaches the
+  // pipeline via HN, Reddit, ArXiv (papers), and newsletters.
+  // {
+  //   category: 'ai',
+  //   sourceType: 'rss',
+  //   name: 'Anthropic Blog',
+  //   url: null,
+  //   config: {},
+  // },
   {
     category: 'ai',
     sourceType: 'rss',
@@ -51,13 +53,15 @@ export const DAILY_AI_SOURCES: SourceDef[] = [
     url: 'https://blog.google/technology/ai/rss/',
     config: {},
   },
-  {
-    category: 'ai',
-    sourceType: 'rss',
-    name: 'Meta AI Blog',
-    url: 'https://ai.meta.com/blog/rss',
-    config: {},
-  },
+  // Meta AI does not publish an RSS feed. Their news reaches the
+  // pipeline via HN, Reddit, ArXiv (papers), and newsletters.
+  // {
+  //   category: 'ai',
+  //   sourceType: 'rss',
+  //   name: 'Meta AI Blog',
+  //   url: null,
+  //   config: {},
+  // },
   {
     category: 'ai',
     sourceType: 'rss',
