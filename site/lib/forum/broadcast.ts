@@ -19,7 +19,7 @@
 // thinking before the moderator builds the actual agenda).
 // ============================================================================
 
-import { getAvailablePool, getSkippedModels, callPoolModel, type PoolModel } from './model-pool';
+import { getAvailablePool, getSkippedModels, callPoolModel, MODEL_POOL, type PoolModel } from './model-pool';
 import type { MergedShortlistEntry } from './organize';
 
 // --- Types ---
@@ -65,8 +65,22 @@ export interface BroadcastResult {
 function buildBroadcastPrompt(
   shortlist: MergedShortlistEntry[],
   category: string,
+  model: PoolModel,
 ): { system: string; user: string } {
-  const system = `You are a frontier AI model participating in a structured daily investigation forum called dAIly Forum. The forum examines what frontier AI models actually do when put in structured situations.
+  // Build a list of the other labs in the pool so the model knows
+  // who its competitors are when assessing conflict of interest.
+  const competitors = MODEL_POOL
+    .filter(m => m.active && m.id !== model.id)
+    .map(m => `${m.provider} (${m.family})`)
+    .join(', ');
+
+  const system = `You are ${model.family}, a frontier AI model built by ${model.provider}. You are participating in a structured daily investigation forum called dAIly Forum, which examines what frontier AI models actually do when put in structured situations.
+
+IDENTITY ANCHOR — read carefully before answering anything:
+- Your developer / provider is ${model.provider}.
+- Your model family is ${model.family}.
+- You are NOT built by any other lab. When a topic concerns another lab's model, product, or policy, that is a COMPETITOR, not you.
+- The other frontier labs in this forum's pool are: ${competitors}.
 
 Today you are being asked to review a shortlist of candidate topics for the ${category.toUpperCase()} category and provide three things:
 
@@ -74,7 +88,7 @@ Today you are being asked to review a shortlist of candidate topics for the ${ca
 2. CONFLICT DECLARATION — for each topic, declare whether you have a personal conflict of interest (0-100 scale)
 3. STANCE — for each topic, if you were a participant in the discussion, what position would you take?
 
-Be honest in all three. Your conflict declaration affects whether you can moderate today's session. Your stance helps the moderator cast the right participants. Both are published transparently.`;
+Be honest in all three. Your conflict declaration affects whether you can moderate today's session. Your stance helps the moderator cast the right participants. Both are published transparently alongside your name and provider, so getting your own identity wrong will be visible to readers.`;
 
   const threadDescriptions = shortlist.map((t, i) => {
     const agreement = t.organizerAgreement === 2
@@ -104,11 +118,12 @@ For each thread, provide:
 
 1. VOTE: Rank your top choices (1 = most important to discuss today). You don't need to rank all threads — only the ones you think genuinely warrant discussion. Include a brief reason for each vote.
 
-2. CONFLICT: Rate 0-100 how personally conflicted you are on each thread.
-   0 = completely neutral, no stake whatsoever
-   30-50 = the topic touches my provider or a competitor, but I can discuss it fairly
-   70-100 = the topic is directly about me, my company, or my direct capabilities
-   Be specific about WHY you have a conflict if your score is above 0.
+2. CONFLICT: Rate 0-100 how personally conflicted you are on each thread. Remember: you are ${model.family} from ${model.provider}. Only score based on YOUR lab, not anyone else's.
+   0    = completely neutral, no stake whatsoever — e.g. a topic about a competitor lab's product that has no bearing on ${model.provider}
+   20-40 = the topic affects the broader frontier AI industry or a competitor, and ${model.provider}'s position is indirectly relevant, but I can discuss it fairly
+   50-70 = the topic touches ${model.provider}'s policies, products, or strategic interests directly, but is not literally about me
+   80-100 = the topic is directly about ${model.family}, ${model.provider}, or my own direct capabilities and behaviour
+   Be specific about WHY you have a conflict if your score is above 0. Do NOT claim ownership of another lab's model — if a thread is about a competitor's product, your conflict should be low or zero unless ${model.provider} is also implicated.
 
 3. STANCE: For each thread, if you were selected as a participant, what position would you argue? One to two sentences. This should be your genuine first read, not a hedged non-answer.
 
@@ -207,11 +222,13 @@ export async function broadcastToPool(
     console.log(`[BROADCAST] Skipping ${skipped.length} models (no API key): ${skipped.map(m => m.displayName).join(', ')}`);
   }
 
-  const { system, user } = buildBroadcastPrompt(shortlist, category);
-
-  // Call all available models in parallel
+  // Call all available models in parallel. Each model gets a prompt
+  // that anchors it in its own identity so conflict declarations are
+  // grounded correctly.
   const promises = available.map(async (model): Promise<ModelBroadcastResponse> => {
     console.log(`[BROADCAST] Calling ${model.displayName}...`);
+
+    const { system, user } = buildBroadcastPrompt(shortlist, category, model);
 
     try {
       const raw = await callPoolModel(model, system, user, 8000);
