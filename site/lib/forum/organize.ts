@@ -21,7 +21,27 @@ import { GoogleGenAI } from '@google/genai';
 import { createClient } from '@/lib/supabase';
 import { findAgreedMerges, applyMerges } from './thread-merge';
 
+// --- Lifecycle constants ---
+
+/** Minimum days since a thread was last discussed before it's eligible
+ *  for re-shortlisting. Cooldown prevents trivial re-discussion churn. */
+const REVISIT_COOLDOWN_DAYS = 7;
+
 // --- Types ---
+
+interface RevisitContext {
+  /** When the thread was most recently the topic of a forum session */
+  priorDiscussionDate: string;
+  /** Days since that discussion */
+  daysSinceDiscussion: number;
+  /** What was concluded last time. Null until Stage 6 (debate engine)
+   *  exists and forum_sessions.session_summary gets populated. */
+  priorConclusion: string | null;
+  /** Items added to this thread since the prior discussion */
+  itemsSinceDiscussion: number;
+  /** Title and date of the most recent new item (for context) */
+  mostRecentNewItem: { title: string; date: string } | null;
+}
 
 interface ThreadSummary {
   id: string;
@@ -32,6 +52,10 @@ interface ThreadSummary {
   lastEvent: string;
   sources: string[];    // source names that contributed items
   summary: string | null;
+  /** Set when this thread has been discussed before and is being
+   *  surfaced as a revisit candidate. Drives the prompt enrichment
+   *  and the higher organizer bar. */
+  revisit: RevisitContext | null;
 }
 
 interface OrganizerShortlistEntry {
@@ -41,6 +65,9 @@ interface OrganizerShortlistEntry {
   readyReason: string;    // why this thread is ready for discussion today
   keyQuestions: string[];  // 2-3 unresolved questions worth debating
   significance: string;   // one-line significance assessment
+  /** True if the organizer is shortlisting a previously-discussed thread.
+   *  The organizer is told to apply a higher bar in this case. */
+  isRevisit: boolean;
 }
 
 interface OrganizerResponse {
@@ -49,7 +76,7 @@ interface OrganizerResponse {
   errors: string[];
 }
 
-interface MergedShortlistEntry {
+export interface MergedShortlistEntry {
   threadId: string;
   threadTitle: string;
   /** Average rank across organizers that included this thread */
@@ -61,11 +88,21 @@ interface MergedShortlistEntry {
   readyReasons: { organizer: string; reason: string }[];
   keyQuestions: string[];
   significance: string[];
+  /** True if at least one organizer flagged this as a revisit. The
+   *  pool broadcast prompt uses this to surface prior context. */
+  isRevisit: boolean;
+  /** Prior discussion context, carried through from the thread query
+   *  for downstream stages. Populated only when isRevisit is true. */
+  revisit: RevisitContext | null;
 }
 
 export interface OrganizeResult {
   category: string;
   threadsEvaluated: number;
+  /** Of threadsEvaluated, how many were normal active threads */
+  activeThreadCount: number;
+  /** Of threadsEvaluated, how many were eligible revisit candidates */
+  revisitThreadCount: number;
   organizerAShortlist: number;
   organizerBShortlist: number;
   mergedShortlist: MergedShortlistEntry[];
@@ -79,21 +116,41 @@ export interface OrganizeResult {
 function buildOrganizerPrompt(threads: ThreadSummary[], category: string): string {
   const threadList = threads.map((t) => {
     const sources = t.sources.length > 0 ? t.sources.join(', ') : 'unknown';
-    return `THREAD_ID: ${t.id}
-    Title: ${t.title}
-    Items: ${t.itemCount} from ${sources}
-    First seen: ${t.firstSeen}
-    Latest event: ${t.lastEvent}
-    Categories: ${t.categories.join(', ')}
-    ${t.summary ? `Summary: ${t.summary}` : ''}`;
+    const baseLines = [
+      `THREAD_ID: ${t.id}`,
+      `    Title: ${t.title}`,
+      `    Items: ${t.itemCount} from ${sources}`,
+      `    First seen: ${t.firstSeen}`,
+      `    Latest event: ${t.lastEvent}`,
+      `    Categories: ${t.categories.join(', ')}`,
+    ];
+    if (t.summary) baseLines.push(`    Summary: ${t.summary}`);
+
+    if (t.revisit) {
+      const r = t.revisit;
+      baseLines.push(``);
+      baseLines.push(`    *** PREVIOUSLY DISCUSSED ***`);
+      baseLines.push(`    Prior discussion: ${r.priorDiscussionDate.split('T')[0]} (${r.daysSinceDiscussion} days ago)`);
+      baseLines.push(`    Prior conclusion: ${r.priorConclusion ?? '[debate engine not yet implemented — no recorded conclusion]'}`);
+      baseLines.push(`    New material since: ${r.itemsSinceDiscussion} item(s)`);
+      if (r.mostRecentNewItem) {
+        baseLines.push(`    Most recent new item: "${r.mostRecentNewItem.title}" (${r.mostRecentNewItem.date.split('T')[0]})`);
+      }
+      baseLines.push(`    REVISIT BAR: shortlist this only if the new material materially shifts the conversation. Recycling the same story is wasted forum time.`);
+    }
+
+    return baseLines.join('\n');
   }).join('\n\n');
+
+  const revisitCount = threads.filter(t => t.revisit).length;
+  const activeCount = threads.length - revisitCount;
 
   return `You are an editorial organizer for a daily AI investigation forum. Your job is to evaluate which threads (ongoing stories/narratives) are ready for a structured discussion today.
 
 CATEGORY: ${category}
 DATE: ${new Date().toISOString().split('T')[0]}
 
-You are reviewing ${threads.length} active threads — stories that have accumulated events from news sources, research papers, and community discussions over the past week.
+You are reviewing ${threads.length} threads: ${activeCount} active stories accumulating over the past week${revisitCount > 0 ? `, plus ${revisitCount} previously-discussed thread(s) that have accumulated new material since their original session` : ''}.
 
 THREADS TO EVALUATE:
 ${threadList}
@@ -105,18 +162,25 @@ YOUR TASK:
    - There are genuine unresolved questions or contested claims
    - It is timely — something has happened recently that makes discussion valuable NOW
 
-2. Rank your top 5-10 threads by significance. For each, provide:
+2. For PREVIOUSLY DISCUSSED threads marked with *** PREVIOUSLY DISCUSSED ***, apply a HIGHER bar:
+   - The new material since the prior discussion must materially shift the conversation — new evidence, a major development, a credible refutation, a policy change. Otherwise the forum is just recycling the same story.
+   - Set "isRevisit": true for these in your shortlist, and explain in readyReason exactly what has changed since last time.
+   - If the new material does NOT materially shift things, do not shortlist it. Be honest.
+
+3. Rank your top 5-10 threads by significance. For each, provide:
    - Why it's ready today (not yesterday, not next week)
    - 2-3 key unresolved questions worth investigating
    - A one-line significance assessment
+   - isRevisit (true if previously discussed, false otherwise)
 
-3. If any threads should be MERGED (they're really the same story from different angles), propose the merge with a reason.
+4. If any threads should be MERGED (they're really the same story from different angles), propose the merge with a reason.
 
 WHAT NOT TO DO:
 - Do not pick a single winner. You are producing a shortlist, not a final selection.
 - Do not build a debate agenda. That's the moderator's job later.
 - Do not take a stance on any thread. You are an editor, not a participant.
 - Do not include threads that aren't genuinely ready — a short list of strong candidates is better than a long list of weak ones.
+- Do not include a previously-discussed thread unless the new material genuinely justifies revisiting it.
 
 Respond with JSON only. IMPORTANT: "threadId" must be the full UUID from the THREAD_ID field above — not a line number or abbreviation.
 
@@ -128,7 +192,8 @@ Respond with JSON only. IMPORTANT: "threadId" must be the full UUID from the THR
       "rank": 1,
       "readyReason": "<why this thread is ready for discussion today>",
       "keyQuestions": ["<question 1>", "<question 2>"],
-      "significance": "<one-line significance>"
+      "significance": "<one-line significance>",
+      "isRevisit": false
     }
   ],
   "proposedMerges": [
@@ -219,6 +284,7 @@ function parseOrganizerResponse(raw: string): OrganizerResponse {
               readyReason: (e.readyReason || e.ready_reason || '') as string,
               keyQuestions: (e.keyQuestions || e.key_questions || []) as string[],
               significance: (e.significance || '') as string,
+              isRevisit: Boolean(e.isRevisit ?? e.is_revisit ?? false),
             })),
             errors: ['Partial parse — extracted shortlist only'],
           };
@@ -238,6 +304,7 @@ function parseOrganizerResponse(raw: string): OrganizerResponse {
         readyReason: (e.readyReason || e.ready_reason || '') as string,
         keyQuestions: (e.keyQuestions || e.key_questions || []) as string[],
         significance: (e.significance || '') as string,
+        isRevisit: Boolean(e.isRevisit ?? e.is_revisit ?? false),
       })),
       proposedMerges: ((parsed2.proposedMerges || parsed2.proposed_merges || []) as Record<string, unknown>[]).map(
         (m) => ({
@@ -258,11 +325,13 @@ function parseOrganizerResponse(raw: string): OrganizerResponse {
 function mergeShortlists(
   responseA: OrganizerResponse,
   responseB: OrganizerResponse,
+  threadRevisits: Map<string, RevisitContext>,
 ): { merged: MergedShortlistEntry[]; proposedMerges: { threadA: string; threadB: string; reason: string }[] } {
   const byThread = new Map<string, MergedShortlistEntry>();
 
   // Process organizer A
   for (const entry of responseA.shortlist) {
+    const revisitCtx = threadRevisits.get(entry.threadId) || null;
     byThread.set(entry.threadId, {
       threadId: entry.threadId,
       threadTitle: entry.threadTitle,
@@ -272,6 +341,11 @@ function mergeShortlists(
       readyReasons: [{ organizer: 'A', reason: entry.readyReason }],
       keyQuestions: [...entry.keyQuestions],
       significance: [entry.significance],
+      // isRevisit is the source-of-truth thread flag, not the model's
+      // self-reported field — models can hallucinate the boolean but the
+      // thread either was discussed before or it wasn't.
+      isRevisit: revisitCtx !== null,
+      revisit: revisitCtx,
     });
   }
 
@@ -288,6 +362,7 @@ function mergeShortlists(
       existing.significance.push(entry.significance);
     } else {
       // Only organizer B included this — divergence
+      const revisitCtx = threadRevisits.get(entry.threadId) || null;
       byThread.set(entry.threadId, {
         threadId: entry.threadId,
         threadTitle: entry.threadTitle,
@@ -297,6 +372,8 @@ function mergeShortlists(
         readyReasons: [{ organizer: 'B', reason: entry.readyReason }],
         keyQuestions: [...entry.keyQuestions],
         significance: [entry.significance],
+        isRevisit: revisitCtx !== null,
+        revisit: revisitCtx,
       });
     }
   }
@@ -319,45 +396,121 @@ function mergeShortlists(
 // --- Main entry point ---
 
 /** Run Stage 2: parallel organizers evaluate threads and produce
- *  a merged shortlist for the pool broadcast. */
+ *  a merged shortlist for the pool broadcast.
+ *
+ *  Two queries:
+ *  1. ACTIVE threads — status in ('new', 'active') with recent activity.
+ *     The standard hot pool.
+ *  2. REVISIT candidates — status = 'discussed' where (a) the cooldown
+ *     has passed and (b) at least one new item has been ingested since
+ *     the prior discussion. The organizer is told to apply a higher bar
+ *     for these and explain what new material justifies revisiting.
+ */
 export async function organizeThreads(category: string): Promise<OrganizeResult> {
   const supabase = createClient();
 
-  // Load active threads with recent activity (last 7 days)
-  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const now = Date.now();
+  const activeCutoff = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const revisitCutoff = new Date(now - REVISIT_COOLDOWN_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data: threads, error } = await supabase
+  // Query 1 — active threads (the hot pool)
+  const { data: activeThreads, error: activeErr } = await supabase
     .from('forum_threads')
-    .select('id, title, categories, summary, status, item_count, first_seen_at, last_event_at')
+    .select('id, title, categories, summary, status, item_count, first_seen_at, last_event_at, discussed_at')
     .contains('categories', [category])
-    .in('status', ['new', 'active', 'ready', 'revisited'])
-    .gte('last_event_at', cutoff)
+    .in('status', ['new', 'active'])
+    .gte('last_event_at', activeCutoff)
     .order('last_event_at', { ascending: false })
     .limit(100); // cap to keep prompt size manageable
 
-  if (error || !threads) {
+  if (activeErr) {
     return {
       category,
       threadsEvaluated: 0,
+      activeThreadCount: 0,
+      revisitThreadCount: 0,
       organizerAShortlist: 0,
       organizerBShortlist: 0,
       mergedShortlist: [],
       proposedMerges: [],
       appliedMerges: { applied: 0, details: [] },
-      errors: [`Failed to load threads: ${error?.message || 'no data'}`],
+      errors: [`Failed to load active threads: ${activeErr.message}`],
     };
   }
+
+  // Query 2 — discussed threads past the cooldown. Eligibility for the
+  // freshness check is verified per-thread below (need to count items
+  // ingested since discussed_at).
+  const { data: discussedCandidates, error: discussedErr } = await supabase
+    .from('forum_threads')
+    .select('id, title, categories, summary, status, item_count, first_seen_at, last_event_at, discussed_at')
+    .contains('categories', [category])
+    .eq('status', 'discussed')
+    .lt('discussed_at', revisitCutoff)
+    .order('last_event_at', { ascending: false })
+    .limit(50); // smaller cap — revisits are rarer
+
+  if (discussedErr) {
+    console.warn(`[ORGANIZE] Failed to load revisit candidates: ${discussedErr.message}`);
+  }
+
+  // Build the revisits-by-thread-id map. For each candidate, count items
+  // added since discussed_at — if zero, they're not eligible.
+  const threadRevisits = new Map<string, RevisitContext>();
+  const eligibleRevisits: typeof activeThreads = [];
+
+  for (const t of discussedCandidates || []) {
+    if (!t.discussed_at) continue;
+
+    const { count: newItemCount } = await supabase
+      .from('forum_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('thread_id', t.id)
+      .gt('ingested_at', t.discussed_at);
+
+    if (!newItemCount || newItemCount === 0) continue;
+
+    // Get the most recent new item for context
+    const { data: recentItems } = await supabase
+      .from('forum_items')
+      .select('title, ingested_at')
+      .eq('thread_id', t.id)
+      .gt('ingested_at', t.discussed_at)
+      .order('ingested_at', { ascending: false })
+      .limit(1);
+
+    // TODO: when forum_sessions exists (Stage 4 schema work), join here
+    // to fetch the prior session_summary instead of leaving null.
+    const priorConclusion: string | null = null;
+
+    const daysSince = Math.floor((now - new Date(t.discussed_at).getTime()) / (24 * 60 * 60 * 1000));
+
+    threadRevisits.set(t.id, {
+      priorDiscussionDate: t.discussed_at,
+      daysSinceDiscussion: daysSince,
+      priorConclusion,
+      itemsSinceDiscussion: newItemCount,
+      mostRecentNewItem: recentItems && recentItems[0]
+        ? { title: recentItems[0].title, date: recentItems[0].ingested_at }
+        : null,
+    });
+    eligibleRevisits.push(t);
+  }
+
+  const threads = [...(activeThreads || []), ...eligibleRevisits];
 
   if (threads.length === 0) {
     return {
       category,
       threadsEvaluated: 0,
+      activeThreadCount: 0,
+      revisitThreadCount: 0,
       organizerAShortlist: 0,
       organizerBShortlist: 0,
       mergedShortlist: [],
       proposedMerges: [],
       appliedMerges: { applied: 0, details: [] },
-      errors: ['No active threads in the last 7 days'],
+      errors: ['No active threads or eligible revisits'],
     };
   }
 
@@ -390,10 +543,12 @@ export async function organizeThreads(category: string): Promise<OrganizeResult>
       lastEvent: t.last_event_at,
       sources: sourceNames,
       summary: t.summary,
+      revisit: threadRevisits.get(t.id) || null,
     });
   }
 
-  console.log(`[ORGANIZE] ${category}: ${threadSummaries.length} threads to evaluate`);
+  const revisitCount = threadSummaries.filter(t => t.revisit).length;
+  console.log(`[ORGANIZE] ${category}: ${threadSummaries.length} threads to evaluate (${threadSummaries.length - revisitCount} active, ${revisitCount} revisit)`);
 
   // Build the prompt (same for both organizers)
   const prompt = buildOrganizerPrompt(threadSummaries, category);
@@ -408,8 +563,10 @@ export async function organizeThreads(category: string): Promise<OrganizeResult>
   console.log(`[ORGANIZE] Organizer A (Sonnet): ${responseA.shortlist.length} threads shortlisted`);
   console.log(`[ORGANIZE] Organizer B (Gemini): ${responseB.shortlist.length} threads shortlisted`);
 
-  // Merge shortlists (identities already anonymised as A and B)
-  const { merged, proposedMerges } = mergeShortlists(responseA, responseB);
+  // Merge shortlists (identities already anonymised as A and B).
+  // Pass the revisits map so merged entries carry the source-of-truth
+  // isRevisit flag and the prior context for downstream stages.
+  const { merged, proposedMerges } = mergeShortlists(responseA, responseB, threadRevisits);
 
   const allErrors = [...responseA.errors, ...responseB.errors];
 
@@ -443,6 +600,8 @@ export async function organizeThreads(category: string): Promise<OrganizeResult>
   return {
     category,
     threadsEvaluated: threadSummaries.length,
+    activeThreadCount: threadSummaries.length - revisitCount,
+    revisitThreadCount: revisitCount,
     organizerAShortlist: responseA.shortlist.length,
     organizerBShortlist: responseB.shortlist.length,
     mergedShortlist: merged,

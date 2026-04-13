@@ -101,13 +101,36 @@ Be honest in all three. Your conflict declaration affects whether you can modera
 
     const significance = t.significance.join(' ');
 
-    return `THREAD ${i + 1}
-  ID: ${t.threadId}
-  Title: ${t.threadTitle}
-  Agreement: ${agreement}
-  Why shortlisted:
-    ${reasons}
-  Significance: ${significance}`;
+    const lines = [
+      `THREAD ${i + 1}`,
+      `  ID: ${t.threadId}`,
+      `  Title: ${t.threadTitle}`,
+      `  Agreement: ${agreement}`,
+      `  Why shortlisted:`,
+      `    ${reasons}`,
+      `  Significance: ${significance}`,
+    ];
+
+    // If this thread has been the topic of a prior session, the
+    // organizers shortlisted it because new material emerged. The pool
+    // needs to know that — both to weigh whether re-discussion is
+    // warranted, and to avoid voting blind on something that's been
+    // covered. The organizer's readyReason already explains what's
+    // changed; this section provides the raw facts.
+    if (t.isRevisit && t.revisit) {
+      const r = t.revisit;
+      lines.push(``);
+      lines.push(`  *** PREVIOUSLY DISCUSSED ***`);
+      lines.push(`  Prior discussion: ${r.priorDiscussionDate.split('T')[0]} (${r.daysSinceDiscussion} days ago)`);
+      lines.push(`  Prior conclusion: ${r.priorConclusion ?? '[debate engine not yet implemented — no recorded conclusion]'}`);
+      lines.push(`  New material since: ${r.itemsSinceDiscussion} item(s)`);
+      if (r.mostRecentNewItem) {
+        lines.push(`  Most recent new item: "${r.mostRecentNewItem.title}" (${r.mostRecentNewItem.date.split('T')[0]})`);
+      }
+      lines.push(`  NOTE: When voting, weigh whether the new material justifies revisiting this story or whether the forum should move on.`);
+    }
+
+    return lines.join('\n');
   }).join('\n\n');
 
   const user = `Here are today's shortlisted threads for the ${category.toUpperCase()} category:

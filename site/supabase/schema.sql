@@ -849,7 +849,9 @@ create table if not exists public.forum_threads (
   categories text[] not null default '{}', -- which categories this thread is relevant to
   title text not null,                   -- human-readable thread title (set by the first item or the organizer)
   summary text,                          -- running summary, updated as items accumulate
-  status text not null default 'new',    -- 'new', 'active', 'ready', 'discussed', 'dormant', 'revisited'
+  status text not null default 'new',    -- lifecycle: 'new' → 'active' → 'discussed' → 'dormant' → 'merged'
+                                         -- ('discussed' threads remain eligible for re-discussion via cooldown +
+                                         --  freshness rules in organize.ts; eligibility is computed, not stored)
   embedding vector(1536),                -- aggregate embedding for matching new items to this thread
   item_count int not null default 0,
   first_seen_at timestamptz not null default now(),
@@ -898,6 +900,17 @@ create index if not exists forum_threads_last_event on public.forum_threads(last
 -- Thread matching RPC — finds the closest existing thread to a given
 -- embedding using pgvector cosine distance. Used by the thread-match
 -- module after ingestion to cluster items into threads.
+--
+-- IMPORTANT: 'discussed' threads MUST be included in matching. When a
+-- thread has been the topic of a forum session, related new items
+-- should continue to attach to it so the "fresh material" signal is
+-- preserved. The organizer then uses cooldown + freshness rules to
+-- decide whether the thread is eligible for re-discussion. Excluding
+-- 'discussed' here would silo new items into duplicate threads and
+-- destroy the revisit pipeline.
+--
+-- 'merged' threads are excluded because they're terminal (their items
+-- have been moved to a survivor thread).
 create or replace function public.match_thread(
   query_embedding vector(1536),
   match_threshold float default 0.20,
@@ -919,7 +932,7 @@ create or replace function public.match_thread(
     (t.embedding <=> query_embedding) as distance
   from public.forum_threads t
   where t.embedding is not null
-    and t.status in ('new', 'active', 'ready', 'dormant')
+    and t.status in ('new', 'active', 'discussed', 'dormant')
     and (t.embedding <=> query_embedding) < match_threshold
   order by t.embedding <=> query_embedding
   limit match_count;
