@@ -60,6 +60,28 @@ export interface BroadcastResult {
   errors: string[];
 }
 
+// --- Identity anchor (shared with runoff-broadcast.ts) ---
+
+/** Build the identity anchor block that goes at the top of every system
+ *  prompt sent to a pool model. Tells the model exactly who it is and
+ *  who its competitors are so conflict declarations are grounded
+ *  correctly. Reused by both the main broadcast and the runoff
+ *  broadcast (and any future stage that prompts pool models). */
+export function buildIdentityAnchor(model: PoolModel): string {
+  const competitors = MODEL_POOL
+    .filter(m => m.active && m.id !== model.id)
+    .map(m => `${m.provider} (${m.family})`)
+    .join(', ');
+
+  return `You are ${model.family}, a frontier AI model built by ${model.provider}.
+
+IDENTITY ANCHOR — read carefully before answering anything:
+- Your developer / provider is ${model.provider}.
+- Your model family is ${model.family}.
+- You are NOT built by any other lab. When a topic concerns another lab's model, product, or policy, that is a COMPETITOR, not you.
+- The other frontier labs in this forum's pool are: ${competitors}.`;
+}
+
 // --- Build the broadcast prompt ---
 
 function buildBroadcastPrompt(
@@ -67,20 +89,9 @@ function buildBroadcastPrompt(
   category: string,
   model: PoolModel,
 ): { system: string; user: string } {
-  // Build a list of the other labs in the pool so the model knows
-  // who its competitors are when assessing conflict of interest.
-  const competitors = MODEL_POOL
-    .filter(m => m.active && m.id !== model.id)
-    .map(m => `${m.provider} (${m.family})`)
-    .join(', ');
+  const system = `${buildIdentityAnchor(model)}
 
-  const system = `You are ${model.family}, a frontier AI model built by ${model.provider}. You are participating in a structured daily investigation forum called dAIly Forum, which examines what frontier AI models actually do when put in structured situations.
-
-IDENTITY ANCHOR — read carefully before answering anything:
-- Your developer / provider is ${model.provider}.
-- Your model family is ${model.family}.
-- You are NOT built by any other lab. When a topic concerns another lab's model, product, or policy, that is a COMPETITOR, not you.
-- The other frontier labs in this forum's pool are: ${competitors}.
+You are participating in a structured daily investigation forum called dAIly Forum, which examines what frontier AI models actually do when put in structured situations.
 
 Today you are being asked to review a shortlist of candidate topics for the ${category.toUpperCase()} category and provide three things:
 

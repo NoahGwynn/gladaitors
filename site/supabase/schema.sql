@@ -938,11 +938,79 @@ create or replace function public.match_thread(
   limit match_count;
 $$;
 
+-- ============================================================================
+-- dAIly Forum — Stage 4: Sessions
+-- ============================================================================
+-- One row per category-day forum run. Stores the full decision trace
+-- for topic selection (with optional runoff and acting moderator paths)
+-- and the actual moderator selection. Fully transparent — every branch
+-- of the selection logic is captured in jsonb columns so readers can
+-- audit how a topic was chosen and why a moderator was picked.
+--
+-- Idempotent per category-day via the unique (category, session_date)
+-- index. Re-running the Stage 4 endpoint the same day either returns
+-- the existing row or resumes from where it failed.
+--
+-- The session_summary field is populated by Stage 6 (debate engine)
+-- when the actual debate completes. Until Stage 6 lands it stays null;
+-- the organize.ts revisit context handles the null gracefully.
+-- ============================================================================
+create table if not exists public.forum_sessions (
+  id uuid primary key default gen_random_uuid(),
+  category text not null,                          -- 'ai', 'science', etc.
+  session_date date not null,                      -- the day this session is for
+  status text not null default 'in_progress',
+  -- 'in_progress' | 'topic_selected' | 'moderator_selected' | 'completed' | 'failed'
+
+  -- Stage 3 snapshot (frozen for reproducibility)
+  broadcast_snapshot jsonb,                        -- full BroadcastResult from Stage 3
+
+  -- Topic selection
+  selected_thread_id uuid references public.forum_threads(id),
+  vote_scores jsonb,                               -- round 1 top-3-cutoff scores per thread
+  was_runoff boolean default false,
+  runoff_snapshot jsonb,                           -- runoff broadcast result if any
+  was_acting_moderator boolean default false,
+  acting_moderator_model_id text,                  -- pool model id, e.g. 'mistral'
+  acting_moderator_tier int,                       -- 1-6 (which graduated tier resolved)
+  acting_moderator_reasoning text,
+  acting_moderator_conflicts jsonb,                -- their scores on the tied topics
+
+  -- Moderator selection (the actual one)
+  moderator_model_id text,
+  moderator_conflict_score int,                    -- their conflict on the chosen topic
+  moderator_selection_method text,
+  -- 'rotation_clean' | 'rotation_skipped' | 'fallback_least_conflicted'
+  moderator_skipped jsonb,                         -- [{modelId, conflict, reason}, ...]
+  moderator_region_softcap_applied boolean default false,
+
+  -- Stage 6 hook — populated when the debate completes
+  session_summary text,
+
+  -- Audit
+  created_at timestamptz not null default now(),
+  completed_at timestamptz,
+  error text
+);
+
+-- One session per category per day — enforces idempotency.
+create unique index if not exists forum_sessions_unique
+  on public.forum_sessions(category, session_date);
+-- Lookup by category for the rotation queue (most-recent first)
+create index if not exists forum_sessions_category
+  on public.forum_sessions(category, session_date desc);
+-- Per-moderator history per category (for the "least-recently moderated"
+-- query that drives the rotation queue)
+create index if not exists forum_sessions_moderator
+  on public.forum_sessions(category, moderator_model_id, session_date desc)
+  where moderator_model_id is not null;
+
 -- RLS — server-managed for the pipeline, readable by anyone (for the
 -- forum pages to display thread/session data)
 alter table public.forum_sources enable row level security;
 alter table public.forum_items enable row level security;
 alter table public.forum_threads enable row level security;
+alter table public.forum_sessions enable row level security;
 
 drop policy if exists "Forum sources are server-managed" on public.forum_sources;
 create policy "Forum sources are server-managed"
@@ -955,3 +1023,7 @@ create policy "Forum items are server-managed"
 drop policy if exists "Forum threads are server-managed" on public.forum_threads;
 create policy "Forum threads are server-managed"
   on public.forum_threads for all using (true);
+
+drop policy if exists "Forum sessions are server-managed" on public.forum_sessions;
+create policy "Forum sessions are server-managed"
+  on public.forum_sessions for all using (true);
