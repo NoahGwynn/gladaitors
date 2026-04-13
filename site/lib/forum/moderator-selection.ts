@@ -71,9 +71,18 @@ export interface ModeratorResult {
   modelId: string;
   modelName: string;
   conflictScore: number;
-  method: 'rotation_clean' | 'rotation_skipped' | 'fallback_least_conflicted';
-  /** Models walked over due to conflict, in queue order. Empty if the
-   *  first-in-queue model was clean. */
+  /** Which graduated tier resolved the pick. 1 = <30 conflict (best
+   *  case), 5 = <90 (compromised but not directly self-interested),
+   *  null = fell through all tiers and used the least-conflicted
+   *  fallback. */
+  tier: number | null;
+  /** Conflict threshold of the resolving tier (null if fallback) */
+  tierThreshold: number | null;
+  /** 'tier_clean' = first model at the resolving tier was clean (no skips before them);
+   *  'tier_skipped' = walked over conflicted models at one or more lower tiers;
+   *  'fallback_least_conflicted' = all 5 tiers exhausted */
+  method: 'tier_clean' | 'tier_skipped' | 'fallback_least_conflicted';
+  /** Models walked over due to conflict at lower tiers. */
   skipped: Array<{
     modelId: string;
     modelName: string;
@@ -85,10 +94,6 @@ export interface ModeratorResult {
 
 // --- Constants ---
 
-/** Hard threshold: any model with conflict ≥ this on the chosen topic
- *  is skipped during the actual moderator selection. */
-export const MODERATOR_CONFLICT_THRESHOLD = 70;
-
 /** When falling back to "least conflicted", any models within this
  *  number of points of the lowest score are considered tied and the
  *  rotation queue breaks the tie. */
@@ -99,14 +104,24 @@ export const FALLBACK_TIE_WINDOW = 10;
  *  exists. Does not override the conflict rule. */
 export const REGION_SOFTCAP_CONSECUTIVE = 2;
 
-/** Graduated tiers for acting moderator selection. Walk in order;
- *  within each tier, walk the rotation queue. First eligible wins. */
-export const ACTING_MODERATOR_TIERS: Array<{ tier: number; threshold: number | null }> = [
+/** Graduated tiers for ACTUAL moderator selection. Walks in order;
+ *  within each tier, walks the rotation queue with region softcap
+ *  applied. First eligible model at the lowest passing tier wins.
+ *  If no tier passes, falls back to least-conflicted-with-rotation-tiebreak. */
+export const MODERATOR_TIERS: Array<{ tier: number; threshold: number }> = [
   { tier: 1, threshold: 30 },
   { tier: 2, threshold: 50 },
   { tier: 3, threshold: 70 },
   { tier: 4, threshold: 80 },
   { tier: 5, threshold: 90 },
+];
+
+/** Graduated tiers for ACTING moderator selection (a referee role,
+ *  not the actual session moderator). Has an additional tier 6 with
+ *  no check at all because the acting role is rare and brief — better
+ *  to have someone in the chair than no one. */
+export const ACTING_MODERATOR_TIERS: Array<{ tier: number; threshold: number | null }> = [
+  ...MODERATOR_TIERS,
   { tier: 6, threshold: null }, // no check at all — last resort
 ];
 
@@ -277,11 +292,18 @@ export function selectActingModerator(
 
 // --- Actual moderator selection ---
 
-/** Select the actual session moderator for a chosen topic. Walks the
- *  rotation queue, skipping any model with conflict ≥ MODERATOR_CONFLICT_THRESHOLD.
- *  Applies the region soft cap (avoid 3rd consecutive same-region) only
- *  if doing so doesn't violate the conflict rule. Falls back to least
- *  conflicted with rotation tiebreaking if nobody passes.
+/** Select the actual session moderator for a chosen topic.
+ *
+ *  Walks the graduated tiers (1 → 5, conflict thresholds <30 → <90).
+ *  Within each tier, walks the rotation queue and applies the region
+ *  softcap. The first eligible model at the lowest passing tier wins.
+ *
+ *  This means a clean model in tier 1 always beats a compromised
+ *  model in tier 3, regardless of queue position. Within the same
+ *  tier, rotation order determines the pick.
+ *
+ *  If no tier passes (everyone above 90), falls back to the least
+ *  conflicted model with a 10-point rotation tiebreak window.
  *
  *  recentRegions should be the regions of the last N moderators in
  *  chronological order (oldest first), as returned by getRecentModeratorRegions.
@@ -312,54 +334,56 @@ export function selectModerator(
     return lastRegions.every(r => r === region);
   };
 
-  // Pass 1: walk queue, find first clean (and first clean from a
-  // different region for the soft cap). Track ALL conflicted models
-  // walked OVER to reach the chosen one — never models that come
-  // after the chosen one (those weren't actually walked).
-  let firstCleanIndex = -1;
-  let firstCleanDifferentRegion = -1;
+  // Walk graduated tiers. Stop at the first tier that produces a pick.
+  for (const { tier, threshold } of MODERATOR_TIERS) {
+    let firstEligibleIdx = -1;
+    let firstEligibleDifferentRegionIdx = -1;
 
-  for (let i = 0; i < rotationQueue.length; i++) {
-    const entry = rotationQueue[i];
-    const conflict = conflictScores.get(entry.model.id) || 0;
+    for (let i = 0; i < rotationQueue.length; i++) {
+      const entry = rotationQueue[i];
+      const conflict = conflictScores.get(entry.model.id) || 0;
 
-    if (conflict >= MODERATOR_CONFLICT_THRESHOLD) {
-      continue; // skipped (will be recorded below if walked over)
+      if (conflict >= threshold) continue; // not eligible at this tier
+
+      if (firstEligibleIdx === -1) firstEligibleIdx = i;
+      if (firstEligibleDifferentRegionIdx === -1 && !wouldExceedRegionCap(entry.model.region)) {
+        firstEligibleDifferentRegionIdx = i;
+      }
+
+      if (firstEligibleIdx !== -1 && firstEligibleDifferentRegionIdx !== -1) break;
     }
 
-    if (firstCleanIndex === -1) firstCleanIndex = i;
-    if (firstCleanDifferentRegion === -1 && !wouldExceedRegionCap(entry.model.region)) {
-      firstCleanDifferentRegion = i;
+    if (firstEligibleIdx === -1) {
+      // No model passed this tier — drop to next tier
+      continue;
     }
 
-    // Once we have both candidates, no need to keep walking
-    if (firstCleanIndex !== -1 && firstCleanDifferentRegion !== -1) break;
-  }
-
-  // Decide which clean candidate to use
-  if (firstCleanIndex !== -1) {
-    let chosenIdx = firstCleanIndex;
+    // Apply region softcap (if applicable)
+    let chosenIdx = firstEligibleIdx;
     let regionSoftcapApplied = false;
-    if (firstCleanDifferentRegion !== -1 && firstCleanDifferentRegion !== firstCleanIndex) {
-      // The first clean candidate would extend a same-region streak.
-      // Swap to the first clean candidate from a different region.
+    if (firstEligibleDifferentRegionIdx !== -1 && firstEligibleDifferentRegionIdx !== firstEligibleIdx) {
       regionSoftcapApplied = true;
-      chosenIdx = firstCleanDifferentRegion;
+      chosenIdx = firstEligibleDifferentRegionIdx;
     }
 
-    // Build the skipped list: only models walked OVER to reach the
-    // chosen index (i.e. queue positions 0..chosenIdx-1 with conflict
-    // ≥ threshold). Models past the chosen index were never walked.
+    // Build the skipped list: every model walked OVER to reach the
+    // chosen one. This includes models skipped at LOWER tiers in
+    // earlier loop iterations (those that didn't pass the lower
+    // threshold) AS WELL AS models in the current tier walked past.
+    // We capture this by recording any model at position < chosenIdx
+    // whose conflict puts them in a tier higher than the chosen one's
+    // tier (i.e. they're more conflicted than the chosen model).
+    const chosenConflict = conflictScores.get(rotationQueue[chosenIdx].model.id) || 0;
     const skipped: ModeratorResult['skipped'] = [];
     for (let i = 0; i < chosenIdx; i++) {
       const entry = rotationQueue[i];
       const conflict = conflictScores.get(entry.model.id) || 0;
-      if (conflict >= MODERATOR_CONFLICT_THRESHOLD) {
+      if (conflict > chosenConflict) {
         skipped.push({
           modelId: entry.model.id,
           modelName: entry.model.displayName,
           conflictScore: conflict,
-          reason: `Conflict ${conflict} ≥ ${MODERATOR_CONFLICT_THRESHOLD} threshold`,
+          reason: `Conflict ${conflict} above tier ${tier} threshold (<${threshold})`,
         });
       }
     }
@@ -368,18 +392,19 @@ export function selectModerator(
     return {
       modelId: chosen.model.id,
       modelName: chosen.model.displayName,
-      conflictScore: conflictScores.get(chosen.model.id) || 0,
-      method: skipped.length > 0 ? 'rotation_skipped' : 'rotation_clean',
+      conflictScore: chosenConflict,
+      tier,
+      tierThreshold: threshold,
+      method: skipped.length > 0 ? 'tier_skipped' : 'tier_clean',
       skipped,
       regionSoftcapApplied,
     };
   }
 
-  // Pass 2: nobody passed the conflict bar. Fall back to least conflicted
-  // with the 10-point tie window broken by rotation order. In this branch
-  // every model in the queue was over the threshold — they're all
-  // recorded in `skipped` for the transparency log so readers can see
-  // the full conflict picture that forced the fallback.
+  // All tiers exhausted (every model has conflict ≥ 90). Fall back
+  // to the least conflicted with the 10-point tie window broken by
+  // rotation order. Every model in the queue is recorded in skipped
+  // for the transparency log.
   const sortedByConflict = rotationQueue
     .map((entry, queueIdx) => ({
       entry,
@@ -402,13 +427,15 @@ export function selectModerator(
       modelId: entry.model.id,
       modelName: entry.model.displayName,
       conflictScore: conflictScores.get(entry.model.id) || 0,
-      reason: 'All pool models exceeded conflict threshold; fell back to least conflicted',
+      reason: 'All graduated tiers exhausted; fell back to least conflicted',
     }));
 
   return {
     modelId: chosen.entry.model.id,
     modelName: chosen.entry.model.displayName,
     conflictScore: chosen.conflict,
+    tier: null,
+    tierThreshold: null,
     method: 'fallback_least_conflicted',
     skipped: fallbackSkipped,
     regionSoftcapApplied: false,

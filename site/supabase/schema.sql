@@ -979,8 +979,10 @@ create table if not exists public.forum_sessions (
   -- Moderator selection (the actual one)
   moderator_model_id text,
   moderator_conflict_score int,                    -- their conflict on the chosen topic
+  moderator_tier int,                              -- 1-5 (which graduated tier resolved); null if fallback
   moderator_selection_method text,
-  -- 'rotation_clean' | 'rotation_skipped' | 'fallback_least_conflicted'
+  -- 'tier_clean' (no walks) | 'tier_skipped' (walked over conflicted models)
+  -- | 'fallback_least_conflicted' (all tiers exhausted)
   moderator_skipped jsonb,                         -- [{modelId, conflict, reason}, ...]
   moderator_region_softcap_applied boolean default false,
 
@@ -992,6 +994,13 @@ create table if not exists public.forum_sessions (
   completed_at timestamptz,
   error text
 );
+
+-- Backfill columns added after initial table creation. Idempotent —
+-- safe to re-run because of `if not exists`. New columns added here
+-- when the schema evolves so existing forum_sessions rows pick them
+-- up without manual migration.
+alter table public.forum_sessions
+  add column if not exists moderator_tier int;
 
 -- One session per category per day — enforces idempotency.
 create unique index if not exists forum_sessions_unique

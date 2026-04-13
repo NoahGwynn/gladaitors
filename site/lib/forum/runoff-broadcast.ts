@@ -96,6 +96,10 @@ Your task:
 
    Rate every topic, including the one you picked.
 
+   Be honest about absolute necessity. The anchors above are absolute, not relative — they mean the same thing on a quiet news day as on a major news day. If today's topics are genuinely all critical, high scores across the board are correct. If today is a quiet day with nothing pressing, low scores across the board are correct. What the forum does NOT want is hedged ratings that cluster on the same number to avoid making a call. If you find yourself rating everything within a narrow band because you can't decide, that itself is a hedge — push yourself to honestly weigh whichever topic feels most necessary against whichever feels least, and let the gap reflect what you actually believe.
+
+   Important: this is the PRIMARY signal the forum uses to break the tie. Picks only matter as a tiebreaker if urgency totals are too close to call. Treat this rating as your editorial judgment, not as a secondary detail.
+
 Respond with JSON only. Use the full thread ID from the ID field above for both "pick" and the "urgency" keys.
 
 {

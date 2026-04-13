@@ -229,7 +229,7 @@ export async function POST(request: NextRequest) {
     const queue = await getRotationQueue(category);
     const recentRegions = await getRecentModeratorRegions(category);
     const moderator: ModeratorResult = selectModerator(selectedThreadId, broadcast, queue, recentRegions);
-    console.log(`[SELECT] Moderator: ${moderator.modelName} (method=${moderator.method}, conflict=${moderator.conflictScore}, skipped=${moderator.skipped.length}, regionSoftcap=${moderator.regionSoftcapApplied})`);
+    console.log(`[SELECT] Moderator: ${moderator.modelName} (tier=${moderator.tier ?? 'fallback'}, method=${moderator.method}, conflict=${moderator.conflictScore}, skipped=${moderator.skipped.length}, regionSoftcap=${moderator.regionSoftcapApplied})`);
 
     // === Step 9: Persist moderator + complete session ===
     await supabase
@@ -238,6 +238,7 @@ export async function POST(request: NextRequest) {
         status: 'moderator_selected',
         moderator_model_id: moderator.modelId,
         moderator_conflict_score: moderator.conflictScore,
+        moderator_tier: moderator.tier,
         moderator_selection_method: moderator.method,
         moderator_skipped: moderator.skipped,
         moderator_region_softcap_applied: moderator.regionSoftcapApplied,

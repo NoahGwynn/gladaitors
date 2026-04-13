@@ -90,8 +90,15 @@ export interface RunoffResolution {
 
 // --- Constants ---
 
-/** Default tie window: 2nd place within 10% of 1st triggers a runoff */
+/** Default tie window for round-1 vote scores: 2nd place within 10%
+ *  of 1st triggers a runoff. */
 export const DEFAULT_TIE_MARGIN_PCT = 10;
+
+/** Tie window for runoff URGENCY totals: 2nd place within 5% of 1st
+ *  is treated as effectively tied (urgency is a noisier signal than
+ *  picks because it spans 1-10 per model and totals cluster). When
+ *  urgency is effectively tied, picks decide as the tiebreaker. */
+export const URGENCY_TIE_MARGIN_PCT = 5;
 
 // --- Pure functions ---
 
@@ -181,13 +188,23 @@ export function detectTie(
   };
 }
 
-/** Resolve a runoff: count picks first, then sum urgency if picks tie.
- *  Returns the winner if either resolution stage produces one, plus the
- *  full breakdown for transparency. If picks AND urgency both tie,
- *  stillTiedTopicIds will be non-empty and the caller must invoke the
+/** Resolve a runoff: URGENCY first (with 5% margin), then PICKS as
+ *  the tiebreaker if urgency is effectively tied.
+ *
+ *  Reasoning: the dAIly Forum exists to investigate what NEEDS
+ *  investigating, not what models personally prefer. Urgency
+ *  ("today's session would be incomplete without this") is a stronger
+ *  signal of editorial necessity than picks ("this is what I most
+ *  want to discuss"). Urgency wins when it's clearly informative.
+ *  When urgency totals are within the noise margin (5%), picks
+ *  decide because the urgency signal can't differentiate.
+ *
+ *  Returns the winner if either stage produces one, plus the full
+ *  breakdown for transparency. If urgency AND picks both tie,
+ *  stillTiedTopicIds is non-empty and the caller must invoke the
  *  acting moderator path. */
 export function resolveRunoff(runoff: RunoffResult): RunoffResolution {
-  // 1. Count picks per topic
+  // Compute pick counts (used as tiebreaker)
   const pickCounts = new Map<string, number>();
   for (const id of runoff.tiedTopicIds) pickCounts.set(id, 0);
 
@@ -198,18 +215,15 @@ export function resolveRunoff(runoff: RunoffResult): RunoffResolution {
     }
   }
 
-  // Find the highest pick count
   let maxPickCount = 0;
   for (const count of pickCounts.values()) {
     if (count > maxPickCount) maxPickCount = count;
   }
-
   const topPickIds = Array.from(pickCounts.entries())
     .filter(([, count]) => count === maxPickCount && count > 0)
     .map(([id]) => id);
 
-  // 2. Compute urgency totals (we always compute these for the audit
-  //    record, even if picks resolved the runoff)
+  // Compute urgency totals (the primary signal)
   const urgencyTotals: Record<string, number> = {};
   for (const id of runoff.tiedTopicIds) urgencyTotals[id] = 0;
 
@@ -222,64 +236,32 @@ export function resolveRunoff(runoff: RunoffResult): RunoffResolution {
     }
   }
 
-  // 3. If picks produced a single winner, return it
-  if (topPickIds.length === 1) {
-    return {
-      winner: topPickIds[0],
-      topPickIds,
-      urgencyTotals,
-      stillTiedTopicIds: [],
-      resolvedBy: 'picks',
-    };
-  }
+  // === Stage 1: urgency ===
+  // Sort topics by urgency total descending. If the top is more than
+  // URGENCY_TIE_MARGIN_PCT above the second, urgency has a clear winner.
+  const sortedByUrgency = Object.entries(urgencyTotals).sort((a, b) => b[1] - a[1]);
 
-  // 4. Picks tied. Use urgency among the tied-pick topics ONLY.
-  //    (We don't open it back up to the full tied set — picks already
-  //    eliminated those.)
-  if (topPickIds.length === 0) {
-    // Edge case: nobody picked anything. Fall back to urgency across
-    // the original tied set.
-    const sortedByUrgency = Object.entries(urgencyTotals).sort((a, b) => b[1] - a[1]);
-    if (sortedByUrgency.length === 0) {
-      return {
-        winner: null,
-        topPickIds: [],
-        urgencyTotals,
-        stillTiedTopicIds: runoff.tiedTopicIds,
-        resolvedBy: null,
-      };
-    }
-    const topUrgency = sortedByUrgency[0][1];
-    const urgencyWinners = sortedByUrgency.filter(([, u]) => u === topUrgency).map(([id]) => id);
-    if (urgencyWinners.length === 1) {
-      return {
-        winner: urgencyWinners[0],
-        topPickIds: [],
-        urgencyTotals,
-        stillTiedTopicIds: [],
-        resolvedBy: 'urgency',
-      };
-    }
+  if (sortedByUrgency.length === 0) {
+    // Pathological: no urgency data at all. Stuck.
     return {
       winner: null,
-      topPickIds: [],
+      topPickIds,
       urgencyTotals,
-      stillTiedTopicIds: urgencyWinners,
+      stillTiedTopicIds: runoff.tiedTopicIds,
       resolvedBy: null,
     };
   }
 
-  // Picks tied between 2+ topics. Compare urgency among those topics only.
-  const tiedPickUrgency = topPickIds.map(id => ({ id, urgency: urgencyTotals[id] || 0 }));
-  tiedPickUrgency.sort((a, b) => b.urgency - a.urgency);
-  const topUrgencyAmongPicks = tiedPickUrgency[0].urgency;
-  const urgencyWinners = tiedPickUrgency
-    .filter(t => t.urgency === topUrgencyAmongPicks)
-    .map(t => t.id);
+  const topUrgency = sortedByUrgency[0][1];
+  const secondUrgency = sortedByUrgency[1]?.[1] ?? 0;
+  const urgencyMarginPct = topUrgency === 0
+    ? 0
+    : ((topUrgency - secondUrgency) / topUrgency) * 100;
 
-  if (urgencyWinners.length === 1) {
+  if (urgencyMarginPct > URGENCY_TIE_MARGIN_PCT && sortedByUrgency.length > 1) {
+    // Clear urgency winner.
     return {
-      winner: urgencyWinners[0],
+      winner: sortedByUrgency[0][0],
       topPickIds,
       urgencyTotals,
       stillTiedTopicIds: [],
@@ -287,12 +269,58 @@ export function resolveRunoff(runoff: RunoffResult): RunoffResolution {
     };
   }
 
-  // Both picks and urgency are tied. Acting moderator must decide.
+  // Only one topic in the tied set — trivially the winner via urgency.
+  if (sortedByUrgency.length === 1) {
+    return {
+      winner: sortedByUrgency[0][0],
+      topPickIds,
+      urgencyTotals,
+      stillTiedTopicIds: [],
+      resolvedBy: 'urgency',
+    };
+  }
+
+  // === Stage 2: picks (urgency was effectively tied) ===
+  // Identify the urgency-tied set: every topic within URGENCY_TIE_MARGIN_PCT
+  // of the top urgency. Then count picks among that set only.
+  const urgencyCutoff = topUrgency * (1 - URGENCY_TIE_MARGIN_PCT / 100);
+  const urgencyTiedIds = sortedByUrgency
+    .filter(([, u]) => u >= urgencyCutoff)
+    .map(([id]) => id);
+
+  // Count picks among the urgency-tied set only
+  const picksAmongUrgencyTied = new Map<string, number>();
+  for (const id of urgencyTiedIds) picksAmongUrgencyTied.set(id, pickCounts.get(id) || 0);
+
+  let maxPicksTied = 0;
+  for (const count of picksAmongUrgencyTied.values()) {
+    if (count > maxPicksTied) maxPicksTied = count;
+  }
+  const pickWinnersInTied = Array.from(picksAmongUrgencyTied.entries())
+    .filter(([, count]) => count === maxPicksTied && count > 0)
+    .map(([id]) => id);
+
+  if (pickWinnersInTied.length === 1) {
+    return {
+      winner: pickWinnersInTied[0],
+      topPickIds,
+      urgencyTotals,
+      stillTiedTopicIds: [],
+      resolvedBy: 'picks',
+    };
+  }
+
+  // === Stage 3: still tied ===
+  // Either nobody picked anything in the urgency-tied set, or multiple
+  // topics are tied on both urgency AND picks. Acting moderator decides.
+  // The remaining tied set is whichever is non-empty.
+  const stillTied = pickWinnersInTied.length > 0 ? pickWinnersInTied : urgencyTiedIds;
+
   return {
     winner: null,
     topPickIds,
     urgencyTotals,
-    stillTiedTopicIds: urgencyWinners,
+    stillTiedTopicIds: stillTied,
     resolvedBy: null,
   };
 }
