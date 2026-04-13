@@ -28,6 +28,15 @@ import { buildIdentityAnchor } from './broadcast';
 import { fetchReadableBatch, type ReadableArticle } from './readability';
 import { searchWebBatch, type WebSearchResponse } from './web-search';
 
+// --- Constants ---
+
+/** Maximum web search queries the moderator can run per session.
+ *  This is a soft signal — the moderator's prompt asks for 3-8 — and
+ *  a hard cap on the parser. If we see the cap consistently being hit
+ *  in production (signalled via webSearchesRequested > webSearches.length),
+ *  it's a sign to bump this. Cost per query is ~$0.04 via Tavily. */
+const MAX_WEB_QUERIES = 8;
+
 // --- Types ---
 
 export interface ResearchItem {
@@ -304,6 +313,14 @@ export interface DeepResearchResult {
    *  results. Empty array if web search was skipped (no API key) or
    *  the moderator decided no web research was needed. */
   webSearches: DeepResearchWebSearch[];
+  /** How many queries the moderator originally generated (before the
+   *  MAX_WEB_QUERIES cap). If this exceeds webSearches.length, the
+   *  moderator wanted more queries than we allowed — useful signal
+   *  for whether the cap should be raised. */
+  webSearchesRequested: number;
+  /** The cap value at the time this session ran (so historical data
+   *  stays interpretable if the cap changes later) */
+  webSearchCap: number;
   /** Raw error if the call failed */
   error?: string;
 }
@@ -321,7 +338,7 @@ function buildQueryGenerationPrompt(
 
 You are the moderator of today's dAIly Forum session in the ${category.toUpperCase()} category. You've already done a light research pass and picked the cast. Now you're starting the deep research phase, which has TWO rounds:
 
-  Round 1 (NOW): read the database-ingested sources below, identify what's missing or thin, and generate 3-5 web search queries to fill those gaps.
+  Round 1 (NOW): read the database-ingested sources below, identify what's missing or thin, and generate 3-${MAX_WEB_QUERIES} web search queries to fill those gaps.
   Round 2 (NEXT): you'll receive the web search results and produce the full deep synthesis.
 
 This is round 1. Your job is to read carefully and generate EFFECTIVE QUERIES — not to start synthesising claims yet. Save the synthesis for round 2 when you have all the material in hand.`;
@@ -358,7 +375,7 @@ YOUR TASK:
 
 Read every available source above carefully. Then identify what's MISSING — perspectives, data, criticism, context, or counterpoints that the database sources don't cover but that would matter to a substantive debate on this topic.
 
-Generate 3-5 web search queries that would fill those gaps. Good queries are SPECIFIC — not "AI safety" but "Apollo Research scheming methodology criticism". Aim for queries that would surface:
+Generate 3-${MAX_WEB_QUERIES} web search queries that would fill those gaps. Good queries are SPECIFIC — not "AI safety" but "Apollo Research scheming methodology criticism". Aim for queries that would surface:
 
 - Independent third-party analysis of contested claims
 - Counterpoints, criticism, or alternative methodology
@@ -366,8 +383,10 @@ Generate 3-5 web search queries that would fill those gaps. Good queries are SPE
 - Expert reactions from outside the originating organization
 - Related prior work the sources didn't cite
 - Regulatory, governance, or policy context if absent
+- Comparison perspectives from other labs (e.g. competitor responses)
+- Specific evaluation methodologies mentioned but not detailed in the source
 
-Be honest about whether you actually need web research. If the database sources are genuinely comprehensive and the gaps are minor, fewer queries (2-3) is fine. Don't generate filler queries.
+Be honest about how many queries you actually need. If the database sources are genuinely comprehensive and the gaps are minor, fewer queries (3-4) is fine. If the topic is thin and you need broad context, use the upper end of the range. Don't generate filler queries — every query should target a specific gap you can name.
 
 Each query needs a REASON — what gap it's filling, what kind of result you're hoping for. The reason gets published in the journey, so be specific.
 
@@ -406,13 +425,14 @@ function parseGeneratedQueries(raw: string): GeneratedQuery[] {
     const parsed = JSON.parse(jsonStr) as { queries?: unknown };
     if (!Array.isArray(parsed.queries)) return [];
 
+    // No cap here — the caller applies MAX_WEB_QUERIES so it can log
+    // whether the moderator wanted more queries than we allowed
     return (parsed.queries as Array<Record<string, unknown>>)
       .map(q => ({
         query: typeof q.query === 'string' ? q.query : '',
         reason: typeof q.reason === 'string' ? q.reason : '',
       }))
-      .filter(q => q.query.length > 0)
-      .slice(0, 5); // cap at 5
+      .filter(q => q.query.length > 0);
   } catch {
     return [];
   }
@@ -544,8 +564,8 @@ Respond with JSON only:
 
 // --- Parse the deep research response ---
 
-function parseDeepResearchResponse(raw: string): Omit<DeepResearchResult, 'sourceFetches' | 'webSearches'> {
-  const empty: Omit<DeepResearchResult, 'sourceFetches' | 'webSearches'> = {
+function parseDeepResearchResponse(raw: string): Omit<DeepResearchResult, 'sourceFetches' | 'webSearches' | 'webSearchesRequested' | 'webSearchCap'> {
+  const empty: Omit<DeepResearchResult, 'sourceFetches' | 'webSearches' | 'webSearchesRequested' | 'webSearchCap'> = {
     keyClaims: [],
     evidenceSnippets: [],
     gapsInCoverage: [],
@@ -631,6 +651,8 @@ export async function researchTopicDeep(
       overallSynthesis: 'No source items provided for deep research.',
       sourceFetches: [],
       webSearches: [],
+      webSearchesRequested: 0,
+      webSearchCap: MAX_WEB_QUERIES,
       error: 'Empty item list',
     };
   }
@@ -667,6 +689,8 @@ export async function researchTopicDeep(
       overallSynthesis: 'No sources could be fetched — readability parser returned errors for every URL.',
       sourceFetches,
       webSearches: [],
+      webSearchesRequested: 0,
+      webSearchCap: MAX_WEB_QUERIES,
       error: 'All source fetches failed',
     };
   }
@@ -675,9 +699,10 @@ export async function researchTopicDeep(
   // Skip entirely if no Tavily key — fall through to synthesis with DB only
   const hasTavily = !!process.env.TAVILY_API_KEY;
   let webSearches: DeepResearchWebSearch[] = [];
+  let webSearchesRequested = 0;
 
   if (hasTavily) {
-    console.log(`[DEEP-RESEARCH] Phase A: ${moderatorModel.displayName} generating web queries...`);
+    console.log(`[DEEP-RESEARCH] Phase A: ${moderatorModel.displayName} generating web queries (cap ${MAX_WEB_QUERIES})...`);
     try {
       const queryPrompt = buildQueryGenerationPrompt(
         threadTitle,
@@ -688,16 +713,27 @@ export async function researchTopicDeep(
       );
       const queryRaw = await callPoolModel(moderatorModel, queryPrompt.system, queryPrompt.user, 1500);
       const generatedQueries = parseGeneratedQueries(queryRaw);
-      console.log(`[DEEP-RESEARCH] Generated ${generatedQueries.length} queries`);
+      webSearchesRequested = generatedQueries.length;
+
+      // Apply the cap. Log clearly when the moderator wanted more than
+      // we allowed — this is the signal for whether to raise the cap.
+      const queriesToRun = generatedQueries.slice(0, MAX_WEB_QUERIES);
+      if (generatedQueries.length > MAX_WEB_QUERIES) {
+        console.warn(
+          `[DEEP-RESEARCH] Moderator generated ${generatedQueries.length} queries — capped at ${MAX_WEB_QUERIES}. Consider raising MAX_WEB_QUERIES if this happens often.`,
+        );
+      } else {
+        console.log(`[DEEP-RESEARCH] Generated ${generatedQueries.length} queries (within cap)`);
+      }
 
       // === Phase B: run queries via Tavily ===
-      if (generatedQueries.length > 0) {
+      if (queriesToRun.length > 0) {
         console.log(`[DEEP-RESEARCH] Phase B: running web searches...`);
         const searchResponses = await searchWebBatch(
-          generatedQueries.map(q => q.query),
+          queriesToRun.map(q => q.query),
         );
 
-        webSearches = generatedQueries.map((gq, i) => {
+        webSearches = queriesToRun.map((gq, i) => {
           const sr: WebSearchResponse = searchResponses[i];
           return {
             query: gq.query,
@@ -739,6 +775,8 @@ export async function researchTopicDeep(
       ...parsed,
       sourceFetches,
       webSearches,
+      webSearchesRequested,
+      webSearchCap: MAX_WEB_QUERIES,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown error';
@@ -750,6 +788,8 @@ export async function researchTopicDeep(
       overallSynthesis: '',
       sourceFetches,
       webSearches,
+      webSearchesRequested,
+      webSearchCap: MAX_WEB_QUERIES,
       error: msg,
     };
   }
