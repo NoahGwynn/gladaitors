@@ -994,8 +994,9 @@ create table if not exists public.forum_sessions (
   research_snapshot jsonb,                         -- light research synthesis (5a)
   cast_snapshot jsonb,                             -- moderator's cast picks + reasoning (5b)
   session_type text,                               -- 'debate' | 'fireside_chat'
-  -- Stage 5c (agenda + deep research) and Stage 6 (debate) columns
-  -- will be added when those stages are built.
+  deep_research_snapshot jsonb,                    -- deep research after readability fetch (5c-i)
+  -- Stage 5c-ii (agenda) and Stage 6 (debate) columns will be added
+  -- when those phases land.
 
   -- Stage 6 hook — populated when the debate completes
   session_summary text,
@@ -1020,6 +1021,8 @@ alter table public.forum_sessions
   add column if not exists cast_snapshot jsonb;
 alter table public.forum_sessions
   add column if not exists session_type text;
+alter table public.forum_sessions
+  add column if not exists deep_research_snapshot jsonb;
 
 -- One session per category per day — enforces idempotency.
 create unique index if not exists forum_sessions_unique
