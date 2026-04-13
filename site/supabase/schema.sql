@@ -996,7 +996,7 @@ create table if not exists public.forum_sessions (
   session_type text,                               -- 'debate' | 'fireside_chat'
   deep_research_snapshot jsonb,                    -- deep research after readability fetch + web search (5c-i)
   agenda_snapshot jsonb,                           -- moderator's structured debate playbook (5c-ii)
-  -- Stage 6 (debate) columns will be added when that phase lands.
+  debate_snapshot jsonb,                           -- full turn-by-turn transcript + move history (Stage 6)
 
   -- Stage 6 hook — populated when the debate completes
   session_summary text,
@@ -1025,6 +1025,8 @@ alter table public.forum_sessions
   add column if not exists deep_research_snapshot jsonb;
 alter table public.forum_sessions
   add column if not exists agenda_snapshot jsonb;
+alter table public.forum_sessions
+  add column if not exists debate_snapshot jsonb;
 
 -- One session per category per day — enforces idempotency.
 create unique index if not exists forum_sessions_unique

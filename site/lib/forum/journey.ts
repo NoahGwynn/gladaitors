@@ -24,6 +24,7 @@ import type { RunoffResult } from './topic-selection';
 import type { ResearchResult, DeepResearchResult } from './research';
 import type { CastSelectionResult, CastParticipant, AlsoInvitedEntry } from './cast-selection';
 import type { AgendaBuildResult, AgendaSegment } from './agenda';
+import type { DebateSnapshot } from './debate-runtime';
 
 // --- Types ---
 
@@ -71,6 +72,7 @@ export interface SessionRowForJourney {
   session_type?: 'debate' | 'fireside_chat' | null;
   deep_research_snapshot?: (DeepResearchResult & SnapshotMeta) | null;
   agenda_snapshot?: (AgendaBuildResult & SnapshotMeta) | null;
+  debate_snapshot?: (DebateSnapshot & SnapshotMeta) | null;
 
   vote_scores?: Array<{ threadId: string; score: number; voterCount: number }> | null;
   was_runoff?: boolean | null;
@@ -182,6 +184,11 @@ export function deriveSessionJourney(session: SessionRowForJourney): JourneyEven
   // === Stage 5c-ii: Agenda ===
   if (session.agenda_snapshot) {
     events.push(buildAgendaEvent(session.agenda_snapshot, session.session_type));
+  }
+
+  // === Stage 6: Debate ===
+  if (session.debate_snapshot) {
+    events.push(buildDebateEvent(session.debate_snapshot, session.session_type));
   }
 
   // === Failure ===
@@ -784,6 +791,54 @@ function buildAgendaEvent(
         exactHitCount: m.exactHits?.length || 0,
         familyHitCount: m.familyHits?.length || 0,
       })),
+    },
+  };
+}
+
+// --- Stage 6: Debate event ---
+
+function buildDebateEvent(
+  snapshot: DebateSnapshot & SnapshotMeta,
+  sessionType: 'debate' | 'fireside_chat' | null | undefined,
+): JourneyEvent {
+  const typeLabel = sessionType === 'fireside_chat' ? 'fireside chat' : 'debate';
+  const moveBreakdown = Object.entries(snapshot.moveCounts || {})
+    .filter(([, n]) => n > 0)
+    .map(([m, n]) => `${m}×${n}`)
+    .join(', ');
+
+  const segmentsCovered = (snapshot.segmentProgress || [])
+    .filter(sp => sp.status === 'completed').length;
+  const segmentsSkipped = (snapshot.segmentProgress || [])
+    .filter(sp => sp.status === 'skipped').length;
+  const segmentsTotal = (snapshot.segmentProgress || []).length;
+
+  const descParts: string[] = [];
+  descParts.push(`The ${typeLabel} ran for ${snapshot.exchangeTurnCount} exchange turn${snapshot.exchangeTurnCount === 1 ? '' : 's'} across ${snapshot.totalTurnRecords} total turn record${snapshot.totalTurnRecords === 1 ? '' : 's'}${snapshot.totalTurnRecords > snapshot.exchangeTurnCount ? ' (some were memory_lookup prep turns)' : ''}.`);
+  descParts.push(`Segments: ${segmentsCovered} of ${segmentsTotal} covered${segmentsSkipped > 0 ? `, ${segmentsSkipped} skipped` : ''}.`);
+  descParts.push(`Moderator moves used: ${moveBreakdown}.`);
+  descParts.push(`${snapshot.utterancesStored} participant utterance${snapshot.utterancesStored === 1 ? '' : 's'} persisted to the tagged memory store for future sessions.`);
+  if (snapshot.forceCloseApplied) {
+    descParts.push(`The runtime forced the close at turn ${snapshot.exchangeTurnCount} (hard cap).`);
+  }
+  if (snapshot.error) descParts.push(`(Note: debate ended with an issue — ${snapshot.error})`);
+
+  return {
+    stage: 6,
+    stageName: STAGE_NAMES[6],
+    step: 'debate_complete',
+    title: `${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} complete: ${snapshot.exchangeTurnCount} turns, ${segmentsCovered}/${segmentsTotal} segments`,
+    description: descParts.join(' '),
+    timestamp: snapshot._completedAt || snapshot.completedAt,
+    data: {
+      exchangeTurnCount: snapshot.exchangeTurnCount,
+      totalTurnRecords: snapshot.totalTurnRecords,
+      moveCounts: snapshot.moveCounts,
+      segmentProgress: snapshot.segmentProgress,
+      forceCloseApplied: snapshot.forceCloseApplied,
+      utterancesStored: snapshot.utterancesStored,
+      // Full transcript included for the UI to render drill-down views
+      turns: snapshot.turns,
     },
   };
 }
