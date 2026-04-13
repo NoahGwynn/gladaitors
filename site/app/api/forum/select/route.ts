@@ -51,6 +51,7 @@ interface SessionRow {
   category: string;
   session_date: string;
   status: string;
+  organize_snapshot: unknown;
   broadcast_snapshot: BroadcastResult | null;
   selected_thread_id: string | null;
   vote_scores: unknown;
@@ -109,8 +110,27 @@ export async function POST(request: NextRequest) {
       broadcast = session.broadcast_snapshot;
     } else {
       console.log('[SELECT] No broadcast snapshot — running Stage 2 + Stage 3');
+
+      // --- Stage 2: organize ---
+      const organizeStartedAt = new Date().toISOString();
       const organizeResult = await organizeThreads(category);
+      const organizeCompletedAt = new Date().toISOString();
       mergedShortlist = organizeResult.mergedShortlist;
+
+      // Persist the organize snapshot (with timestamps) so the journey
+      // derivation function can reconstruct the Stage 2 timeline. We
+      // do this BEFORE the empty-shortlist guard so failed sessions
+      // still have the organize trace.
+      await supabase
+        .from('forum_sessions')
+        .update({
+          organize_snapshot: {
+            _startedAt: organizeStartedAt,
+            _completedAt: organizeCompletedAt,
+            ...organizeResult,
+          },
+        })
+        .eq('id', session.id);
 
       if (mergedShortlist.length === 0) {
         await markSessionFailed(supabase, session.id, 'Stage 2 produced empty shortlist');
@@ -120,12 +140,21 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
       }
 
+      // --- Stage 3: broadcast ---
+      const broadcastStartedAt = new Date().toISOString();
       broadcast = await broadcastToPool(mergedShortlist, category);
+      const broadcastCompletedAt = new Date().toISOString();
 
-      // Persist the snapshot so subsequent runs reuse it
+      // Persist the broadcast snapshot (with timestamps)
       await supabase
         .from('forum_sessions')
-        .update({ broadcast_snapshot: broadcast })
+        .update({
+          broadcast_snapshot: {
+            _startedAt: broadcastStartedAt,
+            _completedAt: broadcastCompletedAt,
+            ...broadcast,
+          },
+        })
         .eq('id', session.id);
     }
 
@@ -151,6 +180,8 @@ export async function POST(request: NextRequest) {
 
     let selectedThreadId: string | null = tieDetection.winner;
     let runoffResult: RunoffResult | null = null;
+    let runoffStartedAt: string | null = null;
+    let runoffCompletedAt: string | null = null;
     let actingModerator: ActingModeratorResult | null = null;
     const wasRunoff = tieDetection.winner === null && tieDetection.tiedTopicIds.length > 1;
 
@@ -159,7 +190,9 @@ export async function POST(request: NextRequest) {
       console.log(`[SELECT] Tied — running runoff with ${tieDetection.tiedTopicIds.length} topics`);
       const fullShortlist = await getShortlist();
       const tiedShortlist = fullShortlist.filter(t => tieDetection.tiedTopicIds.includes(t.threadId));
+      runoffStartedAt = new Date().toISOString();
       runoffResult = await runRunoffBroadcast(tiedShortlist, category);
+      runoffCompletedAt = new Date().toISOString();
 
       const runoffResolution = resolveRunoff(runoffResult);
       console.log(`[SELECT] Runoff: resolvedBy=${runoffResolution.resolvedBy}, winner=${runoffResolution.winner?.slice(0, 8) || 'none'}, stillTied=${runoffResolution.stillTiedTopicIds.length}`);
@@ -195,6 +228,11 @@ export async function POST(request: NextRequest) {
     }
 
     // === Step 7: Persist topic selection ===
+    // Wrap the runoff snapshot with timestamps for the journey UI.
+    const runoffSnapshotPersisted = runoffResult
+      ? { _startedAt: runoffStartedAt, _completedAt: runoffCompletedAt, ...runoffResult }
+      : null;
+
     await supabase
       .from('forum_sessions')
       .update({
@@ -202,7 +240,7 @@ export async function POST(request: NextRequest) {
         selected_thread_id: selectedThreadId,
         vote_scores: voteScores,
         was_runoff: wasRunoff,
-        runoff_snapshot: runoffResult,
+        runoff_snapshot: runoffSnapshotPersisted,
         was_acting_moderator: actingModerator !== null,
         acting_moderator_model_id: actingModerator?.modelId || null,
         acting_moderator_tier: actingModerator?.tier || null,

@@ -962,8 +962,12 @@ create table if not exists public.forum_sessions (
   status text not null default 'in_progress',
   -- 'in_progress' | 'topic_selected' | 'moderator_selected' | 'completed' | 'failed'
 
-  -- Stage 3 snapshot (frozen for reproducibility)
-  broadcast_snapshot jsonb,                        -- full BroadcastResult from Stage 3
+  -- Stage 2 + Stage 3 snapshots (frozen for reproducibility AND used
+  -- as the source of truth for the published session journey UI).
+  -- Each snapshot carries _startedAt and _completedAt timestamps at
+  -- the top level so the journey timeline can show when each stage ran.
+  organize_snapshot jsonb,                         -- full OrganizeResult from Stage 2
+  broadcast_snapshot jsonb,                        -- full BroadcastResult from Stage 3                        -- full BroadcastResult from Stage 3
 
   -- Topic selection
   selected_thread_id uuid references public.forum_threads(id),
@@ -1001,6 +1005,8 @@ create table if not exists public.forum_sessions (
 -- up without manual migration.
 alter table public.forum_sessions
   add column if not exists moderator_tier int;
+alter table public.forum_sessions
+  add column if not exists organize_snapshot jsonb;
 
 -- One session per category per day — enforces idempotency.
 create unique index if not exists forum_sessions_unique
