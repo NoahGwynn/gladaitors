@@ -1033,12 +1033,55 @@ create index if not exists forum_sessions_moderator
   on public.forum_sessions(category, moderator_model_id, session_date desc)
   where moderator_model_id is not null;
 
+-- ============================================================================
+-- dAIly Forum — Tagged Memory (Stage 6 + cross-session accountability)
+-- ============================================================================
+-- Every cast member's spoken response in every debate is persisted here
+-- with topic tags and an embedding. This is the substrate for the
+-- "you said X last week" accountability feature: when the moderator is
+-- preparing or running a debate, they can query past statements by
+-- the same model (or model family for cross-version checks) on related
+-- topics.
+--
+-- Memory has a cold start — early debates produce nothing because there
+-- is no history to query. Value compounds over weeks. The schema is
+-- deliberately built to support both per-model queries (exact matches)
+-- and per-family queries (cross-version: "Claude Opus 4.5 said X, you as
+-- 4.6 disagree"). model_pool.family is the lineage anchor.
+-- ============================================================================
+create table if not exists public.forum_utterances (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.forum_sessions(id) on delete cascade,
+  category text not null,                         -- 'ai', 'science', etc.
+  segment_name text,                              -- agenda segment that produced this turn
+  turn_index int not null,                        -- position in the debate (0-indexed)
+  participant_seat int not null,                  -- 1, 2, or 3
+  model_id text not null,                         -- e.g. 'claude-opus' (exact)
+  model_family text not null,                     -- e.g. 'Claude Opus' (lineage anchor)
+  utterance_text text not null,
+  embedding vector(1536),                         -- text-embedding-3-small of utterance_text
+  tags text[] not null default '{}',              -- 1-3 from the per-category taxonomy
+  spoken_at timestamptz not null default now()
+);
+
+create index if not exists forum_utterances_session
+  on public.forum_utterances(session_id);
+create index if not exists forum_utterances_model
+  on public.forum_utterances(model_id, spoken_at desc);
+create index if not exists forum_utterances_family
+  on public.forum_utterances(model_family, spoken_at desc);
+create index if not exists forum_utterances_tags
+  on public.forum_utterances using gin(tags);
+create index if not exists forum_utterances_category
+  on public.forum_utterances(category, spoken_at desc);
+
 -- RLS — server-managed for the pipeline, readable by anyone (for the
 -- forum pages to display thread/session data)
 alter table public.forum_sources enable row level security;
 alter table public.forum_items enable row level security;
 alter table public.forum_threads enable row level security;
 alter table public.forum_sessions enable row level security;
+alter table public.forum_utterances enable row level security;
 
 drop policy if exists "Forum sources are server-managed" on public.forum_sources;
 create policy "Forum sources are server-managed"
@@ -1055,3 +1098,7 @@ create policy "Forum threads are server-managed"
 drop policy if exists "Forum sessions are server-managed" on public.forum_sessions;
 create policy "Forum sessions are server-managed"
   on public.forum_sessions for all using (true);
+
+drop policy if exists "Forum utterances are server-managed" on public.forum_utterances;
+create policy "Forum utterances are server-managed"
+  on public.forum_utterances for all using (true);
