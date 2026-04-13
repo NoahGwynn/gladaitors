@@ -990,6 +990,13 @@ create table if not exists public.forum_sessions (
   moderator_skipped jsonb,                         -- [{modelId, conflict, reason}, ...]
   moderator_region_softcap_applied boolean default false,
 
+  -- Stage 5 — moderator preparation snapshots
+  research_snapshot jsonb,                         -- light research synthesis (5a)
+  cast_snapshot jsonb,                             -- moderator's cast picks + reasoning (5b)
+  session_type text,                               -- 'debate' | 'fireside_chat'
+  -- Stage 5c (agenda + deep research) and Stage 6 (debate) columns
+  -- will be added when those stages are built.
+
   -- Stage 6 hook — populated when the debate completes
   session_summary text,
 
@@ -1007,6 +1014,12 @@ alter table public.forum_sessions
   add column if not exists moderator_tier int;
 alter table public.forum_sessions
   add column if not exists organize_snapshot jsonb;
+alter table public.forum_sessions
+  add column if not exists research_snapshot jsonb;
+alter table public.forum_sessions
+  add column if not exists cast_snapshot jsonb;
+alter table public.forum_sessions
+  add column if not exists session_type text;
 
 -- One session per category per day — enforces idempotency.
 create unique index if not exists forum_sessions_unique

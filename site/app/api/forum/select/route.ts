@@ -1,18 +1,23 @@
 // ============================================================================
-// POST /api/forum/select — Run Stage 4: topic + moderator selection
+// POST /api/forum/select — Run Stages 4 + 5a/5b: topic, moderator, research, cast
 // ============================================================================
-// The full Stage 4 pipeline:
+// The full pipeline through cast selection:
 //
-//   1. Look up (or create) today's forum_sessions row for this category
-//   2. If the row has no broadcast_snapshot, run Stage 3 (organize + broadcast)
-//   3. Score the votes (top-3 cutoff)
-//   4. Detect tie (within 10% margin)
-//   5. If tied: run runoff → resolve picks → resolve urgency
-//   6. If still tied: select acting moderator → acting mod picks
-//   7. Persist topic selection (forum_sessions + forum_threads.session_id)
-//   8. Run actual moderator selection
-//   9. Persist moderator selection
-//  10. Return full session record
+//   STAGE 4 — topic + moderator
+//    1. Look up (or create) today's forum_sessions row for this category
+//    2. If the row has no broadcast_snapshot, run Stages 2 + 3
+//    3. Score votes, detect tie, runoff if needed, acting moderator if needed
+//    4. Persist topic selection + run actual moderator selection
+//
+//   STAGE 5a — light research
+//    5. Load the items attached to the chosen thread
+//    6. Moderator reads + synthesises into a research note
+//    7. Persist research_snapshot
+//
+//   STAGE 5b — cast selection
+//    8. Moderator picks 2-3 cast members + session type, informed by research
+//    9. Persist cast_snapshot + session_type
+//   10. Mark session 'cast_selected' (NOT 'completed' — Stage 5c + 6 still pending)
 //
 // Idempotent per (category, session_date) — running the same day either
 // returns the existing session or resumes from where it failed.
@@ -45,6 +50,9 @@ import {
   type ActingModeratorResult,
   type ModeratorResult,
 } from '@/lib/forum/moderator-selection';
+import { researchTopicLight, type ResearchItem, type ResearchResult } from '@/lib/forum/research';
+import { selectCast, type CastSelectionResult } from '@/lib/forum/cast-selection';
+import { MODEL_POOL } from '@/lib/forum/model-pool';
 
 interface SessionRow {
   id: string;
@@ -52,6 +60,9 @@ interface SessionRow {
   session_date: string;
   status: string;
   organize_snapshot: unknown;
+  research_snapshot: unknown;
+  cast_snapshot: unknown;
+  session_type: string | null;
   broadcast_snapshot: BroadcastResult | null;
   selected_thread_id: string | null;
   vote_scores: unknown;
@@ -91,8 +102,12 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Failed to create session row' }, { status: 500 });
   }
 
-  // If the session is already complete, return it as-is (idempotent)
-  if (session.status === 'moderator_selected' || session.status === 'completed') {
+  // If the session has fully run Stage 5, return it as-is (idempotent).
+  // Earlier states still re-run to pick up from where they failed —
+  // the resume mechanism is the snapshot checks inside each stage
+  // (e.g. broadcast_snapshot) which short-circuit the LLM calls if
+  // the data already exists.
+  if (session.status === 'cast_selected' || session.status === 'completed') {
     console.log(`[SELECT] Session already ${session.status} — returning existing row`);
     return Response.json({ session, alreadyComplete: true });
   }
@@ -269,7 +284,8 @@ export async function POST(request: NextRequest) {
     const moderator: ModeratorResult = selectModerator(selectedThreadId, broadcast, queue, recentRegions);
     console.log(`[SELECT] Moderator: ${moderator.modelName} (tier=${moderator.tier ?? 'fallback'}, method=${moderator.method}, conflict=${moderator.conflictScore}, skipped=${moderator.skipped.length}, regionSoftcap=${moderator.regionSoftcapApplied})`);
 
-    // === Step 9: Persist moderator + complete session ===
+    // === Step 9: Persist moderator selection ===
+    // NOTE: completed_at is NOT set yet — Stage 5a/5b still pending.
     await supabase
       .from('forum_sessions')
       .update({
@@ -280,11 +296,103 @@ export async function POST(request: NextRequest) {
         moderator_selection_method: moderator.method,
         moderator_skipped: moderator.skipped,
         moderator_region_softcap_applied: moderator.regionSoftcapApplied,
-        completed_at: new Date().toISOString(),
       })
       .eq('id', session.id);
 
-    // === Step 10: Return the full session record ===
+    // Resolve the moderator's PoolModel record for the LLM calls
+    const moderatorPoolModel = MODEL_POOL.find(m => m.id === moderator.modelId);
+    if (!moderatorPoolModel) {
+      throw new Error(`Moderator model ${moderator.modelId} not found in MODEL_POOL`);
+    }
+
+    // === Step 10: Stage 5a — light research ===
+    // Load the items attached to the chosen thread so the moderator
+    // can read the source material before picking the cast.
+    const { data: threadItems } = await supabase
+      .from('forum_items')
+      .select('id, title, summary, url, source_id, published_at')
+      .eq('thread_id', selectedThreadId)
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .limit(20);
+
+    // Resolve source names for each item
+    const sourceIds = [...new Set((threadItems || []).map(i => i.source_id))];
+    const sourceNameById = new Map<string, string>();
+    if (sourceIds.length > 0) {
+      const { data: sources } = await supabase
+        .from('forum_sources')
+        .select('id, name')
+        .in('id', sourceIds);
+      for (const s of sources || []) sourceNameById.set(s.id, s.name);
+    }
+
+    const researchItems: ResearchItem[] = (threadItems || []).map(item => ({
+      id: item.id,
+      title: item.title,
+      summary: item.summary,
+      url: item.url,
+      sourceName: sourceNameById.get(item.source_id) || 'unknown',
+      publishedAt: item.published_at,
+    }));
+
+    // Get the topic's title + significance for the research/cast prompts
+    const selectedShortlistEntry = mergedShortlist?.find(e => e.threadId === selectedThreadId);
+    const topicTitle = selectedShortlistEntry?.threadTitle
+      || (await supabase.from('forum_threads').select('title').eq('id', selectedThreadId).single()).data?.title
+      || '(unknown)';
+    const topicSignificance = selectedShortlistEntry?.significance || [];
+
+    const researchStartedAt = new Date().toISOString();
+    const research: ResearchResult = await researchTopicLight(
+      topicTitle,
+      topicSignificance,
+      researchItems,
+      category,
+      moderatorPoolModel,
+    );
+    const researchCompletedAt = new Date().toISOString();
+
+    await supabase
+      .from('forum_sessions')
+      .update({
+        status: 'researched',
+        research_snapshot: {
+          _startedAt: researchStartedAt,
+          _completedAt: researchCompletedAt,
+          ...research,
+        },
+      })
+      .eq('id', session.id);
+
+    // === Step 11: Stage 5b — cast selection ===
+    const castStartedAt = new Date().toISOString();
+    const castResult: CastSelectionResult = await selectCast(
+      topicTitle,
+      topicSignificance,
+      research,
+      moderatorPoolModel,
+      broadcast,
+      selectedThreadId,
+      category,
+    );
+    const castCompletedAt = new Date().toISOString();
+
+    await supabase
+      .from('forum_sessions')
+      .update({
+        status: 'cast_selected',
+        cast_snapshot: {
+          _startedAt: castStartedAt,
+          _completedAt: castCompletedAt,
+          ...castResult,
+        },
+        session_type: castResult.sessionType,
+        // completed_at intentionally NOT set yet — Stage 5c (deep research
+        // + agenda) and Stage 6 (debate) still pending.
+      })
+      .eq('id', session.id);
+
+    // === Step 12: Return the full session record ===
     const { data: finalSession } = await supabase
       .from('forum_sessions')
       .select('*')
@@ -298,6 +406,8 @@ export async function POST(request: NextRequest) {
       runoffResult,
       actingModerator,
       moderator,
+      research,
+      cast: castResult,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown error';

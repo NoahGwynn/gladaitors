@@ -21,6 +21,8 @@
 import type { OrganizeResult } from './organize';
 import type { BroadcastResult, ModelBroadcastResponse } from './broadcast';
 import type { RunoffResult } from './topic-selection';
+import type { ResearchResult } from './research';
+import type { CastSelectionResult, CastParticipant, AlsoInvitedEntry } from './cast-selection';
 
 // --- Types ---
 
@@ -63,6 +65,9 @@ export interface SessionRowForJourney {
 
   organize_snapshot?: (OrganizeResult & SnapshotMeta) | null;
   broadcast_snapshot?: (BroadcastResult & SnapshotMeta) | null;
+  research_snapshot?: (ResearchResult & SnapshotMeta) | null;
+  cast_snapshot?: (CastSelectionResult & SnapshotMeta) | null;
+  session_type?: 'debate' | 'fireside_chat' | null;
 
   vote_scores?: Array<{ threadId: string; score: number; voterCount: number }> | null;
   was_runoff?: boolean | null;
@@ -97,7 +102,7 @@ const STAGE_NAMES: Record<number, string> = {
   2: 'Editorial Organizers',
   3: 'Pool Broadcast',
   4: 'Topic & Moderator Selection',
-  5: 'Cast Selection',
+  5: 'Moderator Preparation',
   6: 'Debate Session',
 };
 
@@ -144,13 +149,26 @@ export function deriveSessionJourney(session: SessionRowForJourney): JourneyEven
     events.push(buildActingModeratorEvent(session));
   }
 
-  if (session.selected_thread_id && (session.status === 'topic_selected' || session.status === 'moderator_selected' || session.status === 'completed')) {
+  // Once a thread is selected, surface the topic_selected event regardless
+  // of how far the rest of the pipeline has progressed. The snapshot
+  // (selected_thread_id) is the source of truth, not the status string.
+  if (session.selected_thread_id) {
     events.push(buildTopicSelectedEvent(session));
   }
 
   // === Stage 4: Moderator selection ===
   if (session.moderator_model_id) {
     events.push(buildModeratorSelectedEvent(session));
+  }
+
+  // === Stage 5a: Research ===
+  if (session.research_snapshot) {
+    events.push(buildResearchEvent(session.research_snapshot));
+  }
+
+  // === Stage 5b: Cast selection ===
+  if (session.cast_snapshot) {
+    events.push(...buildCastEvents(session.cast_snapshot, session.session_type));
   }
 
   // === Failure ===
@@ -520,4 +538,112 @@ function buildModeratorSelectedEvent(session: SessionRowForJourney): JourneyEven
       regionSoftcapApplied: softcap,
     },
   };
+}
+
+// --- Stage 5a: Research events ---
+
+function buildResearchEvent(snapshot: ResearchResult & SnapshotMeta): JourneyEvent {
+  const factCount = snapshot.synthesisedFacts.length;
+  const contestedCount = snapshot.contestedClaims.length;
+  const openCount = snapshot.openQuestions.length;
+  const timelineCount = snapshot.timeline.length;
+
+  const descParts: string[] = [];
+  descParts.push(`The moderator read the source material attached to the chosen thread and synthesised it into a research note.`);
+  if (snapshot.overallSummary) {
+    descParts.push(`Overall: ${snapshot.overallSummary}`);
+  }
+  const counts: string[] = [];
+  if (factCount) counts.push(`${factCount} synthesised fact${factCount === 1 ? '' : 's'}`);
+  if (contestedCount) counts.push(`${contestedCount} contested claim${contestedCount === 1 ? '' : 's'}`);
+  if (openCount) counts.push(`${openCount} open question${openCount === 1 ? '' : 's'}`);
+  if (timelineCount) counts.push(`${timelineCount} timeline event${timelineCount === 1 ? '' : 's'}`);
+  if (counts.length > 0) descParts.push(`Found: ${counts.join(', ')}.`);
+  if (snapshot.error) descParts.push(`(Note: research call had an issue — ${snapshot.error})`);
+
+  return {
+    stage: 5,
+    stageName: STAGE_NAMES[5],
+    step: 'research_complete',
+    title: `Moderator researched the topic`,
+    description: descParts.join(' '),
+    timestamp: snapshot._completedAt,
+    data: {
+      synthesisedFacts: snapshot.synthesisedFacts,
+      contestedClaims: snapshot.contestedClaims,
+      openQuestions: snapshot.openQuestions,
+      timeline: snapshot.timeline,
+      overallSummary: snapshot.overallSummary,
+      centralItemIds: snapshot.centralItemIds,
+    },
+  };
+}
+
+// --- Stage 5b: Cast selection events ---
+
+function buildCastEvents(
+  snapshot: CastSelectionResult & SnapshotMeta,
+  sessionType: 'debate' | 'fireside_chat' | null | undefined,
+): JourneyEvent[] {
+  const events: JourneyEvent[] = [];
+
+  const type = sessionType || snapshot.sessionType;
+  const typeLabel = type === 'fireside_chat' ? 'fireside chat' : 'debate';
+  const seatCount = snapshot.participants.length;
+
+  // Cast assembled event
+  const castDescParts: string[] = [];
+  castDescParts.push(`The moderator picked ${seatCount} cast member${seatCount === 1 ? '' : 's'} for a ${typeLabel}.`);
+  if (snapshot.moderatorReasoning) {
+    castDescParts.push(snapshot.moderatorReasoning);
+  }
+  if (snapshot.error) castDescParts.push(`(Note: cast selection had an issue — ${snapshot.error})`);
+
+  events.push({
+    stage: 5,
+    stageName: STAGE_NAMES[5],
+    step: 'cast_assembled',
+    title: `Cast assembled: ${seatCount}-seat ${typeLabel}`,
+    description: castDescParts.join(' '),
+    timestamp: snapshot._completedAt,
+    data: {
+      sessionType: type,
+      participants: snapshot.participants.map((p: CastParticipant) => ({
+        modelId: p.modelId,
+        modelName: p.modelName,
+        provider: p.provider,
+        region: p.region,
+        seat: p.seat,
+        stance: p.stance,
+        conflictScore: p.conflictScore,
+        conflictReason: p.conflictReason,
+        reasoning: p.reasoning,
+      })),
+      moderatorReasoning: snapshot.moderatorReasoning,
+    },
+  });
+
+  // Also invited event (only if there are uncast pool members)
+  if (snapshot.alsoInvited && snapshot.alsoInvited.length > 0) {
+    events.push({
+      stage: 5,
+      stageName: STAGE_NAMES[5],
+      step: 'also_invited',
+      title: `${snapshot.alsoInvited.length} pool member${snapshot.alsoInvited.length === 1 ? '' : 's'} considered but not cast`,
+      description: `Their stances and conflict declarations are part of the published session record so the audience can see who was in the room. The cast picks reflect editorial judgment, not exclusion of these voices.`,
+      timestamp: snapshot._completedAt,
+      data: {
+        alsoInvited: snapshot.alsoInvited.map((a: AlsoInvitedEntry) => ({
+          modelId: a.modelId,
+          modelName: a.modelName,
+          provider: a.provider,
+          stance: a.stance,
+          conflictScore: a.conflictScore,
+          voteRank: a.voteRank,
+        })),
+      },
+    });
+  }
+
+  return events;
 }
