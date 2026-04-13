@@ -26,6 +26,7 @@
 import { callPoolModel, type PoolModel } from './model-pool';
 import { buildIdentityAnchor } from './broadcast';
 import { fetchReadableBatch, type ReadableArticle } from './readability';
+import { searchWebBatch, type WebSearchResponse } from './web-search';
 
 // --- Types ---
 
@@ -251,32 +252,65 @@ export interface DeepResearchSourceFetch {
   fetchError: string | null;
 }
 
+/** A web search the moderator decided to run, and what came back. */
+export interface DeepResearchWebSearch {
+  /** The query the moderator generated */
+  query: string;
+  /** The reason the moderator gave for running this query */
+  reason: string;
+  /** Tavily results — each with extracted text */
+  results: Array<{
+    url: string;
+    title: string;
+    snippet: string;
+    fullText: string | null;
+    score: number;
+  }>;
+  /** Error if the search itself failed (e.g. no API key, rate limit) */
+  error: string | null;
+}
+
+/** A citation source — either a DB-ingested item or a web URL fetched
+ *  during the moderator's web search round. */
+export interface DeepResearchCitation {
+  /** 'db' for items from forum_items, 'web' for Tavily-fetched URLs */
+  type: 'db' | 'web';
+  /** The DB item id (when type='db') or the URL (when type='web') */
+  ref: string;
+}
+
 export interface DeepResearchResult {
   /** The moderator's synthesised key claims, with citation hints */
   keyClaims: Array<{
     claim: string;
-    citationItemIds: string[];
+    citations: DeepResearchCitation[];
   }>;
-  /** Concrete evidence snippets the moderator pulled from the sources */
+  /** Concrete evidence snippets the moderator pulled from sources */
   evidenceSnippets: Array<{
     snippet: string;
-    sourceItemId: string;
+    citation: DeepResearchCitation;
     relevance: string;
   }>;
-  /** Areas the available sources don't adequately cover */
+  /** Areas the available sources don't adequately cover, even after
+   *  the web search round */
   gapsInCoverage: string[];
   /** A deeper free-text synthesis the moderator wrote (longer than light research) */
   overallSynthesis: string;
   /** Per-source fetch results — kept on the snapshot for the journey UI
-   *  so readers can see what the moderator actually read */
+   *  so readers can see what DB sources the moderator actually read */
   sourceFetches: DeepResearchSourceFetch[];
+  /** Web searches the moderator decided to run after reading DB sources.
+   *  Each entry carries the query, the moderator's reason, and the
+   *  results. Empty array if web search was skipped (no API key) or
+   *  the moderator decided no web research was needed. */
+  webSearches: DeepResearchWebSearch[];
   /** Raw error if the call failed */
   error?: string;
 }
 
-// --- Build the deep research prompt ---
+// --- Phase A: query generation prompt ---
 
-function buildDeepResearchPrompt(
+function buildQueryGenerationPrompt(
   threadTitle: string,
   threadSignificance: string[],
   fetches: DeepResearchSourceFetch[],
@@ -285,17 +319,12 @@ function buildDeepResearchPrompt(
 ): { system: string; user: string } {
   const system = `${buildIdentityAnchor(moderatorModel)}
 
-You are the moderator of today's dAIly Forum session in the ${category.toUpperCase()} category. You've already done a light research pass and picked the cast. Now you're doing the DEEP read — actually digesting the full article text from the most central sources before you build the debate agenda.
+You are the moderator of today's dAIly Forum session in the ${category.toUpperCase()} category. You've already done a light research pass and picked the cast. Now you're starting the deep research phase, which has TWO rounds:
 
-This is your last chance to update your understanding before the debate runs. The agenda you build next will draw directly from this synthesis, so be thorough. Your job here is to:
+  Round 1 (NOW): read the database-ingested sources below, identify what's missing or thin, and generate 3-5 web search queries to fill those gaps.
+  Round 2 (NEXT): you'll receive the web search results and produce the full deep synthesis.
 
-1. Read every full article text below carefully
-2. Identify the KEY CLAIMS — the substantive assertions the sources make, with which item(s) support each one
-3. Pull out concrete EVIDENCE SNIPPETS — short verbatim quotes or close paraphrases that you might want to bring up in the debate
-4. Note GAPS — things that aren't covered by the sources but matter to the discussion
-5. Write a deeper SYNTHESIS — longer and more substantive than the light research note
-
-You are NOT picking cast (already done), NOT building the agenda (next step), NOT taking a stance. You are reading and synthesising at depth.`;
+This is round 1. Your job is to read carefully and generate EFFECTIVE QUERIES — not to start synthesising claims yet. Save the synthesis for round 2 when you have all the material in hand.`;
 
   const fetchBlocks = fetches.map((f, i) => {
     const lines = [
@@ -317,39 +346,197 @@ You are NOT picking cast (already done), NOT building the agenda (next step), NO
 
   const successCount = fetches.filter(f => f.text !== null).length;
 
-  const user = `THE TOPIC YOU'RE RESEARCHING IN DEPTH:
+  const user = `THE TOPIC:
   Title: ${threadTitle}
 ${threadSignificance.length > 0 ? `  Significance assessment: ${threadSignificance.join(' | ')}` : ''}
 
-THE SOURCES (${successCount} of ${fetches.length} fetched successfully):
+DATABASE SOURCES (${successCount} of ${fetches.length} fetched successfully):
 
 ${fetchBlocks}
 
 YOUR TASK:
 
+Read every available source above carefully. Then identify what's MISSING — perspectives, data, criticism, context, or counterpoints that the database sources don't cover but that would matter to a substantive debate on this topic.
+
+Generate 3-5 web search queries that would fill those gaps. Good queries are SPECIFIC — not "AI safety" but "Apollo Research scheming methodology criticism". Aim for queries that would surface:
+
+- Independent third-party analysis of contested claims
+- Counterpoints, criticism, or alternative methodology
+- Context the press release / official announcement deliberately omitted
+- Expert reactions from outside the originating organization
+- Related prior work the sources didn't cite
+- Regulatory, governance, or policy context if absent
+
+Be honest about whether you actually need web research. If the database sources are genuinely comprehensive and the gaps are minor, fewer queries (2-3) is fine. Don't generate filler queries.
+
+Each query needs a REASON — what gap it's filling, what kind of result you're hoping for. The reason gets published in the journey, so be specific.
+
+Respond with JSON only:
+
+{
+  "queries": [
+    {
+      "query": "<the search query string>",
+      "reason": "<one sentence: what gap this fills, what you hope to find>"
+    }
+  ]
+}`;
+
+  return { system, user };
+}
+
+interface GeneratedQuery {
+  query: string;
+  reason: string;
+}
+
+function parseGeneratedQueries(raw: string): GeneratedQuery[] {
+  try {
+    let text = raw.trim();
+    const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) text = fenceMatch[1].trim();
+
+    const jsonStart = text.indexOf('{');
+    const jsonEnd = text.lastIndexOf('}');
+    if (jsonStart === -1 || jsonEnd === -1) return [];
+
+    let jsonStr = text.slice(jsonStart, jsonEnd + 1);
+    jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
+
+    const parsed = JSON.parse(jsonStr) as { queries?: unknown };
+    if (!Array.isArray(parsed.queries)) return [];
+
+    return (parsed.queries as Array<Record<string, unknown>>)
+      .map(q => ({
+        query: typeof q.query === 'string' ? q.query : '',
+        reason: typeof q.reason === 'string' ? q.reason : '',
+      }))
+      .filter(q => q.query.length > 0)
+      .slice(0, 5); // cap at 5
+  } catch {
+    return [];
+  }
+}
+
+// --- Phase C: synthesis prompt (with both DB + web sources) ---
+
+function buildDeepResearchPrompt(
+  threadTitle: string,
+  threadSignificance: string[],
+  fetches: DeepResearchSourceFetch[],
+  webSearches: DeepResearchWebSearch[],
+  category: string,
+  moderatorModel: PoolModel,
+): { system: string; user: string } {
+  const system = `${buildIdentityAnchor(moderatorModel)}
+
+You are the moderator of today's dAIly Forum session in the ${category.toUpperCase()} category. You're now in round 2 of deep research. You've already read the database-ingested sources and run a round of web searches to fill the gaps. Now you produce the final synthesis.
+
+The agenda you build next will draw directly from this synthesis, so be thorough. You have two source pools:
+
+1. DATABASE SOURCES — items the pipeline ingested from RSS/APIs and you read in full
+2. WEB SEARCH RESULTS — pages your earlier query round surfaced, with extracted text
+
+Treat them as a unified body of research. Cite which source each claim comes from using the citation format below.
+
+You are NOT picking cast (already done), NOT building the agenda (next step), NOT taking a stance. You are reading and synthesising at depth.`;
+
+  const dbBlocks = fetches.map((f, i) => {
+    const lines = [
+      `[DB ${i + 1}] DB_ITEM_ID: ${f.itemId}`,
+      `    Source: ${f.sourceName}`,
+      `    Title: ${f.title}`,
+      `    URL: ${f.url}`,
+    ];
+    if (f.text) {
+      lines.push(`    Word count: ${f.wordCount}`);
+      lines.push(``);
+      lines.push(`    FULL TEXT:`);
+      lines.push(f.text);
+    } else {
+      lines.push(`    [Could not fetch — ${f.fetchError || 'unknown error'}]`);
+    }
+    return lines.join('\n');
+  }).join('\n\n---\n\n');
+
+  const webBlocks = webSearches.map((ws, qi) => {
+    if (ws.error) {
+      return `[WEB QUERY ${qi + 1}] "${ws.query}"\n    Reason: ${ws.reason}\n    [Search failed: ${ws.error}]`;
+    }
+    if (ws.results.length === 0) {
+      return `[WEB QUERY ${qi + 1}] "${ws.query}"\n    Reason: ${ws.reason}\n    [No results returned]`;
+    }
+    const queryHeader = `[WEB QUERY ${qi + 1}] "${ws.query}"\n    Reason: ${ws.reason}`;
+    const resultBlocks = ws.results.map((r, ri) => {
+      const lines = [
+        `  [WEB ${qi + 1}.${ri + 1}] WEB_URL: ${r.url}`,
+        `      Title: ${r.title}`,
+        `      Relevance score: ${r.score.toFixed(2)}`,
+      ];
+      if (r.fullText) {
+        lines.push(`      EXTRACTED CONTENT:`);
+        lines.push(r.fullText.split('\n').map(l => '      ' + l).join('\n'));
+      } else {
+        lines.push(`      Snippet only: ${r.snippet}`);
+      }
+      return lines.join('\n');
+    }).join('\n\n');
+    return `${queryHeader}\n${resultBlocks}`;
+  }).join('\n\n===\n\n');
+
+  const dbSuccessCount = fetches.filter(f => f.text !== null).length;
+  const webResultCount = webSearches.reduce((sum, ws) => sum + ws.results.length, 0);
+
+  const user = `THE TOPIC:
+  Title: ${threadTitle}
+${threadSignificance.length > 0 ? `  Significance: ${threadSignificance.join(' | ')}` : ''}
+
+DATABASE SOURCES (${dbSuccessCount} of ${fetches.length} fetched):
+
+${dbBlocks}
+
+${webSearches.length > 0 ? `WEB SEARCH RESULTS (${webResultCount} pages across ${webSearches.length} queries):
+
+${webBlocks}` : 'NO WEB SEARCH WAS RUN.'}
+
+YOUR TASK:
+
 Produce a deep research note covering:
 
-1. KEY CLAIMS — the substantive assertions the sources make. For each claim, note which item(s) support it via their ITEM_ID. Be specific. "The methodology has limitations" is too vague; "The sample of 50 prompts is too small to generalize across model scales (Item A)" is useful.
+1. KEY CLAIMS — the substantive assertions across both source pools. For each claim, list its citations using this format:
+   - DB source: { "type": "db", "ref": "<DB_ITEM_ID from above>" }
+   - Web source: { "type": "web", "ref": "<WEB_URL from above>" }
+   A single claim can have multiple citations spanning both pools. Be specific — vague claims are useless.
 
-2. EVIDENCE SNIPPETS — short quotes or close paraphrases (1-2 sentences each) you might bring up during the debate. For each, name the source item and explain the relevance. Aim for 5-10 snippets covering the most debate-worthy ground.
+2. EVIDENCE SNIPPETS — short quotes or close paraphrases you might bring up in the debate. Each has ONE citation (the most direct source). Aim for 5-12 across both pools.
 
-3. GAPS IN COVERAGE — things that matter to this discussion but aren't covered by the sources. Be honest. If the source material doesn't address X, say so.
+3. GAPS IN COVERAGE — what's STILL missing after the web search round. If the web search filled most gaps, the list should be short. If it didn't, name what's still uncovered.
 
-4. OVERALL SYNTHESIS — 4-6 sentences capturing what the sources collectively establish, where they conflict, and where they leave open questions. Substantively richer than your light research note.
+4. OVERALL SYNTHESIS — 4-8 sentences capturing what the sources collectively establish, where they conflict, and where they leave open questions. Substantively richer than your light research note. If the web round revealed counterpoints to the official story, surface them.
 
-If a source failed to fetch (marked above), don't try to invent claims from it. Work only from what you actually read.
+If a source failed to fetch, don't invent claims from it.
 
 Respond with JSON only:
 
 {
   "keyClaims": [
-    { "claim": "<the assertion>", "citationItemIds": ["<item id>", ...] }
+    {
+      "claim": "<the assertion>",
+      "citations": [
+        { "type": "db", "ref": "<DB_ITEM_ID>" },
+        { "type": "web", "ref": "<WEB_URL>" }
+      ]
+    }
   ],
   "evidenceSnippets": [
-    { "snippet": "<short quote or paraphrase>", "sourceItemId": "<item id>", "relevance": "<why this matters>" }
+    {
+      "snippet": "<short quote or paraphrase>",
+      "citation": { "type": "db" | "web", "ref": "<id or url>" },
+      "relevance": "<why this matters>"
+    }
   ],
   "gapsInCoverage": ["<gap 1>", "<gap 2>"],
-  "overallSynthesis": "<4-6 sentences>"
+  "overallSynthesis": "<4-8 sentences>"
 }`;
 
   return { system, user };
@@ -357,13 +544,22 @@ Respond with JSON only:
 
 // --- Parse the deep research response ---
 
-function parseDeepResearchResponse(raw: string): Omit<DeepResearchResult, 'sourceFetches'> {
-  const empty: Omit<DeepResearchResult, 'sourceFetches'> = {
+function parseDeepResearchResponse(raw: string): Omit<DeepResearchResult, 'sourceFetches' | 'webSearches'> {
+  const empty: Omit<DeepResearchResult, 'sourceFetches' | 'webSearches'> = {
     keyClaims: [],
     evidenceSnippets: [],
     gapsInCoverage: [],
     overallSynthesis: '',
   };
+
+  function parseCitation(c: unknown): DeepResearchCitation | null {
+    if (!c || typeof c !== 'object') return null;
+    const obj = c as Record<string, unknown>;
+    const type = obj.type === 'web' ? 'web' : obj.type === 'db' ? 'db' : null;
+    const ref = typeof obj.ref === 'string' ? obj.ref : null;
+    if (!type || !ref) return null;
+    return { type, ref };
+  }
 
   try {
     let text = raw.trim();
@@ -383,17 +579,20 @@ function parseDeepResearchResponse(raw: string): Omit<DeepResearchResult, 'sourc
       keyClaims: Array.isArray(parsed.keyClaims)
         ? (parsed.keyClaims as Array<Record<string, unknown>>).map(c => ({
             claim: typeof c.claim === 'string' ? c.claim : '',
-            citationItemIds: Array.isArray(c.citationItemIds)
-              ? (c.citationItemIds as unknown[]).map(String)
+            citations: Array.isArray(c.citations)
+              ? (c.citations as unknown[]).map(parseCitation).filter((x): x is DeepResearchCitation => x !== null)
               : [],
           }))
         : [],
       evidenceSnippets: Array.isArray(parsed.evidenceSnippets)
-        ? (parsed.evidenceSnippets as Array<Record<string, unknown>>).map(s => ({
-            snippet: typeof s.snippet === 'string' ? s.snippet : '',
-            sourceItemId: typeof s.sourceItemId === 'string' ? s.sourceItemId : '',
-            relevance: typeof s.relevance === 'string' ? s.relevance : '',
-          }))
+        ? (parsed.evidenceSnippets as Array<Record<string, unknown>>).map(s => {
+            const cit = parseCitation(s.citation);
+            return {
+              snippet: typeof s.snippet === 'string' ? s.snippet : '',
+              citation: cit || { type: 'db' as const, ref: '' },
+              relevance: typeof s.relevance === 'string' ? s.relevance : '',
+            };
+          })
         : [],
       gapsInCoverage: Array.isArray(parsed.gapsInCoverage)
         ? (parsed.gapsInCoverage as unknown[]).map(String)
@@ -405,12 +604,18 @@ function parseDeepResearchResponse(raw: string): Omit<DeepResearchResult, 'sourc
   }
 }
 
-// --- Main entry point: deep research ---
+// --- Main entry point: deep research (two-phase) ---
 
-/** Run deep research: fetch the full article text for the most central
- *  items via the readability parser, then have the moderator synthesise
- *  the substance into a deep research note. Used after cast selection
- *  and before agenda build. */
+/** Run two-phase deep research:
+ *
+ *   Phase A — fetch DB sources via readability, moderator reads them,
+ *             generates 3-5 web search queries to fill identified gaps
+ *   Phase B — system runs queries via Tavily
+ *   Phase C — moderator synthesises with both DB sources AND web results
+ *
+ *  If the Tavily key is missing, Phase A and B are skipped entirely
+ *  and the function falls back to single-call synthesis on DB sources
+ *  only — same as the pre-Phase-2.5 behaviour. */
 export async function researchTopicDeep(
   threadTitle: string,
   threadSignificance: string[],
@@ -425,13 +630,14 @@ export async function researchTopicDeep(
       gapsInCoverage: [],
       overallSynthesis: 'No source items provided for deep research.',
       sourceFetches: [],
+      webSearches: [],
       error: 'Empty item list',
     };
   }
 
-  console.log(`[DEEP-RESEARCH] Fetching ${itemsToFetch.length} sources via readability...`);
+  console.log(`[DEEP-RESEARCH] Fetching ${itemsToFetch.length} DB sources via readability...`);
 
-  // Fetch all items in parallel
+  // Fetch all DB items in parallel
   const articles: ReadableArticle[] = await fetchReadableBatch(
     itemsToFetch.map(i => i.url),
   );
@@ -451,7 +657,7 @@ export async function researchTopicDeep(
 
   const successCount = sourceFetches.filter(f => f.text !== null).length;
   const totalWords = sourceFetches.reduce((sum, f) => sum + f.wordCount, 0);
-  console.log(`[DEEP-RESEARCH] Fetched ${successCount}/${itemsToFetch.length} sources (${totalWords} total words)`);
+  console.log(`[DEEP-RESEARCH] Fetched ${successCount}/${itemsToFetch.length} DB sources (${totalWords} total words)`);
 
   if (successCount === 0) {
     return {
@@ -460,23 +666,70 @@ export async function researchTopicDeep(
       gapsInCoverage: [],
       overallSynthesis: 'No sources could be fetched — readability parser returned errors for every URL.',
       sourceFetches,
+      webSearches: [],
       error: 'All source fetches failed',
     };
   }
 
-  console.log(`[DEEP-RESEARCH] ${moderatorModel.displayName} synthesising...`);
+  // === Phase A: generate web search queries ===
+  // Skip entirely if no Tavily key — fall through to synthesis with DB only
+  const hasTavily = !!process.env.TAVILY_API_KEY;
+  let webSearches: DeepResearchWebSearch[] = [];
+
+  if (hasTavily) {
+    console.log(`[DEEP-RESEARCH] Phase A: ${moderatorModel.displayName} generating web queries...`);
+    try {
+      const queryPrompt = buildQueryGenerationPrompt(
+        threadTitle,
+        threadSignificance,
+        sourceFetches,
+        category,
+        moderatorModel,
+      );
+      const queryRaw = await callPoolModel(moderatorModel, queryPrompt.system, queryPrompt.user, 1500);
+      const generatedQueries = parseGeneratedQueries(queryRaw);
+      console.log(`[DEEP-RESEARCH] Generated ${generatedQueries.length} queries`);
+
+      // === Phase B: run queries via Tavily ===
+      if (generatedQueries.length > 0) {
+        console.log(`[DEEP-RESEARCH] Phase B: running web searches...`);
+        const searchResponses = await searchWebBatch(
+          generatedQueries.map(q => q.query),
+        );
+
+        webSearches = generatedQueries.map((gq, i) => {
+          const sr: WebSearchResponse = searchResponses[i];
+          return {
+            query: gq.query,
+            reason: gq.reason,
+            results: sr.results,
+            error: sr.error,
+          };
+        });
+
+        const totalWebResults = webSearches.reduce((s, ws) => s + ws.results.length, 0);
+        console.log(`[DEEP-RESEARCH] Web round complete: ${totalWebResults} results across ${webSearches.length} queries`);
+      }
+    } catch (err) {
+      console.warn(`[DEEP-RESEARCH] Web research round failed: ${err instanceof Error ? err.message : 'unknown'} — proceeding with DB sources only`);
+    }
+  } else {
+    console.log(`[DEEP-RESEARCH] No TAVILY_API_KEY — skipping web research, synthesising from DB sources only`);
+  }
+
+  // === Phase C: final synthesis with both source pools ===
+  console.log(`[DEEP-RESEARCH] Phase C: ${moderatorModel.displayName} synthesising final research note...`);
 
   const { system, user } = buildDeepResearchPrompt(
     threadTitle,
     threadSignificance,
     sourceFetches,
+    webSearches,
     category,
     moderatorModel,
   );
 
   try {
-    // Bigger token budget for the deep call — we're sending full article
-    // text in and expecting a richer synthesis out.
     const raw = await callPoolModel(moderatorModel, system, user, 8000);
     const parsed = parseDeepResearchResponse(raw);
 
@@ -485,6 +738,7 @@ export async function researchTopicDeep(
     return {
       ...parsed,
       sourceFetches,
+      webSearches,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown error';
@@ -495,6 +749,7 @@ export async function researchTopicDeep(
       gapsInCoverage: [],
       overallSynthesis: '',
       sourceFetches,
+      webSearches,
       error: msg,
     };
   }
