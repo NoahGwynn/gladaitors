@@ -24,12 +24,15 @@
 //      separately for the chosen topic.
 //
 //   3. selectModerator(topicId, broadcast, queue, recentRegions)
-//      The real Stage 4 moderator selection. Walks the rotation queue,
-//      skipping any model with conflict ≥ 70 on the chosen topic.
-//      First eligible wins. Falls back to least conflicted (with a
-//      10-point tie window broken by rotation) if nobody is clean.
-//      Soft cap: avoid 3rd consecutive same-region moderator unless
-//      that would override the conflict rule.
+//      The real Stage 4 moderator selection. Walks graduated tiers
+//      (<30 → <50 → <70 → <80 → <90), and within each tier walks the
+//      rotation queue with the region softcap applied. First eligible
+//      at the lowest passing tier wins, so a clean model in tier 1
+//      always beats a compromised model in tier 3 regardless of queue
+//      position. Falls back to least conflicted (with a 10-point tie
+//      window broken by rotation) only if all five tiers are exhausted.
+//      Soft cap: avoid 3rd consecutive same-region moderator within
+//      a tier, unless doing so would force a drop to a higher tier.
 //
 // All decisions are deterministic and the full trace is captured for
 // the session record so the published transparency layer can show
