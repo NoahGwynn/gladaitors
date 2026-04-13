@@ -21,8 +21,9 @@
 import type { OrganizeResult } from './organize';
 import type { BroadcastResult, ModelBroadcastResponse } from './broadcast';
 import type { RunoffResult } from './topic-selection';
-import type { ResearchResult } from './research';
+import type { ResearchResult, DeepResearchResult } from './research';
 import type { CastSelectionResult, CastParticipant, AlsoInvitedEntry } from './cast-selection';
+import type { AgendaBuildResult, AgendaSegment } from './agenda';
 
 // --- Types ---
 
@@ -68,6 +69,8 @@ export interface SessionRowForJourney {
   research_snapshot?: (ResearchResult & SnapshotMeta) | null;
   cast_snapshot?: (CastSelectionResult & SnapshotMeta) | null;
   session_type?: 'debate' | 'fireside_chat' | null;
+  deep_research_snapshot?: (DeepResearchResult & SnapshotMeta) | null;
+  agenda_snapshot?: (AgendaBuildResult & SnapshotMeta) | null;
 
   vote_scores?: Array<{ threadId: string; score: number; voterCount: number }> | null;
   was_runoff?: boolean | null;
@@ -169,6 +172,16 @@ export function deriveSessionJourney(session: SessionRowForJourney): JourneyEven
   // === Stage 5b: Cast selection ===
   if (session.cast_snapshot) {
     events.push(...buildCastEvents(session.cast_snapshot, session.session_type));
+  }
+
+  // === Stage 5c-i: Deep research ===
+  if (session.deep_research_snapshot) {
+    events.push(buildDeepResearchEvent(session.deep_research_snapshot));
+  }
+
+  // === Stage 5c-ii: Agenda ===
+  if (session.agenda_snapshot) {
+    events.push(buildAgendaEvent(session.agenda_snapshot, session.session_type));
   }
 
   // === Failure ===
@@ -646,4 +659,131 @@ function buildCastEvents(
   }
 
   return events;
+}
+
+// --- Stage 5c-i: Deep research event ---
+
+function buildDeepResearchEvent(snapshot: DeepResearchResult & SnapshotMeta): JourneyEvent {
+  const dbCount = snapshot.sourceFetches.filter(f => f.text !== null).length;
+  const dbTotal = snapshot.sourceFetches.length;
+  const webQueries = snapshot.webSearches.length;
+  const webResults = snapshot.webSearches.reduce((s, ws) => s + ws.results.length, 0);
+  const webRequested = snapshot.webSearchesRequested ?? 0;
+  const cap = snapshot.webSearchCap ?? 0;
+  const capHit = webRequested > webQueries;
+
+  const dbCitations = snapshot.evidenceSnippets.filter(s => s.citation.type === 'db').length;
+  const webCitations = snapshot.evidenceSnippets.filter(s => s.citation.type === 'web').length;
+
+  const descParts: string[] = [];
+  descParts.push(`The moderator did a deep read of the source material — fetched ${dbCount} of ${dbTotal} DB sources via readability and synthesised them at depth.`);
+  if (webQueries > 0) {
+    descParts.push(`After the DB read, generated ${webRequested} web search ${webRequested === 1 ? 'query' : 'queries'} aimed at filling gaps and ran ${webQueries} via Tavily, returning ${webResults} results.`);
+    if (capHit) {
+      descParts.push(`(Wanted ${webRequested} queries but capped at ${cap}.)`);
+    }
+  } else if (snapshot.webSearchesRequested !== undefined && snapshot.webSearchesRequested === 0) {
+    descParts.push(`No web search round was needed — the DB sources were sufficient.`);
+  } else {
+    descParts.push(`No web search round was run.`);
+  }
+  descParts.push(`Final synthesis: ${snapshot.keyClaims.length} key claims, ${snapshot.evidenceSnippets.length} evidence snippets (${dbCitations} from DB, ${webCitations} from web), ${snapshot.gapsInCoverage.length} remaining gaps.`);
+  if (snapshot.error) descParts.push(`(Note: deep research had an issue — ${snapshot.error})`);
+
+  return {
+    stage: 5,
+    stageName: STAGE_NAMES[5],
+    step: 'deep_research_complete',
+    title: `Deep research: ${snapshot.keyClaims.length} key claims across ${dbCount} DB + ${webResults} web sources`,
+    description: descParts.join(' '),
+    timestamp: snapshot._completedAt,
+    data: {
+      dbSourceCount: dbCount,
+      dbSourceTotal: dbTotal,
+      webQueriesRun: webQueries,
+      webQueriesRequested: webRequested,
+      webSearchCap: cap,
+      capHit,
+      webResultsTotal: webResults,
+      keyClaims: snapshot.keyClaims,
+      evidenceSnippets: snapshot.evidenceSnippets,
+      gapsInCoverage: snapshot.gapsInCoverage,
+      overallSynthesis: snapshot.overallSynthesis,
+      sourceFetches: snapshot.sourceFetches.map(f => ({
+        itemId: f.itemId,
+        title: f.title,
+        sourceName: f.sourceName,
+        url: f.url,
+        wordCount: f.wordCount,
+        success: f.text !== null,
+        fetchError: f.fetchError,
+      })),
+      webSearches: snapshot.webSearches,
+    },
+  };
+}
+
+// --- Stage 5c-ii: Agenda event ---
+
+function buildAgendaEvent(
+  snapshot: AgendaBuildResult & SnapshotMeta,
+  sessionType: 'debate' | 'fireside_chat' | null | undefined,
+): JourneyEvent {
+  const segmentCount = snapshot.segments.length;
+  const optionalCount = snapshot.optionalDeepening.length;
+  const goalCount = snapshot.goals.length;
+  const typeLabel = sessionType === 'fireside_chat' ? 'fireside chat' : 'debate';
+
+  const totalMemoryHits = (snapshot.memoryPreload || []).reduce(
+    (s, m) => s + (m.exactHits?.length || 0) + (m.familyHits?.length || 0),
+    0,
+  );
+
+  const descParts: string[] = [];
+  descParts.push(`The moderator built the structured playbook for today's ${typeLabel} — ${segmentCount} planned segment${segmentCount === 1 ? '' : 's'}${optionalCount > 0 ? ` plus ${optionalCount} optional deepening segment${optionalCount === 1 ? '' : 's'}` : ''}, ${goalCount} session goals.`);
+  if (snapshot.topicTags && snapshot.topicTags.length > 0) {
+    descParts.push(`Topic tagged as: ${snapshot.topicTags.join(', ')}.`);
+  }
+  if (totalMemoryHits > 0) {
+    descParts.push(`Pre-loaded ${totalMemoryHits} past statement${totalMemoryHits === 1 ? '' : 's'} from the cast members for the runtime to surface as contradictions or echoes.`);
+  } else {
+    descParts.push(`Cold start — no past statements to pre-load yet (memory builds up over time).`);
+  }
+  if (snapshot.error) descParts.push(`(Note: agenda build had an issue — ${snapshot.error})`);
+
+  return {
+    stage: 5,
+    stageName: STAGE_NAMES[5],
+    step: 'agenda_built',
+    title: `Agenda built: ${segmentCount}-segment ${typeLabel}`,
+    description: descParts.join(' '),
+    timestamp: snapshot._completedAt,
+    data: {
+      sessionFraming: snapshot.sessionFraming,
+      goals: snapshot.goals,
+      segments: snapshot.segments.map((s: AgendaSegment) => ({
+        name: s.name,
+        mainQuestion: s.mainQuestion,
+        subQuestions: s.subQuestions,
+        participantsToAsk: s.participantsToAsk,
+        whyItMatters: s.whyItMatters,
+        expectedDuration: s.expectedDuration,
+        relatedResearchCount: s.relatedResearch?.length || 0,
+        relatedMemoryCount: s.relatedMemory?.length || 0,
+      })),
+      optionalDeepening: snapshot.optionalDeepening.map((s: AgendaSegment) => ({
+        name: s.name,
+        mainQuestion: s.mainQuestion,
+      })),
+      closingFrame: snapshot.closingFrame,
+      topicTags: snapshot.topicTags,
+      memoryPreloadSummary: (snapshot.memoryPreload || []).map(m => ({
+        seat: m.seat,
+        modelId: m.modelId,
+        modelFamily: m.modelFamily,
+        exactHitCount: m.exactHits?.length || 0,
+        familyHitCount: m.familyHits?.length || 0,
+      })),
+    },
+  };
 }

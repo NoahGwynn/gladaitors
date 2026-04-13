@@ -50,8 +50,15 @@ import {
   type ActingModeratorResult,
   type ModeratorResult,
 } from '@/lib/forum/moderator-selection';
-import { researchTopicLight, type ResearchItem, type ResearchResult } from '@/lib/forum/research';
+import {
+  researchTopicLight,
+  researchTopicDeep,
+  type ResearchItem,
+  type ResearchResult,
+  type DeepResearchResult,
+} from '@/lib/forum/research';
 import { selectCast, type CastSelectionResult } from '@/lib/forum/cast-selection';
+import { buildAgenda, type AgendaBuildResult } from '@/lib/forum/agenda';
 import { MODEL_POOL } from '@/lib/forum/model-pool';
 
 interface SessionRow {
@@ -63,6 +70,8 @@ interface SessionRow {
   research_snapshot: unknown;
   cast_snapshot: unknown;
   session_type: string | null;
+  deep_research_snapshot: unknown;
+  agenda_snapshot: unknown;
   broadcast_snapshot: BroadcastResult | null;
   selected_thread_id: string | null;
   vote_scores: unknown;
@@ -102,12 +111,12 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Failed to create session row' }, { status: 500 });
   }
 
-  // If the session has fully run Stage 5, return it as-is (idempotent).
-  // Earlier states still re-run to pick up from where they failed —
-  // the resume mechanism is the snapshot checks inside each stage
-  // (e.g. broadcast_snapshot) which short-circuit the LLM calls if
-  // the data already exists.
-  if (session.status === 'cast_selected' || session.status === 'completed') {
+  // If the session has fully run Stage 5 (through agenda build), return
+  // it as-is (idempotent). Earlier states still re-run to pick up from
+  // where they failed — the resume mechanism is the snapshot checks
+  // inside each stage (e.g. broadcast_snapshot) which short-circuit
+  // the LLM calls if the data already exists.
+  if (session.status === 'agenda_built' || session.status === 'completed') {
     console.log(`[SELECT] Session already ${session.status} — returning existing row`);
     return Response.json({ session, alreadyComplete: true });
   }
@@ -387,12 +396,83 @@ export async function POST(request: NextRequest) {
           ...castResult,
         },
         session_type: castResult.sessionType,
-        // completed_at intentionally NOT set yet — Stage 5c (deep research
-        // + agenda) and Stage 6 (debate) still pending.
       })
       .eq('id', session.id);
 
-    // === Step 12: Return the full session record ===
+    // === Step 12: Stage 5c-i — deep research ===
+    // Gracefully degrade if cast selection failed (can't proceed to
+    // agenda without a cast — return what we have).
+    if (castResult.participants.length === 0) {
+      console.warn('[SELECT] Cast selection produced no participants — skipping deep research and agenda');
+      const { data: partial } = await supabase
+        .from('forum_sessions')
+        .select('*')
+        .eq('id', session.id)
+        .single();
+      return Response.json({
+        session: partial,
+        voteScores,
+        tieDetection,
+        runoffResult,
+        actingModerator,
+        moderator,
+        research,
+        cast: castResult,
+        warning: 'Cast selection produced no participants',
+      });
+    }
+
+    const deepResearchStartedAt = new Date().toISOString();
+    const deepResearch: DeepResearchResult = await researchTopicDeep(
+      topicTitle,
+      topicSignificance,
+      researchItems,
+      category,
+      moderatorPoolModel,
+    );
+    const deepResearchCompletedAt = new Date().toISOString();
+
+    await supabase
+      .from('forum_sessions')
+      .update({
+        status: 'deep_researched',
+        deep_research_snapshot: {
+          _startedAt: deepResearchStartedAt,
+          _completedAt: deepResearchCompletedAt,
+          ...deepResearch,
+        },
+      })
+      .eq('id', session.id);
+
+    // === Step 13: Stage 5c-ii — agenda build ===
+    const agendaStartedAt = new Date().toISOString();
+    const agenda: AgendaBuildResult = await buildAgenda(
+      topicTitle,
+      topicSignificance,
+      research,
+      deepResearch,
+      castResult.participants,
+      castResult.sessionType,
+      moderatorPoolModel,
+      category,
+      session.id,
+    );
+    const agendaCompletedAt = new Date().toISOString();
+
+    await supabase
+      .from('forum_sessions')
+      .update({
+        status: 'agenda_built',
+        agenda_snapshot: {
+          _startedAt: agendaStartedAt,
+          _completedAt: agendaCompletedAt,
+          ...agenda,
+        },
+        // completed_at intentionally NOT set yet — Stage 6 (debate) still pending
+      })
+      .eq('id', session.id);
+
+    // === Step 14: Return the full session record ===
     const { data: finalSession } = await supabase
       .from('forum_sessions')
       .select('*')
@@ -408,6 +488,8 @@ export async function POST(request: NextRequest) {
       moderator,
       research,
       cast: castResult,
+      deepResearch,
+      agenda,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown error';

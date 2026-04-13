@@ -588,7 +588,11 @@ function parseDeepResearchResponse(raw: string): Omit<DeepResearchResult, 'sourc
 
     const jsonStart = text.indexOf('{');
     const jsonEnd = text.lastIndexOf('}');
-    if (jsonStart === -1 || jsonEnd === -1) return { ...empty, error: 'No JSON found' };
+    if (jsonStart === -1 || jsonEnd === -1) {
+      console.warn(`[DEEP-RESEARCH] No JSON found in response. Length=${raw.length}. First 500 chars:`);
+      console.warn(raw.slice(0, 500));
+      return { ...empty, error: `No JSON found (response length: ${raw.length})` };
+    }
 
     let jsonStr = text.slice(jsonStart, jsonEnd + 1);
     jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
@@ -766,7 +770,11 @@ export async function researchTopicDeep(
   );
 
   try {
-    const raw = await callPoolModel(moderatorModel, system, user, 8000);
+    // 16k output budget — the synthesis prompt asks for many claims,
+    // snippets, gaps, and a multi-sentence synthesis. With both DB +
+    // web sources in the input, the response can be substantial.
+    const raw = await callPoolModel(moderatorModel, system, user, 16000);
+    console.log(`[DEEP-RESEARCH] Raw response length: ${raw.length} chars`);
     const parsed = parseDeepResearchResponse(raw);
 
     console.log(`[DEEP-RESEARCH] ${moderatorModel.displayName}: ${parsed.keyClaims.length} key claims, ${parsed.evidenceSnippets.length} evidence snippets, ${parsed.gapsInCoverage.length} gaps`);
