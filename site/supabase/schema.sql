@@ -1109,3 +1109,25 @@ create policy "Forum sessions are server-managed"
 drop policy if exists "Forum utterances are server-managed" on public.forum_utterances;
 create policy "Forum utterances are server-managed"
   on public.forum_utterances for all using (true);
+
+-- ============================================================================
+-- Supabase Realtime — enable for forum_sessions so the session page can
+-- stream live pipeline updates via postgres_changes.
+--
+-- The pipeline writes stage snapshots (organize_snapshot, broadcast_snapshot,
+-- ..., debate_snapshot) incrementally as each stage completes. The browser
+-- subscribes to the row via useRealtimeSession and re-renders on every
+-- UPDATE. Without this publication membership, updates never reach the
+-- client and the page only refreshes on full page reloads.
+--
+-- Idempotent — only adds the table if not already in the publication.
+-- ============================================================================
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'forum_sessions'
+  ) then
+    alter publication supabase_realtime add table public.forum_sessions;
+  end if;
+end $$;

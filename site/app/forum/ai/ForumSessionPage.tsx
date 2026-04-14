@@ -23,7 +23,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/lib/forum/useRealtimeSession';
 import type { SessionRowForJourney } from '@/lib/forum/journey';
@@ -55,7 +55,38 @@ interface SessionRowExtra {
 
 export default function ForumSessionPage({ category, sessionDate }: ForumSessionPageProps) {
   const { session, loading, error, journey } = useRealtimeSession(category, sessionDate);
+
+  // Step detail panel state:
+  //   selectedStage — which stage's detail is currently open (null = none)
+  //   userOverride — once the user clicks anything on the scrubber, we
+  //                  stop auto-following the active stage and respect
+  //                  whatever they chose (including "closed")
   const [selectedStage, setSelectedStage] = useState<number | null>(null);
+  const [userOverride, setUserOverride] = useState(false);
+
+  // Derive the active (pulsing) stage from the session status. This is
+  // what the scrubber highlights as in-progress, and what we auto-expand
+  // as long as the user hasn't taken over.
+  const currentStage = currentScrubberStage(session?.status);
+  const completedCount = completedScrubberStages(session?.status);
+  // A stage is "actively in progress" if the current stage number is
+  // greater than the completed count — i.e. work is happening there now.
+  const activeStage = currentStage > completedCount ? currentStage : null;
+
+  // Auto-expand the active stage when not overridden. This fires on
+  // every session update, so as the pipeline advances through stages
+  // the expanded detail follows along automatically.
+  useEffect(() => {
+    if (userOverride) return;
+    setSelectedStage(activeStage);
+  }, [activeStage, userOverride]);
+
+  // Scrubber click handler — once the user clicks anything, we flip
+  // to manual mode and stop following the active stage.
+  function handleSelectStage(stage: number | null) {
+    setUserOverride(true);
+    setSelectedStage(stage);
+  }
 
   return (
     <div className={styles.page}>
@@ -78,7 +109,7 @@ export default function ForumSessionPage({ category, sessionDate }: ForumSession
         </div>
       )}
 
-      {!loading && !error && renderContent(session, category, journey, selectedStage, setSelectedStage)}
+      {!loading && !error && renderContent(session, category, journey, selectedStage, handleSelectStage)}
     </div>
   );
 }
@@ -151,7 +182,9 @@ function renderContent(
         <div className={styles.prepStatus} style={{ marginTop: 24 }}>
           <span className={styles.prepStatusDot} />
           <span>
-            Pipeline running — the discussion will appear here when the debate starts.
+            {status === 'debate_in_progress'
+              ? 'Debate kicking off — first turn landing shortly…'
+              : 'Pipeline running — the discussion will appear here when the debate starts.'}
           </span>
         </div>
       )}
