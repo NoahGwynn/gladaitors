@@ -42,6 +42,7 @@ import { callParticipantTurn, type ParticipantVisibleTurn } from './participant-
 import { queryMemory, type MemoryHit } from './memory-query';
 import { storeUtterance } from './utterance-storage';
 import { getTaxonomy, filterValidTags } from './tag-taxonomy';
+import { createClient } from '@/lib/supabase';
 
 // --- Constants ---
 
@@ -94,7 +95,7 @@ export interface DebateSegmentProgress {
 }
 
 export interface DebateSnapshot {
-  status: 'completed' | 'failed';
+  status: 'in_progress' | 'completed' | 'failed';
   startedAt: string;
   completedAt: string;
   exchangeTurnCount: number;
@@ -154,13 +155,20 @@ export interface RunDebateInput {
   agenda: Agenda;
   cast: CastParticipant[];
   moderator: PoolModel;
+  /** If true (default), persist the debate_snapshot after every turn
+   *  so the UI can watch the debate unfold live via Supabase Realtime.
+   *  Set to false for tests that don't need streaming. */
+  streamToDatabase?: boolean;
 }
 
 /** Run a debate to completion (or failure). Returns the full snapshot.
- *  The caller persists it to forum_sessions.debate_snapshot and marks
- *  the session completed. */
+ *  Persists incrementally to forum_sessions.debate_snapshot after each
+ *  turn by default, so the UI streams the debate live via Supabase
+ *  Realtime as it runs. The caller still receives the full snapshot
+ *  at the end for the final endpoint response. */
 export async function runDebate(input: RunDebateInput): Promise<DebateSnapshot> {
   const startedAt = new Date().toISOString();
+  const streamToDatabase = input.streamToDatabase !== false; // default true
 
   const turns: DebateTurn[] = [];
   const segmentProgress: DebateSegmentProgress[] = input.agenda.segments.map(s => ({
@@ -199,6 +207,48 @@ export async function runDebate(input: RunDebateInput): Promise<DebateSnapshot> 
   console.log(`[DEBATE] Starting session: ${input.topicTitle}`);
   console.log(`[DEBATE] Cast: ${input.cast.map(c => `${c.modelName}(seat ${c.seat})`).join(', ')}`);
   console.log(`[DEBATE] Agenda: ${input.agenda.segments.length} segments`);
+
+  // Incremental persistence — writes the current DebateSnapshot state
+  // to forum_sessions after each turn. Supabase Realtime pushes the
+  // update to any subscribed client, so the UI shows turns appearing
+  // live as the debate runs. On errors we log and continue — failing
+  // to persist shouldn't kill the debate.
+  const supabase = streamToDatabase ? createClient() : null;
+  async function persistProgress(status: 'in_progress' | 'completed' = 'in_progress') {
+    if (!supabase) return;
+    const snapshot: DebateSnapshot = {
+      status,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      exchangeTurnCount,
+      totalTurnRecords: turns.length,
+      forceCloseApplied,
+      turns,
+      segmentProgress,
+      moveCounts,
+      utterancesStored,
+    };
+    try {
+      await supabase
+        .from('forum_sessions')
+        .update({
+          status: status === 'completed' ? 'completed' : 'debate_in_progress',
+          debate_snapshot: {
+            _startedAt: startedAt,
+            _completedAt: status === 'completed' ? snapshot.completedAt : null,
+            ...snapshot,
+          },
+        })
+        .eq('id', input.sessionId);
+    } catch (err) {
+      console.warn(`[DEBATE] Failed to persist progress: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
+  }
+
+  // Initial write — marks the session as debate_in_progress with an empty
+  // transcript. This is what flips the UI from "agenda built" to "debate
+  // starting" state.
+  await persistProgress('in_progress');
 
   // Main loop
   while (exchangeTurnCount < DEBATE_HARD_CAP) {
@@ -262,6 +312,10 @@ export async function runDebate(input: RunDebateInput): Promise<DebateSnapshot> 
 
     turns.push(moderatorTurn);
     moveCounts[decision.chosenMove] += 1;
+
+    // Stream the moderator turn to subscribers immediately so the UI
+    // can render it before the participant response lands
+    await persistProgress('in_progress');
 
     // Clear pending memory — it's been consumed by this turn's context
     pendingAdHocMemory = null;
@@ -415,6 +469,10 @@ export async function runDebate(input: RunDebateInput): Promise<DebateSnapshot> 
     }
 
     exchangeTurnCount += 1;
+
+    // Stream the full exchange (moderator + participant) to subscribers
+    // so the UI sees the completed turn live
+    await persistProgress('in_progress');
 
     // Check hard cap — if we just hit it, set forceClose flag for next moderator turn
     if (exchangeTurnCount >= DEBATE_HARD_CAP) {

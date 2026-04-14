@@ -1,0 +1,640 @@
+@use '../../../styles/variables' as *;
+
+// ============================================================================
+// Forum Session Page — dAIly AI
+// ============================================================================
+// Mirrors the Arena debate visual language: dark cinematic theme, brand red
+// accent, cards with model-colored border-left stripes. Structured around
+// three main phases:
+//   1. Scheduled — pre-pipeline countdown + "what is this" overview
+//   2. Prep — journey timeline + stage detail cards as pipeline runs
+//   3. Debate — debate stream takes over the viewport
+//   4. Completed — permanent record with everything visible
+// ============================================================================
+
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - $nav-height);
+  max-width: $max-width;
+  width: 100%;
+  margin: 0 auto;
+  padding: $space-xl $space-lg $space-3xl;
+
+  @media (max-width: 640px) {
+    padding: $space-lg $space-md $space-2xl;
+  }
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  font-size: $size-sm;
+  color: $text-secondary;
+  text-decoration: none;
+  margin-bottom: $space-lg;
+
+  &:hover {
+    color: $text-primary;
+  }
+}
+
+// ============================================================================
+// Page heading (common across states)
+// ============================================================================
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  margin-bottom: $space-xl;
+}
+
+.title {
+  font-size: $size-2xl;
+  font-weight: 800;
+  color: $text-primary;
+  margin: 0;
+  letter-spacing: -0.01em;
+
+  @media (max-width: 640px) {
+    font-size: $size-xl;
+  }
+}
+
+.titleAi {
+  color: $ui-accent;
+}
+
+.sessionDate {
+  font-size: $size-sm;
+  color: $text-muted;
+  font-family: $font-mono;
+  letter-spacing: 0.04em;
+}
+
+// ============================================================================
+// Scheduled state — countdown + overview
+// ============================================================================
+
+.scheduledWrap {
+  display: flex;
+  flex-direction: column;
+  gap: $space-2xl;
+}
+
+.countdownCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: $space-2xl $space-lg;
+  background: linear-gradient(180deg, $bg-card 0%, $bg-surface 100%);
+  border: 1px solid $border;
+  border-radius: $radius-lg;
+  gap: $space-lg;
+}
+
+.countdownLabel {
+  font-family: $font-mono;
+  font-size: $size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: $text-muted;
+}
+
+.countdownDigits {
+  display: flex;
+  gap: $space-md;
+  font-family: $font-mono;
+  font-size: 56px;
+  font-weight: 700;
+  color: $text-primary;
+  letter-spacing: -0.02em;
+
+  @media (max-width: 640px) {
+    font-size: 40px;
+    gap: $space-sm;
+  }
+}
+
+.countdownUnit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 72px;
+
+  @media (max-width: 640px) {
+    min-width: 56px;
+  }
+}
+
+.countdownUnitLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $text-muted;
+  margin-top: $space-xs;
+  font-weight: 400;
+}
+
+.countdownBegin {
+  font-size: $size-md;
+  color: $text-secondary;
+  margin-top: $space-sm;
+}
+
+.overviewTitle {
+  font-size: $size-lg;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0 0 $space-md;
+  text-align: center;
+}
+
+.overviewLead {
+  font-size: $size-md;
+  color: $text-secondary;
+  line-height: 1.6;
+  text-align: center;
+  max-width: 760px;
+  margin: 0 auto $space-xl;
+}
+
+.overviewSteps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: $space-md;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.overviewStep {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+  padding: $space-lg;
+  background: $bg-card;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+}
+
+.overviewStepNumber {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba($ui-accent, 0.15);
+  color: $ui-accent;
+  font-family: $font-mono;
+  font-size: $size-xs;
+  font-weight: 700;
+  margin-bottom: $space-xs;
+}
+
+.overviewStepTitle {
+  font-size: $size-sm;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0;
+}
+
+.overviewStepText {
+  font-size: $size-xs;
+  color: $text-muted;
+  line-height: 1.5;
+  margin: 0;
+}
+
+// ============================================================================
+// Prep state — journey timeline + stage cards
+// ============================================================================
+
+.prepWrap {
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+}
+
+.prepStatus {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: $space-md $space-lg;
+  background: $bg-card;
+  border: 1px solid $border;
+  border-left: 3px solid $ui-accent;
+  border-radius: $radius-md;
+  color: $text-secondary;
+  font-size: $size-sm;
+}
+
+.prepStatusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: $ui-accent;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+// ============================================================================
+// Journey timeline (shared between prep + completed states)
+// ============================================================================
+
+.journey {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+}
+
+.journeyEvent {
+  display: flex;
+  gap: $space-md;
+  padding: $space-lg 0;
+  position: relative;
+  animation: slideIn 0.4s ease;
+
+  &:not(:last-child) {
+    border-bottom: 1px solid $border;
+  }
+
+  // Left rail — the line connecting events
+  &::before {
+    content: '';
+    position: absolute;
+    left: 19px;
+    top: 56px;
+    bottom: -4px;
+    width: 1px;
+    background: $border;
+  }
+
+  &:last-child::before {
+    display: none;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.journeyMarker {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $bg-card;
+  border: 1px solid $border;
+  font-family: $font-mono;
+  font-size: $size-xs;
+  font-weight: 700;
+  color: $ui-accent;
+  z-index: 1;
+}
+
+.journeyMarkerActive {
+  border-color: $ui-accent;
+  box-shadow: 0 0 0 3px rgba($ui-accent, 0.2);
+}
+
+.journeyBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.journeyHeader {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+  margin-bottom: $space-sm;
+}
+
+.journeyStage {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $text-muted;
+}
+
+.journeyTitle {
+  font-size: $size-md;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.journeyDescription {
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.6;
+  margin: 0 0 $space-md;
+}
+
+.journeyDetail {
+  margin-top: $space-md;
+  padding-top: $space-md;
+  border-top: 1px solid $border;
+}
+
+.journeyDetailToggle {
+  background: none;
+  border: none;
+  color: $text-muted;
+  font-family: $font-mono;
+  font-size: $size-xs;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+
+  &:hover {
+    color: $text-secondary;
+  }
+}
+
+// ============================================================================
+// Stage detail — shared styles for individual stage content blocks
+// ============================================================================
+
+.detailList {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+  margin: $space-sm 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detailListItem {
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.5;
+  padding-left: $space-md;
+  position: relative;
+
+  &::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: $text-muted;
+  }
+}
+
+.detailStat {
+  display: flex;
+  justify-content: space-between;
+  padding: $space-xs 0;
+  font-size: $size-sm;
+  border-bottom: 1px solid rgba($border, 0.5);
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.detailStatLabel {
+  color: $text-muted;
+}
+
+.detailStatValue {
+  color: $text-primary;
+  font-family: $font-mono;
+}
+
+.detailSection {
+  margin: $space-md 0 $space-sm;
+  font-size: $size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $text-muted;
+  font-weight: 600;
+}
+
+// ============================================================================
+// Debate stream — takes over the viewport during Stage 6
+// ============================================================================
+
+.debateWrap {
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+}
+
+.debateHeader {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  padding-bottom: $space-lg;
+  border-bottom: 1px solid $border;
+}
+
+.debateSessionType {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $ui-accent;
+  font-weight: 700;
+}
+
+.debateTopic {
+  font-size: $size-xl;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.debateCast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-sm;
+  margin-top: $space-xs;
+}
+
+.debateCastMember {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  padding: $space-xs $space-sm;
+  background: $bg-card;
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+  font-size: $size-xs;
+  color: $text-secondary;
+
+  strong {
+    color: $text-primary;
+    font-weight: 600;
+  }
+}
+
+.debateCastDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--seat-color, $text-muted);
+}
+
+.debateStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  font-size: $size-xs;
+  color: $text-muted;
+  font-family: $font-mono;
+  margin-top: $space-sm;
+}
+
+.debateStatusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: $ui-accent;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.debateTurns {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+  padding: $space-md 0;
+}
+
+// Individual turn card (mirrors the Arena argument pattern)
+.turn {
+  padding: $space-lg;
+  background: $bg-card;
+  border-radius: $radius-md;
+  border-left: 3px solid var(--turn-color, $text-muted);
+  animation: slideIn 0.3s ease;
+
+  @media (max-width: 600px) {
+    padding: $space-md;
+  }
+}
+
+.turnModerator {
+  border-left-color: $ui-accent;
+  background: rgba($ui-accent, 0.04);
+}
+
+.turnHeader {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: $space-xs $space-sm;
+  margin-bottom: $space-sm;
+}
+
+.turnActor {
+  font-weight: 700;
+  font-size: $size-md;
+  color: var(--turn-color, $text-primary);
+}
+
+.turnActorModerator {
+  color: $ui-accent;
+}
+
+.turnMove {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $text-muted;
+  padding: 2px 8px;
+  background: $bg-surface;
+  border-radius: 3px;
+  border: 1px solid $border;
+}
+
+.turnTarget {
+  font-family: $font-mono;
+  font-size: 10px;
+  color: $text-muted;
+}
+
+.turnNumber {
+  margin-left: auto;
+  font-family: $font-mono;
+  font-size: 10px;
+  color: $text-muted;
+}
+
+.turnReasoning {
+  margin-top: $space-xs;
+  padding: $space-sm $space-md;
+  background: rgba($ui-accent, 0.06);
+  border-left: 2px solid rgba($ui-accent, 0.4);
+  border-radius: $radius-sm;
+  font-size: $size-xs;
+  color: $text-secondary;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.turnReasoningToggle {
+  background: none;
+  border: none;
+  color: $text-muted;
+  font-family: $font-mono;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: $space-xs;
+
+  &:hover {
+    color: $text-secondary;
+  }
+}
+
+.turnContent {
+  font-size: $size-base;
+  color: $text-primary;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+// ============================================================================
+// Loading / empty states
+// ============================================================================
+
+.loading {
+  padding: $space-3xl $space-lg;
+  text-align: center;
+  color: $text-muted;
+  font-size: $size-sm;
+}
+
+.errorBox {
+  padding: $space-md $space-lg;
+  background: rgba($ui-danger, 0.08);
+  border: 1px solid rgba($ui-danger, 0.3);
+  border-radius: $radius-md;
+  color: $ui-danger;
+  font-size: $size-sm;
+  margin-bottom: $space-lg;
+}
