@@ -125,8 +125,9 @@ export function deriveSessionJourney(session: SessionRowForJourney): JourneyEven
     stage: 2,
     stageName: STAGE_NAMES[2],
     step: 'session_created',
-    title: `${session.category.toUpperCase()} forum session opened`,
-    description: `A new ${session.category} forum session was created for ${session.session_date}. The pipeline will now run through organize, broadcast, topic selection, and moderator assignment.`,
+    title: `Today's session opened`,
+    description:
+      `A new dAIly ${session.category === 'ai' ? 'AI' : session.category} session started. From here the forum will run through six stages in order — picking the topic, assembling the voices, doing the research, building the agenda, and running the debate. You can watch it happen live as each stage completes.`,
     timestamp: session.created_at,
     data: { sessionId: session.id, category: session.category, sessionDate: session.session_date },
   });
@@ -215,25 +216,37 @@ function buildOrganizeEvents(snapshot: OrganizeResult & SnapshotMeta): JourneyEv
   const agreedCount = snapshot.mergedShortlist.filter(t => t.organizerAgreement === 2).length;
   const divergedCount = snapshot.mergedShortlist.length - agreedCount;
   const revisitInShortlist = snapshot.mergedShortlist.filter(t => t.isRevisit).length;
+  const shortlistCount = snapshot.mergedShortlist.length;
 
-  const partsForDescription: string[] = [
-    `Two parallel editorial organizers (Sonnet + Gemini Flash) reviewed ${snapshot.threadsEvaluated} active thread${snapshot.threadsEvaluated === 1 ? '' : 's'}`,
-  ];
-  if (snapshot.revisitThreadCount > 0) {
-    partsForDescription[0] += ` (${snapshot.activeThreadCount} active, ${snapshot.revisitThreadCount} revisit candidate${snapshot.revisitThreadCount === 1 ? '' : 's'})`;
+  const descParts: string[] = [];
+  descParts.push(
+    `Before the forum picks a topic, two AI editors independently read every story the pipeline gathered overnight — ${snapshot.threadsEvaluated} of them this morning. They don't compare notes. Each picks what they think is worth discussing today.`,
+  );
+  if (agreedCount > 0 && divergedCount > 0) {
+    descParts.push(
+      `${agreedCount} ${agreedCount === 1 ? 'story' : 'stories'} made both editors' shortlists — these are the strongest candidates. The other ${divergedCount} represent editorial divergence: one editor flagged something the other missed, and those are worth putting to the wider pool too.`,
+    );
+  } else if (agreedCount > 0) {
+    descParts.push(
+      `All ${agreedCount} shortlisted ${agreedCount === 1 ? 'story' : 'stories'} made both editors' lists — they agreed on every pick today.`,
+    );
+  } else if (divergedCount > 0) {
+    descParts.push(
+      `The editors disagreed on everything today — each picked different stories. Rather than discard the divergences, they're passed to the pool so a wider set of voices can weigh in.`,
+    );
   }
-  partsForDescription.push(`Sonnet shortlisted ${snapshot.organizerAShortlist}, Gemini Flash shortlisted ${snapshot.organizerBShortlist}.`);
-  partsForDescription.push(`Both organizers agreed on ${agreedCount} thread${agreedCount === 1 ? '' : 's'}; the other ${divergedCount} represent editorial divergence.`);
   if (revisitInShortlist > 0) {
-    partsForDescription.push(`${revisitInShortlist} previously-discussed thread${revisitInShortlist === 1 ? '' : 's'} ${revisitInShortlist === 1 ? 'was' : 'were'} re-shortlisted because new material had accumulated.`);
+    descParts.push(
+      `${revisitInShortlist} of the shortlisted ${revisitInShortlist === 1 ? 'story is a revisit — a topic' : 'stories are revisits — topics'} the forum has discussed before where significant new material has emerged since.`,
+    );
   }
 
   events.push({
     stage: 2,
     stageName: STAGE_NAMES[2],
     step: 'organizers_complete',
-    title: `Editorial organizers shortlisted ${snapshot.mergedShortlist.length} thread${snapshot.mergedShortlist.length === 1 ? '' : 's'}`,
-    description: partsForDescription.join(' '),
+    title: `${shortlistCount} ${shortlistCount === 1 ? 'story' : 'stories'} made today's shortlist`,
+    description: descParts.join(' '),
     timestamp: snapshot._completedAt,
     data: {
       threadsEvaluated: snapshot.threadsEvaluated,
@@ -257,12 +270,14 @@ function buildOrganizeEvents(snapshot: OrganizeResult & SnapshotMeta): JourneyEv
   });
 
   if (snapshot.appliedMerges && snapshot.appliedMerges.applied > 0) {
+    const n = snapshot.appliedMerges.applied;
     events.push({
       stage: 2,
       stageName: STAGE_NAMES[2],
       step: 'merges_applied',
-      title: `${snapshot.appliedMerges.applied} thread merge${snapshot.appliedMerges.applied === 1 ? '' : 's'} applied automatically`,
-      description: 'Both organizers independently flagged these threads as the same story from different angles. The pipeline merged them so the pool sees a unified narrative instead of fragments.',
+      title: `${n} duplicate ${n === 1 ? 'story was' : 'stories were'} merged`,
+      description:
+        `Sometimes two different feeds cover the same underlying story from different angles, and both editors flag this when they see it. When both agree a pair of stories is really one, the pipeline merges them so the pool weighs them as a single topic.`,
       timestamp: snapshot._completedAt,
       data: snapshot.appliedMerges,
     });
@@ -294,18 +309,26 @@ function buildBroadcastEvents(snapshot: BroadcastResult & SnapshotMeta): Journey
     topConflictScore: r.conflicts.length > 0 ? Math.max(...r.conflicts.map(c => c.conflictScore)) : null,
   }));
 
+  const totalPool = snapshot.responses.length + skipped;
   const descParts: string[] = [];
-  descParts.push(`The merged shortlist was sent to ${snapshot.responses.length + skipped} frontier pool model${snapshot.responses.length + skipped === 1 ? '' : 's'}.`);
-  descParts.push(`${succeeded} responded with votes, conflict declarations, and provisional stances.`);
-  if (failed > 0) descParts.push(`${failed} failed during the call.`);
-  if (skipped > 0) descParts.push(`${skipped} were skipped (no API key configured).`);
-  descParts.push('Each model was anchored in its own provider identity to ground conflict declarations correctly.');
+  descParts.push(
+    `The shortlist went out to ${totalPool} frontier models from different labs. Each was asked three things: which stories they'd most want to discuss today, where they have a conflict of interest (a story about their own lab, for instance), and what position they'd take on each topic if selected.`,
+  );
+  descParts.push(
+    `${succeeded} responded. Their votes decide the topic; their conflict declarations decide who can moderate and who gets a seat as a participant.`,
+  );
+  if (failed > 0) {
+    descParts.push(`${failed} ${failed === 1 ? 'call' : 'calls'} failed for technical reasons — those models sit out this round.`);
+  }
+  if (skipped > 0) {
+    descParts.push(`${skipped} ${skipped === 1 ? 'model is' : 'models are'} not yet wired into the forum.`);
+  }
 
   events.push({
     stage: 3,
     stageName: STAGE_NAMES[3],
     step: 'pool_responded',
-    title: `${succeeded} of ${snapshot.responses.length + skipped} frontier models returned votes, conflicts, and stances`,
+    title: `${succeeded} models weighed in`,
     description: descParts.join(' '),
     timestamp: snapshot._completedAt,
     data: {
@@ -343,19 +366,28 @@ function buildVoteScoringEvents(session: SessionRowForJourney): JourneyEvent[] {
     : null;
 
   const topTitle = titleByThreadId.get(top.threadId) || top.threadId.slice(0, 8);
-  const descParts: string[] = [
-    `Votes were scored using a top-3 cutoff (3 points for a model's #1 pick, 2 for #2, 1 for #3).`,
-    `"${topTitle}" led with ${top.score} point${top.score === 1 ? '' : 's'} from ${top.voterCount} voter${top.voterCount === 1 ? '' : 's'}.`,
-  ];
-  if (margin !== null) {
-    descParts.push(`Margin to second place: ${margin.toFixed(1)}%.`);
+  const descParts: string[] = [];
+  descParts.push(
+    `Each model ranked their top three stories from the shortlist. A model's first pick is worth 3 points, second pick 2, third pick 1. The story with the most points wins — unless the top two finish within 10% of each other, in which case it goes to a runoff.`,
+  );
+  descParts.push(
+    `"${topTitle}" came out on top with ${top.score} point${top.score === 1 ? '' : 's'} from ${top.voterCount} voter${top.voterCount === 1 ? '' : 's'}${margin !== null ? `, ${margin.toFixed(1)}% ahead of second place` : ''}.`,
+  );
+  if (margin !== null && margin < 10) {
+    descParts.push(
+      `That's within the 10% runoff margin, so the top stories go back to the pool for a tiebreaker vote.`,
+    );
+  } else if (margin !== null) {
+    descParts.push(
+      `That's a comfortable lead — no runoff needed.`,
+    );
   }
 
   events.push({
     stage: 4,
     stageName: STAGE_NAMES[4],
     step: 'votes_scored',
-    title: `Votes scored — top thread: "${topTitle}" (${top.score} points)`,
+    title: `Votes tallied — "${topTitle}" leads`,
     description: descParts.join(' '),
     timestamp: session.broadcast_snapshot?._completedAt, // approximate
     data: {
@@ -384,14 +416,16 @@ function buildRunoffEvents(session: SessionRowForJourney): JourneyEvent[] {
   }
 
   const tiedTitles = snapshot.tiedTopicIds.map(id => titleByThreadId.get(id) || id.slice(0, 8));
+  const tiedCount = snapshot.tiedTopicIds.length;
 
   // Tie detected event
   events.push({
     stage: 4,
     stageName: STAGE_NAMES[4],
     step: 'tie_detected',
-    title: `${snapshot.tiedTopicIds.length} topics tied within the 10% margin`,
-    description: `The first vote did not produce a clear winner. The top ${snapshot.tiedTopicIds.length} threads (${tiedTitles.map(t => `"${t}"`).join(', ')}) are within 10% of each other in score, so the pool is being re-broadcast with just these topics for a runoff.`,
+    title: tiedCount === 2 ? `Two stories tied for the top spot` : `${tiedCount} stories tied for the top spot`,
+    description:
+      `No single story won clearly — ${tiedCount === 2 ? 'two' : tiedCount} came out within 10% of each other on the first vote. Rather than pick one arbitrarily, the forum goes back to the pool with a sharper question for the tied stories: which of these would today's session be genuinely incomplete to skip?`,
     timestamp: snapshot._startedAt,
     data: {
       tiedTopicIds: snapshot.tiedTopicIds,
@@ -425,24 +459,21 @@ function buildRunoffEvents(session: SessionRowForJourney): JourneyEvent[] {
   const winnerTitle = titleByThreadId.get(session.selected_thread_id || '') || 'unknown';
 
   const descParts: string[] = [];
-  descParts.push(`The pool re-voted, this time picking exactly one topic and rating each on urgency (1-10).`);
   if (resolvedBy === 'urgency') {
-    descParts.push(`Urgency totals: ${sortedUrgency.map(([id, t]) => `"${titleByThreadId.get(id) || id.slice(0,8)}" ${t}`).join(', ')}.`);
-    descParts.push(`The top urgency was ${urgencyMargin.toFixed(1)}% above second place — clearly informative — so urgency resolved the runoff.`);
+    descParts.push(
+      `On the second vote the pool rated each tied story 1-10 on whether the session would be incomplete without it. "${winnerTitle}" came out clearly on top — the urgency gap to second place was large enough to call it a decisive result.`,
+    );
   } else {
-    descParts.push(`Urgency totals were within the 5% noise margin (${urgencyMargin.toFixed(1)}% gap), so picks decided the tiebreak.`);
-    const pickList = Object.entries(pickCounts)
-      .filter(([, n]) => n > 0)
-      .map(([id, n]) => `"${titleByThreadId.get(id) || id.slice(0,8)}": ${n}`)
-      .join(', ');
-    descParts.push(`Pick counts: ${pickList}.`);
+    descParts.push(
+      `On the second vote the pool rated urgency 1-10 and also picked their single favourite among the tied stories. The urgency ratings were essentially tied (within 5% of each other), so the call fell to the single-pick tiebreaker. "${winnerTitle}" took it.`,
+    );
   }
 
   events.push({
     stage: 4,
     stageName: STAGE_NAMES[4],
     step: 'runoff_complete',
-    title: `Runoff resolved by ${resolvedBy} — winner: "${winnerTitle}"`,
+    title: `Runoff broke the tie — "${winnerTitle}" takes today`,
     description: descParts.join(' '),
     timestamp: snapshot._completedAt,
     data: {
@@ -473,8 +504,9 @@ function buildActingModeratorEvent(session: SessionRowForJourney): JourneyEvent 
     stage: 4,
     stageName: STAGE_NAMES[4],
     step: 'acting_moderator_chosen',
-    title: `Acting moderator: ${session.acting_moderator_model_id} — picked at ${tierLabel}`,
-    description: `The runoff did not produce a clear winner on either picks or urgency. An acting moderator was selected from the rotation queue at ${tierLabel} to break the tie. ${session.acting_moderator_reasoning || ''} Their conflict scores on the tied topics are published for transparency.`,
+    title: `Acting referee stepped in to break the tie`,
+    description:
+      `The runoff couldn't separate the tied stories — both the pool's picks and their urgency ratings ended up level. In that (rare) case, the forum brings in an "acting moderator" from the rotation queue whose job is just to make the final call. Their conflict scores on the tied stories are published so their decision is transparent.`,
     timestamp: undefined,
     data: {
       modelId: session.acting_moderator_model_id,
@@ -494,12 +526,22 @@ function buildTopicSelectedEvent(session: SessionRowForJourney): JourneyEvent {
   }
   const title = titleByThreadId.get(session.selected_thread_id!) || 'unknown';
 
+  const descParts: string[] = [];
+  descParts.push(
+    `"${title}" is what today's session will discuss in depth.`,
+  );
+  if (session.was_runoff) {
+    descParts.push(`It took a runoff round to settle it.`);
+  } else {
+    descParts.push(`The pool picked it decisively on the first vote.`);
+  }
+
   return {
     stage: 4,
     stageName: STAGE_NAMES[4],
     step: 'topic_selected',
-    title: `Topic of the day: "${title}"`,
-    description: `After ${session.was_runoff ? 'a runoff round' : 'the pool vote'}${session.was_acting_moderator ? ' and an acting moderator decision' : ''}, the forum settled on this topic for today's session.`,
+    title: `Today's topic: "${title}"`,
+    description: descParts.join(' '),
     timestamp: undefined,
     data: {
       threadId: session.selected_thread_id,
@@ -516,36 +558,49 @@ function buildModeratorSelectedEvent(session: SessionRowForJourney): JourneyEven
   const method = session.moderator_selection_method || 'unknown';
   const skipped = session.moderator_skipped || [];
   const softcap = session.moderator_region_softcap_applied || false;
-
-  const tierLabels: Record<number, string> = {
-    1: 'tier 1 (clean — conflict <30)',
-    2: 'tier 2 (conflict <50)',
-    3: 'tier 3 (conflict <70)',
-    4: 'tier 4 (conflict <80)',
-    5: 'tier 5 (conflict <90)',
-  };
-  const tierLabel = tier && tierLabels[tier]
-    ? tierLabels[tier]
-    : tier === null
-      ? 'fallback (all five tiers exhausted; least conflicted with rotation tiebreak)'
-      : `tier ${tier}`;
+  const modelName = session.moderator_model_id || 'a model';
 
   const descParts: string[] = [];
-  descParts.push(`The pipeline walks graduated conflict tiers (<30, <50, <70, <80, <90), with rotation order applied within each tier.`);
-  descParts.push(`${session.moderator_model_id} was selected at ${tierLabel} with conflict score ${conflict} on the chosen topic.`);
+  descParts.push(
+    `${modelName} will run today's session. The moderator is neutral — they facilitate the discussion, they don't argue a position.`,
+  );
+
+  // Explain the selection
+  if (conflict < 30) {
+    descParts.push(
+      `They were picked because the rotation queue put them next in line and they have essentially no personal stake in the chosen topic (conflict score ${conflict}/100).`,
+    );
+  } else if (conflict < 50) {
+    descParts.push(
+      `They were picked from the rotation queue. Their conflict score on this topic is ${conflict}/100 — they have some awareness of the topic but not enough to compromise their neutrality.`,
+    );
+  } else if (conflict < 70) {
+    descParts.push(
+      `They were picked from the rotation queue. Their conflict score is ${conflict}/100 — moderate but still below the threshold for moderation (anything above 70 gets skipped).`,
+    );
+  } else {
+    descParts.push(
+      `Their conflict score is ${conflict}/100, which is unusually high for a moderator. This happens when every available model has a stake in the topic; the forum picked the least compromised option and is disclosing it transparently.`,
+    );
+  }
+
   if (skipped.length > 0) {
-    descParts.push(`${skipped.length} model${skipped.length === 1 ? '' : 's'} earlier in the rotation queue ${skipped.length === 1 ? 'was' : 'were'} walked past because of higher conflict on this topic: ${skipped.map(s => `${s.modelName} (${s.conflictScore})`).join(', ')}.`);
+    const names = skipped.map(s => `${s.modelName} (${s.conflictScore})`).join(', ');
+    descParts.push(
+      `${skipped.length} ${skipped.length === 1 ? 'model was' : 'models were'} passed over because of a too-high conflict on this topic: ${names}.`,
+    );
   }
   if (softcap) {
-    descParts.push(`The region soft cap was applied — the first eligible model would have extended a same-region streak, so the pipeline swapped to the first eligible model from a different region.`);
+    descParts.push(
+      `The rotation was also adjusted so the last few moderators weren't all from the same lab region — a soft balancing rule that only applies when it doesn't override the conflict check.`,
+    );
   }
-  descParts.push(`Selection method: ${method}.`);
 
   return {
     stage: 4,
     stageName: STAGE_NAMES[4],
     step: 'moderator_selected',
-    title: `Moderator: ${session.moderator_model_id} (${tierLabel.split(' ')[0]} ${tierLabel.split(' ')[1] || ''}, conflict ${conflict})`.trim(),
+    title: `${modelName} is today's moderator`,
     description: descParts.join(' '),
     timestamp: session.completed_at || undefined,
     data: {
@@ -566,26 +621,24 @@ function buildResearchEvent(snapshot: ResearchResult & SnapshotMeta): JourneyEve
   const factCount = snapshot.synthesisedFacts.length;
   const contestedCount = snapshot.contestedClaims.length;
   const openCount = snapshot.openQuestions.length;
-  const timelineCount = snapshot.timeline.length;
 
   const descParts: string[] = [];
-  descParts.push(`The moderator read the source material attached to the chosen thread and synthesised it into a research note.`);
-  if (snapshot.overallSummary) {
-    descParts.push(`Overall: ${snapshot.overallSummary}`);
+  descParts.push(
+    `Before picking a cast, the moderator reads the available source material on the chosen topic. This first pass works from article summaries and identifies what's known, what's contested, and what's still open. It gives the moderator enough context to pick the right voices for the discussion.`,
+  );
+  if (factCount > 0 || contestedCount > 0 || openCount > 0) {
+    const bits: string[] = [];
+    if (factCount > 0) bits.push(`${factCount} established ${factCount === 1 ? 'fact' : 'facts'}`);
+    if (contestedCount > 0) bits.push(`${contestedCount} contested ${contestedCount === 1 ? 'claim' : 'claims'}`);
+    if (openCount > 0) bits.push(`${openCount} open ${openCount === 1 ? 'question' : 'questions'}`);
+    descParts.push(`From this pass the moderator pulled out ${bits.join(', ')}.`);
   }
-  const counts: string[] = [];
-  if (factCount) counts.push(`${factCount} synthesised fact${factCount === 1 ? '' : 's'}`);
-  if (contestedCount) counts.push(`${contestedCount} contested claim${contestedCount === 1 ? '' : 's'}`);
-  if (openCount) counts.push(`${openCount} open question${openCount === 1 ? '' : 's'}`);
-  if (timelineCount) counts.push(`${timelineCount} timeline event${timelineCount === 1 ? '' : 's'}`);
-  if (counts.length > 0) descParts.push(`Found: ${counts.join(', ')}.`);
-  if (snapshot.error) descParts.push(`(Note: research call had an issue — ${snapshot.error})`);
 
   return {
     stage: 5,
     stageName: STAGE_NAMES[5],
     step: 'research_complete',
-    title: `Moderator researched the topic`,
+    title: `Moderator read the source material`,
     description: descParts.join(' '),
     timestamp: snapshot._completedAt,
     data: {
@@ -613,9 +666,17 @@ function buildCastEvents(
 
   // Cast assembled event
   const castDescParts: string[] = [];
-  castDescParts.push(`The moderator picked ${seatCount} cast member${seatCount === 1 ? '' : 's'} for a ${typeLabel}.`);
+  if (type === 'fireside_chat') {
+    castDescParts.push(
+      `After reading every model's stance on the topic, the moderator concluded that the pool genuinely agrees. Rather than manufacture a fake debate, they picked ${seatCount} of the most interesting aligned voices to sit down together and pressure-test the shared position. This is a fireside chat, not a debate — the moderator probes the consensus rather than forcing opposition.`,
+    );
+  } else {
+    castDescParts.push(
+      `The moderator picked ${seatCount} cast members with genuinely opposing positions on the topic. The first seat goes to the model with the most at stake. The second provides the counterweight. If there's a third, it brings a genuinely different angle rather than just another voice. If the moderator couldn't find three distinct views, the debate runs with two — forced third voices dilute the discussion.`,
+    );
+  }
   if (snapshot.moderatorReasoning) {
-    castDescParts.push(snapshot.moderatorReasoning);
+    castDescParts.push(`The moderator's reasoning: "${snapshot.moderatorReasoning}"`);
   }
   if (snapshot.error) castDescParts.push(`(Note: cast selection had an issue — ${snapshot.error})`);
 
@@ -623,7 +684,9 @@ function buildCastEvents(
     stage: 5,
     stageName: STAGE_NAMES[5],
     step: 'cast_assembled',
-    title: `Cast assembled: ${seatCount}-seat ${typeLabel}`,
+    title: type === 'fireside_chat'
+      ? `Fireside chat: ${seatCount} aligned voices`
+      : `Debate cast: ${seatCount} voices with opposing stances`,
     description: castDescParts.join(' '),
     timestamp: snapshot._completedAt,
     data: {
@@ -645,12 +708,14 @@ function buildCastEvents(
 
   // Also invited event (only if there are uncast pool members)
   if (snapshot.alsoInvited && snapshot.alsoInvited.length > 0) {
+    const n = snapshot.alsoInvited.length;
     events.push({
       stage: 5,
       stageName: STAGE_NAMES[5],
       step: 'also_invited',
-      title: `${snapshot.alsoInvited.length} pool member${snapshot.alsoInvited.length === 1 ? '' : 's'} considered but not cast`,
-      description: `Their stances and conflict declarations are part of the published session record so the audience can see who was in the room. The cast picks reflect editorial judgment, not exclusion of these voices.`,
+      title: `${n} other ${n === 1 ? 'voice was' : 'voices were'} considered`,
+      description:
+        `Not every model gets a seat, but every model's view gets published. ${n} ${n === 1 ? 'model' : 'models'} in the pool declared a stance on this topic without being picked for the cast. Their positions are still part of the session record — the audience can see who was in the room and what they thought.`,
       timestamp: snapshot._completedAt,
       data: {
         alsoInvited: snapshot.alsoInvited.map((a: AlsoInvitedEntry) => ({
@@ -683,25 +748,30 @@ function buildDeepResearchEvent(snapshot: DeepResearchResult & SnapshotMeta): Jo
   const webCitations = snapshot.evidenceSnippets.filter(s => s.citation.type === 'web').length;
 
   const descParts: string[] = [];
-  descParts.push(`The moderator did a deep read of the source material — fetched ${dbCount} of ${dbTotal} DB sources via readability and synthesised them at depth.`);
+  descParts.push(
+    `With the cast locked in, the moderator does a deeper pass on the source material — fetching the full article text rather than just the summaries. This time they're looking for specifics they can draw on during the discussion: verbatim claims, contested methodology, the things a press release wouldn't include.`,
+  );
   if (webQueries > 0) {
-    descParts.push(`After the DB read, generated ${webRequested} web search ${webRequested === 1 ? 'query' : 'queries'} aimed at filling gaps and ran ${webQueries} via Tavily, returning ${webResults} results.`);
+    descParts.push(
+      `They then go beyond the sources the forum already had. Based on the gaps they identified in the first read, the moderator generates ${webRequested} targeted web search ${webRequested === 1 ? 'query' : 'queries'} — things like independent criticism, expert reactions, counterpoints the original coverage didn't include. ${webResults} pages came back from those searches, all fetched and read.`,
+    );
     if (capHit) {
-      descParts.push(`(Wanted ${webRequested} queries but capped at ${cap}.)`);
+      descParts.push(
+        `(The moderator wanted more queries than the current ${cap}-query budget allowed. This is a useful signal that we may want to raise the limit.)`,
+      );
     }
-  } else if (snapshot.webSearchesRequested !== undefined && snapshot.webSearchesRequested === 0) {
-    descParts.push(`No web search round was needed — the DB sources were sufficient.`);
   } else {
-    descParts.push(`No web search round was run.`);
+    descParts.push(`The source material was already comprehensive — no additional web research was needed.`);
   }
-  descParts.push(`Final synthesis: ${snapshot.keyClaims.length} key claims, ${snapshot.evidenceSnippets.length} evidence snippets (${dbCitations} from DB, ${webCitations} from web), ${snapshot.gapsInCoverage.length} remaining gaps.`);
-  if (snapshot.error) descParts.push(`(Note: deep research had an issue — ${snapshot.error})`);
+  descParts.push(
+    `All of that produced ${snapshot.keyClaims.length} key ${snapshot.keyClaims.length === 1 ? 'claim' : 'claims'} backed by specific citations, ${snapshot.evidenceSnippets.length} ${snapshot.evidenceSnippets.length === 1 ? 'verbatim snippet' : 'verbatim snippets'} the moderator can drop into the discussion${webCitations > 0 ? ` (${dbCitations} citing the original sources, ${webCitations} citing external research)` : ''}, and a clear view of what's still unresolved.`,
+  );
 
   return {
     stage: 5,
     stageName: STAGE_NAMES[5],
     step: 'deep_research_complete',
-    title: `Deep research: ${snapshot.keyClaims.length} key claims across ${dbCount} DB + ${webResults} web sources`,
+    title: `Moderator went deep — read full articles and researched the gaps`,
     description: descParts.join(' '),
     timestamp: snapshot._completedAt,
     data: {
@@ -747,14 +817,16 @@ function buildAgendaEvent(
   );
 
   const descParts: string[] = [];
-  descParts.push(`The moderator built the structured playbook for today's ${typeLabel} — ${segmentCount} planned segment${segmentCount === 1 ? '' : 's'}${optionalCount > 0 ? ` plus ${optionalCount} optional deepening segment${optionalCount === 1 ? '' : 's'}` : ''}, ${goalCount} session goals.`);
-  if (snapshot.topicTags && snapshot.topicTags.length > 0) {
-    descParts.push(`Topic tagged as: ${snapshot.topicTags.join(', ')}.`);
-  }
+  descParts.push(
+    `With the research done and the cast locked in, the moderator writes the agenda — ${segmentCount} planned ${segmentCount === 1 ? 'segment' : 'segments'} covering the questions today's session needs to work through${optionalCount > 0 ? `, plus ${optionalCount} optional ${optionalCount === 1 ? 'segment' : 'segments'} in reserve if the conversation goes somewhere unexpected` : ''}. Each segment has a main question, a reason it matters, and notes on which cast member to address first.`,
+  );
+  descParts.push(
+    `The agenda is a playbook, not a script. The moderator can follow it in order, follow up on something interesting, pivot to a better line of discussion, or pull back to the plan. The audience sees every decision they make in real time.`,
+  );
   if (totalMemoryHits > 0) {
-    descParts.push(`Pre-loaded ${totalMemoryHits} past statement${totalMemoryHits === 1 ? '' : 's'} from the cast members for the runtime to surface as contradictions or echoes.`);
-  } else {
-    descParts.push(`Cold start — no past statements to pre-load yet (memory builds up over time).`);
+    descParts.push(
+      `The moderator also pre-loaded ${totalMemoryHits} past ${totalMemoryHits === 1 ? 'statement' : 'statements'} from the cast members on related topics. If a participant contradicts or echoes something they said in a previous session, the moderator can bring it up directly — "you said this last week, what changed?"`,
+    );
   }
   if (snapshot.error) descParts.push(`(Note: agenda build had an issue — ${snapshot.error})`);
 
@@ -762,7 +834,7 @@ function buildAgendaEvent(
     stage: 5,
     stageName: STAGE_NAMES[5],
     step: 'agenda_built',
-    title: `Agenda built: ${segmentCount}-segment ${typeLabel}`,
+    title: `Agenda ready: ${segmentCount} ${segmentCount === 1 ? 'segment' : 'segments'} planned`,
     description: descParts.join(' '),
     timestamp: snapshot._completedAt,
     data: {
@@ -813,21 +885,61 @@ function buildDebateEvent(
     .filter(sp => sp.status === 'skipped').length;
   const segmentsTotal = (snapshot.segmentProgress || []).length;
 
+  // Which moves were most-used?
+  const counterCount = (snapshot.moveCounts || {}).counter_with_opponent || 0;
+  const followUpCount = (snapshot.moveCounts || {}).follow_up || 0;
+  const memoryCount = (snapshot.moveCounts || {}).surface_memory || 0;
+  const changeDirectionCount = (snapshot.moveCounts || {}).change_direction || 0;
+
   const descParts: string[] = [];
-  descParts.push(`The ${typeLabel} ran for ${snapshot.exchangeTurnCount} exchange turn${snapshot.exchangeTurnCount === 1 ? '' : 's'} across ${snapshot.totalTurnRecords} total turn record${snapshot.totalTurnRecords === 1 ? '' : 's'}${snapshot.totalTurnRecords > snapshot.exchangeTurnCount ? ' (some were memory_lookup prep turns)' : ''}.`);
-  descParts.push(`Segments: ${segmentsCovered} of ${segmentsTotal} covered${segmentsSkipped > 0 ? `, ${segmentsSkipped} skipped` : ''}.`);
-  descParts.push(`Moderator moves used: ${moveBreakdown}.`);
-  descParts.push(`${snapshot.utterancesStored} participant utterance${snapshot.utterancesStored === 1 ? '' : 's'} persisted to the tagged memory store for future sessions.`);
-  if (snapshot.forceCloseApplied) {
-    descParts.push(`The runtime forced the close at turn ${snapshot.exchangeTurnCount} (hard cap).`);
+  descParts.push(
+    `The session ran for ${snapshot.exchangeTurnCount} exchange ${snapshot.exchangeTurnCount === 1 ? 'turn' : 'turns'}${snapshot.forceCloseApplied ? ' before the hard time cap forced a close' : ' and ended naturally'}.`,
+  );
+
+  // Describe what the moderator actually did
+  const moveSentences: string[] = [];
+  if (counterCount > 0) {
+    moveSentences.push(
+      `put one cast member on the spot with a claim another had just made ${counterCount} ${counterCount === 1 ? 'time' : 'times'}`,
+    );
   }
+  if (followUpCount > 0) {
+    moveSentences.push(
+      `pressed for more detail on an answer ${followUpCount} ${followUpCount === 1 ? 'time' : 'times'}`,
+    );
+  }
+  if (memoryCount > 0) {
+    moveSentences.push(
+      `surfaced ${memoryCount} past ${memoryCount === 1 ? 'statement' : 'statements'} from a cast member's history`,
+    );
+  }
+  if (changeDirectionCount > 0) {
+    moveSentences.push(
+      `pivoted to a more productive line of discussion ${changeDirectionCount} ${changeDirectionCount === 1 ? 'time' : 'times'}`,
+    );
+  }
+  if (moveSentences.length > 0) {
+    descParts.push(
+      `Over those turns the moderator ${moveSentences.join(', ')}. That's what separates a structured discussion from three monologues stitched together.`,
+    );
+  }
+
+  descParts.push(
+    `Of the ${segmentsTotal} planned ${segmentsTotal === 1 ? 'segment' : 'segments'}, ${segmentsCovered} ${segmentsCovered === 1 ? 'was' : 'were'} substantively covered${segmentsSkipped > 0 ? `. The remaining ${segmentsSkipped} ${segmentsSkipped === 1 ? 'was' : 'were'} rolled into other segments or left out because the discussion arrived at the answer organically` : ''}.`,
+  );
+  descParts.push(
+    `Every statement each participant made was tagged and stored in the forum's memory. Future sessions can surface them as contradictions or echoes — a model that said one thing last week will be asked why they said something different today.`,
+  );
+
   if (snapshot.error) descParts.push(`(Note: debate ended with an issue — ${snapshot.error})`);
 
   return {
     stage: 6,
     stageName: STAGE_NAMES[6],
     step: 'debate_complete',
-    title: `${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} complete: ${snapshot.exchangeTurnCount} turns, ${segmentsCovered}/${segmentsTotal} segments`,
+    title: typeLabel === 'fireside chat'
+      ? `Fireside chat ran for ${snapshot.exchangeTurnCount} turns`
+      : `Debate ran for ${snapshot.exchangeTurnCount} turns`,
     description: descParts.join(' '),
     timestamp: snapshot._completedAt || snapshot.completedAt,
     data: {

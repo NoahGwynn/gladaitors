@@ -2,27 +2,38 @@
 // ForumSessionPage — top-level client component for a session page
 // ============================================================================
 // Subscribes to a forum_sessions row via Supabase Realtime and renders
-// the appropriate state based on the session's status:
+// the session. Layout:
 //
-//   - no session yet          → ScheduledState (countdown + overview)
-//   - status=scheduled        → ScheduledState
-//   - status=in_progress..agenda_built → Prep (journey timeline + detail cards)
-//   - status=debate_in_progress → DebateStream (live, takes over)
-//   - status=completed        → DebateStream (static) + JourneyTimeline below
-//   - status=failed           → error view
+//   Title + date
+//   Intro block (framing: transparent process, debate below, process above)
+//   JourneyScrubber (6-stage hero element)
+//   [Selected step's detail panel, if any]
+//   DebateStream (when available — showing live during debate_in_progress,
+//                 static when completed)
 //
-// The session state drives everything — each child component reads from
-// the same live session row. When a stage writes a new snapshot, the
-// row updates, Realtime pushes it, the page re-renders.
+// The scrubber is the editorial navigation for the page. The debate is
+// the default content below. Users can click any stage on the scrubber
+// to see exactly what happened (or will happen) at that step.
+//
+// Before a session exists, the page shows the ScheduledState (countdown
+// + overview). After the session has any data, the unified layout above
+// takes over — the scrubber fills in as stages complete, and the debate
+// section appears when stage 6 starts.
 // ============================================================================
 
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/lib/forum/useRealtimeSession';
 import type { SessionRowForJourney } from '@/lib/forum/journey';
+import {
+  currentScrubberStage,
+  completedScrubberStages,
+} from '@/lib/forum/scrubber-stages';
 import ScheduledState from './ScheduledState';
-import JourneyTimeline from './JourneyTimeline';
+import JourneyScrubber from './JourneyScrubber';
+import JourneyStepDetail from './JourneyStepDetail';
 import DebateStream from './DebateStream';
 import styles from './page.module.scss';
 
@@ -31,9 +42,7 @@ interface ForumSessionPageProps {
   sessionDate: string;
 }
 
-// These fields live on the session row but aren't in SessionRowForJourney
-// because the journey module doesn't need them. We read them here for
-// the debate view.
+// Extra fields on the row that aren't in SessionRowForJourney
 interface SessionRowExtra {
   cast_snapshot?: {
     participants?: Array<{
@@ -46,6 +55,7 @@ interface SessionRowExtra {
 
 export default function ForumSessionPage({ category, sessionDate }: ForumSessionPageProps) {
   const { session, loading, error, journey } = useRealtimeSession(category, sessionDate);
+  const [selectedStage, setSelectedStage] = useState<number | null>(null);
 
   return (
     <div className={styles.page}>
@@ -68,7 +78,7 @@ export default function ForumSessionPage({ category, sessionDate }: ForumSession
         </div>
       )}
 
-      {!loading && !error && renderContent(session, category, journey)}
+      {!loading && !error && renderContent(session, category, journey, selectedStage, setSelectedStage)}
     </div>
   );
 }
@@ -77,79 +87,82 @@ function renderContent(
   session: SessionRowForJourney | null,
   category: string,
   journey: ReturnType<typeof useRealtimeSession>['journey'],
+  selectedStage: number | null,
+  setSelectedStage: (s: number | null) => void,
 ) {
-  // No session yet → pre-pipeline countdown
-  if (!session) {
+  // No session or pre-pipeline → show the countdown + overview
+  if (!session || session.status === 'scheduled') {
     return <ScheduledState category={category} />;
   }
 
   const status = session.status;
+  const currentStage = currentScrubberStage(status);
+  const completedCount = completedScrubberStages(status);
 
-  // Scheduled or in_progress before anything interesting has happened
-  if (status === 'scheduled') {
-    return <ScheduledState category={category} />;
-  }
-
-  // Failed state
+  // Failed state: still render the scrubber showing what completed,
+  // and an inline error
   if (status === 'failed') {
     return (
       <>
-        <div className={styles.errorBox}>
-          This session encountered a failure and stopped.{' '}
-          {session.error && <span>{session.error}</span>}
-        </div>
-        {journey.length > 0 && <JourneyTimeline events={journey} />}
-      </>
-    );
-  }
-
-  // Debate in progress — takes over the viewport (journey collapses)
-  if (status === 'debate_in_progress' && session.debate_snapshot) {
-    return renderDebate(session, /* live */ true);
-  }
-
-  // Completed — full permanent record, both debate and journey visible
-  if (status === 'completed' && session.debate_snapshot) {
-    return (
-      <>
-        {renderDebate(session, /* live */ false)}
-        <div style={{ marginTop: 48 }}>
-          <h2
-            style={{
-              fontSize: 18,
-              fontWeight: 700,
-              color: 'var(--text-primary)',
-              marginBottom: 16,
-            }}
-          >
-            How we got here
-          </h2>
-          <JourneyTimeline events={journey} />
+        <IntroBlock />
+        <JourneyScrubber
+          currentStage={currentStage}
+          completedCount={completedCount}
+          selectedStage={selectedStage}
+          onSelect={setSelectedStage}
+        />
+        {selectedStage !== null && (
+          <JourneyStepDetail
+            stageNumber={selectedStage}
+            events={journey}
+            onClose={() => setSelectedStage(null)}
+          />
+        )}
+        <div className={styles.errorBox} style={{ marginTop: 24 }}>
+          This session stopped before completing. {session.error}
         </div>
       </>
     );
   }
 
-  // All prep-phase states: show the journey timeline with the current
-  // stage marked as in_progress
+  // All other states: intro + scrubber + (maybe) step detail + (maybe) debate
+  const debateSnapshot = session.debate_snapshot;
+  const hasDebateData = debateSnapshot != null && debateSnapshot.turns.length > 0;
+  const debateLive = status === 'debate_in_progress';
+
   return (
-    <div className={styles.prepWrap}>
-      <div className={styles.prepStatus}>
-        <span className={styles.prepStatusDot} />
-        <span>Pipeline running — stage {currentStageNumber(status)} of 6</span>
-      </div>
-      <JourneyTimeline events={journey} inProgress />
-    </div>
+    <>
+      <IntroBlock />
+      <JourneyScrubber
+        currentStage={currentStage}
+        completedCount={completedCount}
+        selectedStage={selectedStage}
+        onSelect={setSelectedStage}
+      />
+      {selectedStage !== null && (
+        <JourneyStepDetail
+          stageNumber={selectedStage}
+          events={journey}
+          onClose={() => setSelectedStage(null)}
+        />
+      )}
+      {hasDebateData && renderDebate(session, debateLive)}
+      {!hasDebateData && (
+        <div className={styles.prepStatus} style={{ marginTop: 24 }}>
+          <span className={styles.prepStatusDot} />
+          <span>
+            Pipeline running — the discussion will appear here when the debate starts.
+          </span>
+        </div>
+      )}
+    </>
   );
 }
 
 function renderDebate(session: SessionRowForJourney, live: boolean) {
-  // Extract cast from the cast snapshot — we need seat/provider/modelName
-  // for the debate stream component
   const castSnapshot = (session as SessionRowForJourney & SessionRowExtra).cast_snapshot;
   const participants = castSnapshot?.participants || [];
 
-  // Topic title — fall back to whatever is available
   const organizeSnapshot = session.organize_snapshot;
   let topicTitle = '(unknown topic)';
   if (organizeSnapshot && session.selected_thread_id) {
@@ -170,6 +183,23 @@ function renderDebate(session: SessionRowForJourney, live: boolean) {
   );
 }
 
+// --- Intro block (the philosophical framing above the scrubber) ---
+
+function IntroBlock() {
+  return (
+    <div className={styles.intro}>
+      <p className={styles.introText}>
+        <strong>
+          Every part of today&apos;s session — topic, cast, agenda, and debate — is the
+          result of a transparent, step-by-step process.
+        </strong>{' '}
+        The discussion is below. The process is above. Click any step to see how
+        today&apos;s session was built.
+      </p>
+    </div>
+  );
+}
+
 // --- Helpers ---
 
 function formatHumanDate(isoDate: string): string {
@@ -184,18 +214,4 @@ function formatHumanDate(isoDate: string): string {
   } catch {
     return isoDate;
   }
-}
-
-function currentStageNumber(status: string): number {
-  const stageByStatus: Record<string, number> = {
-    in_progress: 2,
-    topic_selected: 3,
-    moderator_selected: 4,
-    researched: 5,
-    cast_selected: 5,
-    deep_researched: 5,
-    agenda_built: 5,
-    debate_in_progress: 6,
-  };
-  return stageByStatus[status] || 2;
 }
