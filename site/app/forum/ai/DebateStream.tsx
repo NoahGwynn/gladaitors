@@ -58,10 +58,17 @@ interface CastMember {
   provider: string;
 }
 
+interface ModeratorInfo {
+  modelId: string;
+  modelName: string;
+  provider: string;
+}
+
 interface DebateStreamProps {
   snapshot: DebateSnapshot;
   sessionType: 'debate' | 'fireside_chat' | null;
   topicTitle: string;
+  moderator: ModeratorInfo | null;
   cast: CastMember[];
   /** True while the debate is still running (shows live indicator + auto-scroll) */
   live: boolean;
@@ -71,6 +78,7 @@ export default function DebateStream({
   snapshot,
   sessionType,
   topicTitle,
+  moderator,
   cast,
   live,
 }: DebateStreamProps) {
@@ -96,20 +104,39 @@ export default function DebateStream({
       <div className={styles.debateHeader}>
         <div className={styles.debateSessionType}>{sessionTypeLabel}</div>
         <h2 className={styles.debateTopic}>{topicTitle}</h2>
-        <div className={styles.debateCast}>
-          {cast.map((c) => (
-            <span
-              key={c.seat}
-              className={styles.debateCastMember}
-              style={{ '--seat-color': getProviderColor(c.provider) } as CSSProperties}
-            >
-              <span className={styles.debateCastDot} />
-              <span>
-                Seat {c.seat}: <strong>{c.modelName}</strong>
+
+        <div className={styles.debateRoster}>
+          {moderator && (
+            <div className={styles.debateRosterRow}>
+              <span className={styles.debateRosterLabel}>Moderator</span>
+              <span
+                className={styles.debateCastMember}
+                style={{ '--seat-color': MODERATOR_COLOR } as CSSProperties}
+              >
+                <span className={styles.debateCastDot} />
+                <strong>{moderator.modelName}</strong>
               </span>
+            </div>
+          )}
+          <div className={styles.debateRosterRow}>
+            <span className={styles.debateRosterLabel}>
+              {sessionType === 'fireside_chat' ? 'Voices' : 'Panelists'}
             </span>
-          ))}
+            {cast.map((c) => (
+              <span
+                key={c.seat}
+                className={styles.debateCastMember}
+                style={{ '--seat-color': getProviderColor(c.provider) } as CSSProperties}
+              >
+                <span className={styles.debateCastDot} />
+                <span>
+                  Seat {c.seat}: <strong>{c.modelName}</strong>
+                </span>
+              </span>
+            ))}
+          </div>
         </div>
+
         {live && (
           <div className={styles.debateStatus}>
             <span className={styles.debateStatusDot} />
@@ -124,6 +151,7 @@ export default function DebateStream({
             key={turn.index}
             turn={turn}
             castBySeat={castBySeat}
+            moderatorName={moderator?.modelName ?? null}
           />
         ))}
         <div ref={turnsEndRef} />
@@ -137,9 +165,10 @@ export default function DebateStream({
 interface DebateTurnCardProps {
   turn: DebateTurn;
   castBySeat: Map<number, CastMember>;
+  moderatorName: string | null;
 }
 
-function DebateTurnCard({ turn, castBySeat }: DebateTurnCardProps) {
+function DebateTurnCard({ turn, castBySeat, moderatorName }: DebateTurnCardProps) {
   const [reasoningOpen, setReasoningOpen] = useState(false);
 
   if (turn.actor === 'moderator') {
@@ -150,7 +179,7 @@ function DebateTurnCard({ turn, castBySeat }: DebateTurnCardProps) {
       >
         <div className={styles.turnHeader}>
           <span className={`${styles.turnActor} ${styles.turnActorModerator}`}>
-            Moderator
+            {moderatorName ? `Moderator · ${moderatorName}` : 'Moderator'}
           </span>
           {turn.move && <span className={styles.turnMove}>{turn.move}</span>}
           {turn.targetSeat != null && (

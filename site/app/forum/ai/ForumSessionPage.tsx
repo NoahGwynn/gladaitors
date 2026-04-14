@@ -27,6 +27,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRealtimeSession } from '@/lib/forum/useRealtimeSession';
 import type { SessionRowForJourney } from '@/lib/forum/journey';
+import { MODEL_POOL } from '@/lib/forum/model-pool';
 import {
   currentScrubberStage,
   completedScrubberStages,
@@ -184,7 +185,7 @@ function renderContent(
       )}
       {hasDebateData && renderDebate(session, debateLive)}
       {!hasDebateData && (
-        <div className={styles.prepStatus} style={{ marginTop: 24 }}>
+        <div className={styles.prepStatus} style={{ marginTop: 64 }}>
           <span className={styles.prepStatusDot} />
           <span>
             {status === 'debate_in_progress'
@@ -210,11 +211,29 @@ function renderDebate(session: SessionRowForJourney, live: boolean) {
     if (entry) topicTitle = entry.threadTitle;
   }
 
+  // Resolve the moderator from MODEL_POOL so we can show provider
+  // colour + display name in both the roster and the turn cards.
+  const moderatorId = session.moderator_model_id || session.acting_moderator_model_id;
+  let moderator: { modelId: string; modelName: string; provider: string } | null = null;
+  if (moderatorId) {
+    const poolEntry = MODEL_POOL.find((m) => m.id === moderatorId);
+    if (poolEntry) {
+      moderator = {
+        modelId: poolEntry.id,
+        modelName: poolEntry.displayName,
+        provider: poolEntry.provider,
+      };
+    } else {
+      moderator = { modelId: moderatorId, modelName: moderatorId, provider: 'unknown' };
+    }
+  }
+
   return (
     <DebateStream
       snapshot={session.debate_snapshot!}
       sessionType={session.session_type || null}
       topicTitle={topicTitle}
+      moderator={moderator}
       cast={participants}
       live={live}
     />

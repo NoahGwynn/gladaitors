@@ -389,25 +389,31 @@
 
 .stepDetail {
   margin-top: $space-lg;
-  padding: $space-xl;
   background: $bg-card;
   border: 1px solid $border;
   border-radius: $radius-lg;
   animation: slideIn 0.3s ease;
-
-  @media (max-width: 640px) {
-    padding: $space-lg $space-md;
-  }
+  overflow: hidden;
 }
+
+// --- Header area (stage title + explainer) ---
+// Visually distinct from the event list below it: slightly darker
+// background, accent stripe at the top, and stronger typography.
 
 .stepDetailHeader {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: $space-md;
-  margin-bottom: $space-lg;
-  padding-bottom: $space-md;
+  padding: $space-xl $space-xl $space-lg;
+  background: linear-gradient(180deg, $bg-elevated 0%, $bg-card 100%);
+  border-top: 3px solid $ui-accent;
   border-bottom: 1px solid $border;
+  position: relative;
+
+  @media (max-width: 640px) {
+    padding: $space-lg $space-md;
+  }
 }
 
 .stepDetailStageNumber {
@@ -485,25 +491,72 @@
 }
 
 .stepDetailEmpty {
-  padding: $space-xl $space-md;
+  padding: $space-2xl $space-md;
   text-align: center;
   color: $text-muted;
   font-size: $size-sm;
   font-style: italic;
 }
 
+// --- Events area (the individual steps within the stage) ---
+// Visually distinct from the header: plain card background, padded
+// body, and each event has a left-aligned bullet marker so they read
+// as a numbered list of steps beneath the stage header.
+
 .stepDetailEvents {
   display: flex;
   flex-direction: column;
-  gap: $space-lg;
+  padding: $space-lg $space-xl;
+
+  @media (max-width: 640px) {
+    padding: $space-md $space-md;
+  }
 }
 
 .stepDetailEvent {
-  padding: $space-md 0;
+  position: relative;
+  padding: $space-md 0 $space-lg $space-xl;
 
-  &:not(:last-child) {
-    padding-bottom: $space-lg;
-    border-bottom: 1px solid rgba($border, 0.5);
+  // Timeline dot marker
+  &::before {
+    content: '';
+    position: absolute;
+    left: 6px;
+    top: 22px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: $ui-accent;
+    border: 2px solid $bg-card;
+    z-index: 1;
+  }
+
+  // Continuous vertical line connecting this event's dot to the next
+  // one. Extends past the element's bottom edge so it reaches into
+  // the next event's top padding and meets the next dot without a gap.
+  // The -24px is the distance from our bottom edge to the next dot's
+  // top: next-event top padding (16px) + next dot top offset (22px)
+  // - dot radius overlap (14px) ≈ 24px.
+  &:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 10px;
+    top: 32px;
+    bottom: -24px;
+    width: 2px;
+    background: $border;
+    z-index: 0;
+  }
+
+  @media (max-width: 640px) {
+    padding-left: $space-lg;
+
+    &::before {
+      left: 4px;
+    }
+    &:not(:last-child)::after {
+      left: 8px;
+    }
   }
 }
 
@@ -799,6 +852,7 @@
   display: flex;
   flex-direction: column;
   gap: $space-lg;
+  margin-top: $space-2xl;  // breathing room below the journey section above
 }
 
 .debateHeader {
@@ -831,6 +885,31 @@
   flex-wrap: wrap;
   gap: $space-sm;
   margin-top: $space-xs;
+}
+
+// Header roster: moderator row above the panelists row, each with a
+// short label so the reader can tell who's facilitating vs arguing.
+.debateRoster {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  margin-top: $space-md;
+}
+
+.debateRosterRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $space-sm;
+}
+
+.debateRosterLabel {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $text-muted;
+  min-width: 72px;
 }
 
 .debateCastMember {
@@ -895,9 +974,11 @@
   }
 }
 
+// Moderator turns use the brand red only as a left-accent stripe.
+// The card background matches other turns — red is an accent, not
+// a fill.
 .turnModerator {
   border-left-color: $ui-accent;
-  background: rgba($ui-accent, 0.04);
 }
 
 .turnHeader {
