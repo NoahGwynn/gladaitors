@@ -109,7 +109,7 @@ export default function ForumSessionPage({ category, sessionDate }: ForumSession
         </div>
       )}
 
-      {!loading && !error && renderContent(session, category, journey, selectedStage, handleSelectStage)}
+      {!loading && !error && renderContent(session, category, journey, selectedStage, handleSelectStage, activeStage)}
     </div>
   );
 }
@@ -120,6 +120,7 @@ function renderContent(
   journey: ReturnType<typeof useRealtimeSession>['journey'],
   selectedStage: number | null,
   setSelectedStage: (s: number | null) => void,
+  activeStage: number | null,
 ) {
   // No session or pre-pipeline → show the countdown + overview
   if (!session || session.status === 'scheduled') {
@@ -129,6 +130,9 @@ function renderContent(
   const status = session.status;
   const currentStage = currentScrubberStage(status);
   const completedCount = completedScrubberStages(status);
+
+  // Is the currently-open detail panel showing the active (pulsing) stage?
+  const showingActive = selectedStage !== null && selectedStage === activeStage;
 
   // Failed state: still render the scrubber showing what completed,
   // and an inline error
@@ -146,6 +150,7 @@ function renderContent(
           <JourneyStepDetail
             stageNumber={selectedStage}
             events={journey}
+            isActive={showingActive}
             onClose={() => setSelectedStage(null)}
           />
         )}

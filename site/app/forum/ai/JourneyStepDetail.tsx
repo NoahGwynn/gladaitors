@@ -24,6 +24,9 @@ interface JourneyStepDetailProps {
   stageNumber: number;
   /** All journey events currently available on the session */
   events: JourneyEvent[];
+  /** True if this stage is currently the active (pulsing) one in the
+   *  scrubber — shows a live indicator next to the title. */
+  isActive?: boolean;
   /** Called when the user clicks the close button */
   onClose: () => void;
 }
@@ -31,6 +34,7 @@ interface JourneyStepDetailProps {
 export default function JourneyStepDetail({
   stageNumber,
   events,
+  isActive = false,
   onClose,
 }: JourneyStepDetailProps) {
   const stage = SCRUBBER_STAGES.find((s) => s.num === stageNumber);
@@ -46,7 +50,17 @@ export default function JourneyStepDetail({
       <div className={styles.stepDetailHeader}>
         <div>
           <div className={styles.stepDetailStageNumber}>Stage {stage.num}</div>
-          <h2 className={styles.stepDetailTitle}>{stage.fullTitle}</h2>
+          <h2 className={styles.stepDetailTitle}>
+            {isActive && (
+              <span
+                className={styles.stepDetailLiveDot}
+                aria-label="Live"
+                title="This stage is currently in progress"
+              />
+            )}
+            {stage.fullTitle}
+            {isActive && <span className={styles.stepDetailLiveLabel}>Live</span>}
+          </h2>
           <p className={styles.stepDetailExplainer}>{stage.explainer}</p>
         </div>
         <button
