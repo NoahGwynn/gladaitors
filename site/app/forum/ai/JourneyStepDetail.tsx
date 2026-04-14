@@ -79,10 +79,18 @@ export default function JourneyStepDetail({
 function StepDetailEvent({ event }: { event: JourneyEvent }) {
   const [technicalOpen, setTechnicalOpen] = useState(false);
   const hasTechnicalDetail = hasDetail(event);
+  const formattedTime = formatEventTime(event.timestamp);
 
   return (
     <div className={styles.stepDetailEvent}>
-      <h3 className={styles.stepDetailEventTitle}>{event.title}</h3>
+      <div className={styles.stepDetailEventHeader}>
+        <h3 className={styles.stepDetailEventTitle}>{event.title}</h3>
+        {formattedTime && (
+          <time className={styles.stepDetailEventTime} dateTime={event.timestamp}>
+            {formattedTime}
+          </time>
+        )}
+      </div>
       <p className={styles.stepDetailEventDescription}>{event.description}</p>
       {hasTechnicalDetail && (
         <>
@@ -102,6 +110,47 @@ function StepDetailEvent({ event }: { event: JourneyEvent }) {
       )}
     </div>
   );
+}
+
+/** Format an ISO timestamp for display next to a journey event.
+ *  - Same day as today: "14:32:05"
+ *  - Different day: "14 Apr · 14:32"
+ *  Always uses the browser's local time — the audience sees when
+ *  things happened in their own timezone. */
+function formatEventTime(isoTimestamp: string | undefined): string | null {
+  if (!isoTimestamp) return null;
+  try {
+    const date = new Date(isoTimestamp);
+    if (Number.isNaN(date.getTime())) return null;
+
+    const now = new Date();
+    const sameDay =
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate();
+
+    if (sameDay) {
+      return new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(date);
+    }
+
+    const datePart = new Intl.DateTimeFormat('en-GB', {
+      day: 'numeric',
+      month: 'short',
+    }).format(date);
+    const timePart = new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date);
+    return `${datePart} · ${timePart}`;
+  } catch {
+    return null;
+  }
 }
 
 /** True if this event has drill-down data worth showing. */

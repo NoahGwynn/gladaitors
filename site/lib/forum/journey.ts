@@ -507,7 +507,8 @@ function buildActingModeratorEvent(session: SessionRowForJourney): JourneyEvent 
     title: `Acting referee stepped in to break the tie`,
     description:
       `The runoff couldn't separate the tied stories — both the pool's picks and their urgency ratings ended up level. In that (rare) case, the forum brings in an "acting moderator" from the rotation queue whose job is just to make the final call. Their conflict scores on the tied stories are published so their decision is transparent.`,
-    timestamp: undefined,
+    // Approximate: this happens right after the runoff completes
+    timestamp: session.runoff_snapshot?._completedAt,
     data: {
       modelId: session.acting_moderator_model_id,
       tier: session.acting_moderator_tier,
@@ -542,7 +543,11 @@ function buildTopicSelectedEvent(session: SessionRowForJourney): JourneyEvent {
     step: 'topic_selected',
     title: `Today's topic: "${title}"`,
     description: descParts.join(' '),
-    timestamp: undefined,
+    // Topic is selected immediately after the vote/runoff — use the
+    // best available timestamp from those stages
+    timestamp:
+      session.runoff_snapshot?._completedAt ||
+      session.broadcast_snapshot?._completedAt,
     data: {
       threadId: session.selected_thread_id,
       title,
@@ -602,7 +607,12 @@ function buildModeratorSelectedEvent(session: SessionRowForJourney): JourneyEven
     step: 'moderator_selected',
     title: `${modelName} is today's moderator`,
     description: descParts.join(' '),
-    timestamp: session.completed_at || undefined,
+    // Moderator is selected right after the topic. Best approximation:
+    // the research snapshot's startedAt (since research is the next
+    // step the moderator does). Fall back to broadcast completion.
+    timestamp:
+      session.research_snapshot?._startedAt ||
+      session.broadcast_snapshot?._completedAt,
     data: {
       modelId: session.moderator_model_id,
       tier,
