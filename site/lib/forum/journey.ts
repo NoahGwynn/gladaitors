@@ -20,6 +20,7 @@
 
 import type { OrganizeResult } from './organize';
 import type { BroadcastResult, ModelBroadcastResponse } from './broadcast';
+import type { FocusedBroadcastResult } from './focused-broadcast';
 import type { RunoffResult } from './topic-selection';
 import type { ResearchResult, DeepResearchResult } from './research';
 import type { CastSelectionResult, CastParticipant, AlsoInvitedEntry } from './cast-selection';
@@ -67,6 +68,9 @@ export interface SessionRowForJourney {
 
   organize_snapshot?: (OrganizeResult & SnapshotMeta) | null;
   broadcast_snapshot?: (BroadcastResult & SnapshotMeta) | null;
+  focused_broadcast_snapshot?: (FocusedBroadcastResult & SnapshotMeta) | null;
+  debate_format?: 'moderated' | 'unmoderated' | null;
+  debate_format_reason?: string | null;
   research_snapshot?: (ResearchResult & SnapshotMeta) | null;
   cast_snapshot?: (CastSelectionResult & SnapshotMeta) | null;
   session_type?: 'debate' | 'fireside_chat' | null;
@@ -94,7 +98,11 @@ export interface SessionRowForJourney {
     modelId: string;
     modelName: string;
     conflictScore: number;
-    reason: string;
+    unfitToModerate?: boolean;
+    unfitReason?: string;
+    skipReason?: string;
+    /** Legacy: older rows may have a free-text reason instead */
+    reason?: string;
   }> | null;
   moderator_region_softcap_applied?: boolean | null;
 
@@ -162,9 +170,16 @@ export function deriveSessionJourney(session: SessionRowForJourney): JourneyEven
     events.push(buildTopicSelectedEvent(session));
   }
 
-  // === Stage 4: Moderator selection ===
+  // === Stage 4b: Focused rebroadcast ===
+  if (session.focused_broadcast_snapshot) {
+    events.push(...buildFocusedBroadcastEvents(session.focused_broadcast_snapshot));
+  }
+
+  // === Stage 4c: Moderator selection (or unmoderated fallback) ===
   if (session.moderator_model_id) {
     events.push(buildModeratorSelectedEvent(session));
+  } else if (session.debate_format === 'unmoderated') {
+    events.push(buildUnmoderatedFallbackEvent(session));
   }
 
   // === Stage 5a: Research ===
@@ -302,20 +317,17 @@ function buildBroadcastEvents(snapshot: BroadcastResult & SnapshotMeta): Journey
     provider: r.provider,
     region: r.region,
     voteCount: r.votes.length,
-    conflictCount: r.conflicts.length,
-    stanceCount: r.stances.length,
     error: r.error,
     topVoteThreadId: r.votes.find(v => v.rank === 1)?.threadId || null,
-    topConflictScore: r.conflicts.length > 0 ? Math.max(...r.conflicts.map(c => c.conflictScore)) : null,
   }));
 
   const totalPool = snapshot.responses.length + skipped;
   const descParts: string[] = [];
   descParts.push(
-    `The shortlist went out to ${totalPool} frontier models from different labs. Each was asked three things: which stories they'd most want to discuss today, where they have a conflict of interest (a story about their own lab, for instance), and what position they'd take on each topic if selected.`,
+    `The shortlist went out to ${totalPool} frontier models from different labs. Each was asked one question: which stories they'd most want to discuss today. This is the voting ballot — conflict scores and stances come later, after the topic is chosen, when each model is asked to commit to a position on just the winning topic.`,
   );
   descParts.push(
-    `${succeeded} responded. Their votes decide the topic; their conflict declarations decide who can moderate and who gets a seat as a participant.`,
+    `${succeeded} responded. Their votes decide the topic.`,
   );
   if (failed > 0) {
     descParts.push(`${failed} ${failed === 1 ? 'call' : 'calls'} failed for technical reasons — those models sit out this round.`);
@@ -337,11 +349,96 @@ function buildBroadcastEvents(snapshot: BroadcastResult & SnapshotMeta): Journey
       skippedCount: skipped,
       perModel,
       skippedModels: snapshot.skippedModels,
-      responses: snapshot.responses, // Full payload for the detail drawer
+      responses: snapshot.responses,
     },
   });
 
   return events;
+}
+
+// --- Stage 4b events (focused rebroadcast) ---
+
+function buildFocusedBroadcastEvents(snapshot: FocusedBroadcastResult & SnapshotMeta): JourneyEvent[] {
+  const events: JourneyEvent[] = [];
+
+  const valid = snapshot.responses.filter(r => !r.error);
+  const failedCount = snapshot.responses.filter(r => r.error).length;
+  const selfVetoed = valid.filter(r => r.unfitToModerate);
+  const scores = valid.map(r => r.conflictScore);
+  const maxScore = scores.length > 0 ? Math.max(...scores) : 0;
+  const minScore = scores.length > 0 ? Math.min(...scores) : 0;
+
+  const descParts: string[] = [];
+  descParts.push(
+    `With the topic chosen, every pool model was re-asked three focused questions about this one subject: how conflicted they are on a strict rubric, whether they're unfit to moderate it (a boolean self-veto, with caution-based reasons explicitly rejected), and what position they'd actually argue if selected as a panelist. Splitting this from the initial voting ballot removes the cognitive load of weighing eight topics at once and lets each model introspect properly on the topic that matters.`,
+  );
+  descParts.push(
+    `${valid.length} of ${snapshot.responses.length} models responded with valid answers. Conflict scores ranged from ${minScore} to ${maxScore}.`,
+  );
+  if (selfVetoed.length > 0) {
+    descParts.push(
+      `${selfVetoed.length} model${selfVetoed.length === 1 ? '' : 's'} self-vetoed the moderator role — the reasons each gave are shown below and carried into moderator selection as a hard filter.`,
+    );
+  }
+  if (failedCount > 0) {
+    descParts.push(`${failedCount} response${failedCount === 1 ? '' : 's'} failed to parse or errored.`);
+  }
+
+  events.push({
+    stage: 4,
+    stageName: STAGE_NAMES[4],
+    step: 'focused_broadcast_complete',
+    title: `Pool commitments on "${snapshot.topicTitle}"`,
+    description: descParts.join(' '),
+    timestamp: snapshot._completedAt,
+    data: {
+      topicId: snapshot.topicId,
+      topicTitle: snapshot.topicTitle,
+      validResponseCount: valid.length,
+      failedCount,
+      selfVetoedCount: selfVetoed.length,
+      maxConflictScore: maxScore,
+      minConflictScore: minScore,
+      responses: snapshot.responses,
+    },
+  });
+
+  return events;
+}
+
+// --- Stage 4c events (no moderator — unmoderated fallback) ---
+
+function buildUnmoderatedFallbackEvent(session: SessionRowForJourney): JourneyEvent {
+  const skipped = session.moderator_skipped || [];
+  const reason = session.debate_format_reason
+    || 'No pool model could moderate this topic — the session runs in unmoderated format.';
+
+  const vetoedCount = skipped.filter(s => s.unfitToModerate).length;
+  const tooConflicted = skipped.length - vetoedCount;
+
+  const descParts: string[] = [];
+  descParts.push(reason);
+  if (vetoedCount > 0) {
+    descParts.push(`${vetoedCount} model${vetoedCount === 1 ? '' : 's'} self-vetoed the moderator role with specific, concrete reasons — those are shown below.`);
+  }
+  if (tooConflicted > 0) {
+    descParts.push(`${tooConflicted} candidate${tooConflicted === 1 ? ' was' : 's were'} too conflicted to chair (score ≥80 on the rubric).`);
+  }
+  descParts.push(`Rather than pick the least-bad referee and pretend to neutrality the system can't guarantee, the debate switches to sequential unmoderated format: the most-invested voices are seated as panelists and speak directly to each other, one at a time.`);
+
+  return {
+    stage: 4,
+    stageName: STAGE_NAMES[4],
+    step: 'moderator_unavailable',
+    title: 'No moderator — unmoderated format',
+    description: descParts.join(' '),
+    timestamp: undefined,
+    data: {
+      reason,
+      skipped,
+      debateFormat: 'unmoderated',
+    },
+  };
 }
 
 // --- Stage 4 events ---
@@ -489,31 +586,17 @@ function buildRunoffEvents(session: SessionRowForJourney): JourneyEvent[] {
 }
 
 function buildActingModeratorEvent(session: SessionRowForJourney): JourneyEvent {
-  const tier = session.acting_moderator_tier;
-  const tierLabels: Record<number, string> = {
-    1: 'tier 1 (clean — max conflict <30)',
-    2: 'tier 2 (max conflict <50)',
-    3: 'tier 3 (max conflict <70)',
-    4: 'tier 4 (max conflict <80)',
-    5: 'tier 5 (max conflict <90)',
-    6: 'tier 6 (no conflict check — last resort)',
-  };
-  const tierLabel = tier && tierLabels[tier] ? tierLabels[tier] : `tier ${tier}`;
-
   return {
     stage: 4,
     stageName: STAGE_NAMES[4],
     step: 'acting_moderator_chosen',
     title: `Acting referee stepped in to break the tie`,
     description:
-      `The runoff couldn't separate the tied stories — both the pool's picks and their urgency ratings ended up level. In that (rare) case, the forum brings in an "acting moderator" from the rotation queue whose job is just to make the final call. Their conflict scores on the tied stories are published so their decision is transparent.`,
-    // Approximate: this happens right after the runoff completes
+      `The runoff couldn't separate the tied stories — both the pool's picks ended up level. In that (rare) case, the forum brings in an "acting moderator" from the rotation queue to make the final call. Since the initial broadcast is now votes-only (no conflict data at this stage), the acting referee is picked by pure rotation order: the model that has gone longest without moderating this category.`,
     timestamp: session.runoff_snapshot?._completedAt,
     data: {
       modelId: session.acting_moderator_model_id,
-      tier: session.acting_moderator_tier,
       reasoning: session.acting_moderator_reasoning,
-      conflicts: session.acting_moderator_conflicts,
     },
   };
 }
@@ -570,30 +653,42 @@ function buildModeratorSelectedEvent(session: SessionRowForJourney): JourneyEven
     `${modelName} will run today's session. The moderator is neutral — they facilitate the discussion, they don't argue a position.`,
   );
 
-  // Explain the selection
+  // Explain the selection. Thresholds come from MODERATOR_TIERS:
+  // tier 1 <30, tier 2 <50, tier 3 <70, tier 4 <80. Scores ≥80 drop
+  // to unmoderated format (handled by a separate event builder).
   if (conflict < 30) {
     descParts.push(
-      `They were picked because the rotation queue put them next in line and they have essentially no personal stake in the chosen topic (conflict score ${conflict}/100).`,
+      `They were picked because the rotation queue put them next in line and they have essentially no personal stake in the chosen topic (focused conflict score ${conflict}/100).`,
     );
   } else if (conflict < 50) {
     descParts.push(
-      `They were picked from the rotation queue. Their conflict score on this topic is ${conflict}/100 — they have some awareness of the topic but not enough to compromise their neutrality.`,
+      `They were picked from the rotation queue. Their focused conflict score on this topic is ${conflict}/100 — they have some awareness of the topic but not enough to compromise their neutrality.`,
     );
   } else if (conflict < 70) {
     descParts.push(
-      `They were picked from the rotation queue. Their conflict score is ${conflict}/100 — moderate but still below the threshold for moderation (anything above 70 gets skipped).`,
+      `They were picked from the rotation queue. Their focused conflict score is ${conflict}/100 — moderate, but still below the tier-4 cap (≥80 drops the session to unmoderated format entirely).`,
     );
   } else {
     descParts.push(
-      `Their conflict score is ${conflict}/100, which is unusually high for a moderator. This happens when every available model has a stake in the topic; the forum picked the least compromised option and is disclosing it transparently.`,
+      `Their focused conflict score is ${conflict}/100 — close to the ≥80 cap that triggers the unmoderated fallback. This happens when every available model has a meaningful stake in the topic; the forum picked the least compromised option and is disclosing it transparently.`,
     );
   }
 
   if (skipped.length > 0) {
-    const names = skipped.map(s => `${s.modelName} (${s.conflictScore})`).join(', ');
-    descParts.push(
-      `${skipped.length} ${skipped.length === 1 ? 'model was' : 'models were'} passed over because of a too-high conflict on this topic: ${names}.`,
-    );
+    const vetoed = skipped.filter(s => s.unfitToModerate);
+    const conflicted = skipped.filter(s => !s.unfitToModerate);
+    if (vetoed.length > 0) {
+      const names = vetoed.map(s => s.modelName).join(', ');
+      descParts.push(
+        `${vetoed.length} ${vetoed.length === 1 ? 'model' : 'models'} self-vetoed the moderator role (${names}) — their reasons are shown in the detail panel below.`,
+      );
+    }
+    if (conflicted.length > 0) {
+      const names = conflicted.map(s => `${s.modelName} (${s.conflictScore})`).join(', ');
+      descParts.push(
+        `${conflicted.length} ${conflicted.length === 1 ? 'model was' : 'models were'} passed over because of a too-high conflict on this topic: ${names}.`,
+      );
+    }
   }
   if (softcap) {
     descParts.push(
@@ -616,7 +711,7 @@ function buildModeratorSelectedEvent(session: SessionRowForJourney): JourneyEven
     data: {
       modelId: session.moderator_model_id,
       tier,
-      tierThreshold: tier ? [30, 50, 70, 80, 90][tier - 1] : null,
+      tierThreshold: tier ? [30, 50, 70, 80][tier - 1] : null,
       conflictScore: conflict,
       method,
       skipped,

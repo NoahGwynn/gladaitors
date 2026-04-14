@@ -38,7 +38,12 @@ import { MODEL_POOL } from './model-pool';
 import type { Agenda } from './agenda';
 import type { CastParticipant } from './cast-selection';
 import { callModeratorTurn, type ModeratorMove, type ModeratorTurnState, type ModeratorHistoryTurn } from './moderator-turn';
-import { callParticipantTurn, type ParticipantVisibleTurn } from './participant-turn';
+import {
+  callParticipantTurn,
+  callUnmoderatedTurn,
+  type ParticipantVisibleTurn,
+  type UnmoderatedTurnKind,
+} from './participant-turn';
 import { queryMemory, type MemoryHit } from './memory-query';
 import { storeUtterance } from './utterance-storage';
 import { getTaxonomy, filterValidTags } from './tag-taxonomy';
@@ -501,6 +506,253 @@ export async function runDebate(input: RunDebateInput): Promise<DebateSnapshot> 
     exchangeTurnCount,
     totalTurnRecords: turns.length,
     forceCloseApplied,
+    turns,
+    segmentProgress,
+    moveCounts,
+    utterancesStored,
+  };
+}
+
+// ============================================================================
+// UNMODERATED DEBATE RUNTIME
+// ============================================================================
+// When Stage 4 drops to unmoderated (every moderator candidate scored
+// ≥80 conflict or self-vetoed), the debate runs as a sequential
+// seat-cycle with no chair and no agenda. Three phases:
+//
+//   Opening — each panelist speaks once, stating their position from
+//             scratch. No responses to anyone.
+//   Middle  — seats cycle (1 → 2 → 3 → 1 → ...), each turn responding
+//             directly to the immediately previous speaker.
+//   Closing — each panelist speaks once, delivering their final
+//             position after the exchange. They know it's their last.
+//
+// Turn budget is fixed by panelist count:
+//   2 panelists → 12 total (2 open + 8 middle + 2 close, 4 middle each)
+//   3 panelists → 15 total (3 open + 9 middle + 3 close, 3 middle each)
+//   4 panelists → 16 total (4 open + 8 middle + 4 close, 2 middle each)
+//
+// The unmoderated path reuses the same DebateSnapshot / DebateTurn
+// shape as the moderated path so the UI renders both identically.
+// Moderator-only fields (move, targetSeat, moderatorReasoning) remain
+// unset on unmoderated turns — the DebateStream component already
+// handles null/undefined moderator gracefully.
+// ============================================================================
+
+/** Total exchange-turn budget given panelist count */
+function unmoderatedTurnBudget(panelistCount: number): number {
+  if (panelistCount <= 2) return 12;
+  if (panelistCount === 3) return 15;
+  return 16;
+}
+
+/** Phase plan: returns the sequence of (seat, kind) tuples that make
+ *  up the full unmoderated debate. Opening phase has one turn per
+ *  panelist; closing phase has one turn per panelist; middle phase
+ *  fills the remaining budget by cycling seats 1..N round-robin. */
+function buildUnmoderatedPlan(
+  panelistSeats: number[],
+): Array<{ seat: number; kind: UnmoderatedTurnKind }> {
+  const n = panelistSeats.length;
+  if (n < 2) return [];
+
+  const total = unmoderatedTurnBudget(n);
+  const openingCount = n;
+  const closingCount = n;
+  const middleCount = total - openingCount - closingCount;
+
+  const plan: Array<{ seat: number; kind: UnmoderatedTurnKind }> = [];
+
+  // Opening: one per seat in seat order
+  for (const seat of panelistSeats) plan.push({ seat, kind: 'opening' });
+
+  // Middle: round-robin through seats
+  for (let i = 0; i < middleCount; i++) {
+    const seat = panelistSeats[i % n];
+    plan.push({ seat, kind: 'middle' });
+  }
+
+  // Closing: one per seat in seat order
+  for (const seat of panelistSeats) plan.push({ seat, kind: 'closing' });
+
+  return plan;
+}
+
+export interface RunUnmoderatedDebateInput {
+  sessionId: string;
+  category: string;
+  topicTitle: string;
+  topicSignificance: string[];
+  cast: CastParticipant[];
+  /** Human-readable reason shown in the session header and journey.
+   *  Comes from ModeratorSelectionOutcome.reason in the unmoderated
+   *  branch. */
+  unmoderatedReason: string;
+  streamToDatabase?: boolean;
+}
+
+/** Run an unmoderated debate to completion. Returns the same
+ *  DebateSnapshot shape as runDebate() so the UI renders identically.
+ *  Persists incrementally to forum_sessions.debate_snapshot for live
+ *  streaming via Supabase Realtime. */
+export async function runUnmoderatedDebate(
+  input: RunUnmoderatedDebateInput,
+): Promise<DebateSnapshot> {
+  const startedAt = new Date().toISOString();
+  const streamToDatabase = input.streamToDatabase !== false;
+
+  // Sort cast by seat so the plan walks seats in order
+  const seatedCast = [...input.cast].sort((a, b) => a.seat - b.seat);
+  const panelistSeats = seatedCast.map(c => c.seat);
+  const plan = buildUnmoderatedPlan(panelistSeats);
+
+  const nameBySeat = new Map<number, string>();
+  for (const c of seatedCast) nameBySeat.set(c.seat, c.modelName);
+
+  const turns: DebateTurn[] = [];
+  const moveCounts: Record<ModeratorMove, number> = {
+    continue_planned: 0,
+    follow_up: 0,
+    counter_with_opponent: 0,
+    surface_memory: 0,
+    change_direction: 0,
+    pull_back: 0,
+    memory_lookup: 0,
+    close: 0,
+  };
+
+  let exchangeTurnCount = 0;
+  let utterancesStored = 0;
+
+  // Unmoderated sessions have no segments, but the snapshot schema
+  // requires segmentProgress — populate with a single synthetic
+  // "Unmoderated exchange" entry so the UI has something to render.
+  const segmentProgress: DebateSegmentProgress[] = [{
+    segmentName: 'Unmoderated exchange',
+    status: 'in_progress',
+    startedAtExchangeTurn: 0,
+    endedAtExchangeTurn: null,
+    exchangesSpent: 0,
+  }];
+
+  console.log(`[UNMOD-DEBATE] Starting: ${input.topicTitle}`);
+  console.log(`[UNMOD-DEBATE] Cast: ${seatedCast.map(c => `${c.modelName}(seat ${c.seat})`).join(', ')}`);
+  console.log(`[UNMOD-DEBATE] Plan: ${plan.length} turns (${panelistSeats.length} panelists)`);
+
+  const supabase = streamToDatabase ? createClient() : null;
+  async function persistProgress(status: 'in_progress' | 'completed' = 'in_progress') {
+    if (!supabase) return;
+    const snapshot: DebateSnapshot = {
+      status,
+      startedAt,
+      completedAt: new Date().toISOString(),
+      exchangeTurnCount,
+      totalTurnRecords: turns.length,
+      forceCloseApplied: false,
+      turns,
+      segmentProgress,
+      moveCounts,
+      utterancesStored,
+    };
+    try {
+      await supabase
+        .from('forum_sessions')
+        .update({
+          status: status === 'completed' ? 'completed' : 'debate_in_progress',
+          debate_snapshot: {
+            _startedAt: startedAt,
+            _completedAt: status === 'completed' ? snapshot.completedAt : null,
+            ...snapshot,
+          },
+        })
+        .eq('id', input.sessionId);
+    } catch (err) {
+      console.warn(`[UNMOD-DEBATE] Failed to persist progress: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
+  }
+
+  await persistProgress('in_progress');
+
+  // Main loop — execute the plan
+  for (let i = 0; i < plan.length; i++) {
+    const step = plan[i];
+    const castMember = seatedCast.find(c => c.seat === step.seat);
+    if (!castMember) {
+      console.warn(`[UNMOD-DEBATE] Unknown seat ${step.seat} in plan — skipping`);
+      continue;
+    }
+    const poolModel = MODEL_POOL.find(m => m.id === castMember.modelId);
+    if (!poolModel) {
+      console.warn(`[UNMOD-DEBATE] Seat ${step.seat} modelId ${castMember.modelId} not in pool — skipping`);
+      continue;
+    }
+
+    const history = toParticipantVisibleHistory(turns);
+
+    const response = await callUnmoderatedTurn(
+      {
+        model: poolModel,
+        seat: castMember.seat,
+        stance: castMember.stance,
+      },
+      input.topicTitle,
+      input.topicSignificance,
+      input.category,
+      history,
+      step.kind,
+      nameBySeat,
+    );
+
+    const turn: DebateTurn = {
+      index: turns.length,
+      exchangeTurn: exchangeTurnCount,
+      actor: 'participant',
+      timestamp: new Date().toISOString(),
+      seat: castMember.seat,
+      modelId: poolModel.id,
+      modelName: poolModel.displayName,
+      text: response.text,
+      segmentName: `${step.kind} (unmoderated)`,
+    };
+    turns.push(turn);
+
+    // Store utterance for memory pipeline
+    try {
+      await storeUtterance({
+        sessionId: input.sessionId,
+        category: input.category,
+        segmentName: step.kind,
+        turnIndex: exchangeTurnCount,
+        participantSeat: castMember.seat,
+        modelId: poolModel.id,
+        modelFamily: poolModel.family,
+        utteranceText: response.text,
+      });
+      utterancesStored += 1;
+    } catch (err) {
+      console.warn(`[UNMOD-DEBATE] Failed to store utterance: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
+
+    exchangeTurnCount += 1;
+    segmentProgress[0].exchangesSpent += 1;
+
+    await persistProgress('in_progress');
+  }
+
+  // Close out the synthetic segment
+  segmentProgress[0].status = 'completed';
+  segmentProgress[0].endedAtExchangeTurn = exchangeTurnCount;
+
+  const completedAt = new Date().toISOString();
+  console.log(`[UNMOD-DEBATE] Session ended. Turns: ${exchangeTurnCount}. Utterances stored: ${utterancesStored}.`);
+
+  return {
+    status: 'completed',
+    startedAt,
+    completedAt,
+    exchangeTurnCount,
+    totalTurnRecords: turns.length,
+    forceCloseApplied: false,
     turns,
     segmentProgress,
     moveCounts,

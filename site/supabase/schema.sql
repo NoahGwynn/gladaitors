@@ -980,6 +980,25 @@ create table if not exists public.forum_sessions (
   acting_moderator_reasoning text,
   acting_moderator_conflicts jsonb,                -- their scores on the tied topics
 
+  -- Stage 4b — focused rebroadcast on the chosen topic.
+  -- After topic selection, every pool model is asked three things about
+  -- ONLY the winning topic: a refined conflict score, a boolean self-veto
+  -- ("am I a bad choice to moderate this specific topic?"), and a stance
+  -- they'd argue if selected as a panelist. This decouples voting (done
+  -- in Stage 3 on all 8 shortlisted topics) from commitment-level
+  -- introspection on the one that was picked.
+  focused_broadcast_snapshot jsonb,
+
+  -- Debate format: 'moderated' (a pool model chairs) or 'unmoderated'
+  -- (sequential round-robin with no chair, used when every candidate
+  -- scored ≥80 conflict or self-vetoed). Set by /api/forum/select right
+  -- after moderator selection resolves.
+  debate_format text default 'moderated',
+  -- Human-readable explanation for why the format is what it is.
+  -- Populated for unmoderated sessions (why no moderator was picked);
+  -- null for moderated sessions. Shown in the session page header.
+  debate_format_reason text,
+
   -- Moderator selection (the actual one)
   moderator_model_id text,
   moderator_conflict_score int,                    -- their conflict on the chosen topic
@@ -1027,6 +1046,12 @@ alter table public.forum_sessions
   add column if not exists agenda_snapshot jsonb;
 alter table public.forum_sessions
   add column if not exists debate_snapshot jsonb;
+alter table public.forum_sessions
+  add column if not exists focused_broadcast_snapshot jsonb;
+alter table public.forum_sessions
+  add column if not exists debate_format text default 'moderated';
+alter table public.forum_sessions
+  add column if not exists debate_format_reason text;
 
 -- One session per category per day — enforces idempotency.
 create unique index if not exists forum_sessions_unique

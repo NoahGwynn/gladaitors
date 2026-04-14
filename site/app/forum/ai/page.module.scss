@@ -880,6 +880,25 @@
   line-height: 1.3;
 }
 
+// Banner shown above the roster for unmoderated sessions. Brand-red
+// left accent, same visual language as other transparency callouts.
+.debateUnmoderatedBanner {
+  margin-top: $space-sm;
+  padding: $space-md $space-lg;
+  background: rgba($ui-accent, 0.06);
+  border-left: 3px solid $ui-accent;
+  border-radius: $radius-sm;
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.5;
+
+  strong {
+    color: $text-primary;
+    display: inline;
+    margin-right: $space-xs;
+  }
+}
+
 .debateCast {
   display: flex;
   flex-wrap: wrap;

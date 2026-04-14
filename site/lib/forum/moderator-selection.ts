@@ -1,5 +1,5 @@
 // ============================================================================
-// dAIly Forum — Stage 4b: Moderator Selection
+// dAIly Forum — Stage 4: Moderator Selection
 // ============================================================================
 // Three functions:
 //
@@ -9,39 +9,35 @@
 //      Models that have never moderated this category go first, in
 //      pool order.
 //
-//   2. selectActingModerator(tiedTopicIds, broadcast, queue)
+//   2. selectActingModerator(tiedTopicIds, rotationQueue)
 //      Fires only when a runoff produces a double-tie that the pool
-//      could not break with picks + urgency. Walks graduated conflict
-//      tiers (<30 → <50 → <70 → <80 → <90 → no check), picking the
-//      first eligible model in rotation order at each tier.
+//      could not break with picks + urgency. The acting moderator
+//      breaks the tie with a single editorial call. Since the initial
+//      broadcast no longer collects conflict data (votes only), this
+//      function is now PURE ROTATION — the first model in the queue
+//      wins. The acting moderator is a rare edge case (double-tie
+//      surviving a runoff); degrading to rotation-only is acceptable.
 //
-//      "Conflict" here is the model's MAXIMUM declared conflict score
-//      across ALL tied topics — we want a referee who can fairly choose
-//      between them, not one who's compromised on any of them.
-//
-//      Acting moderator is NOT the actual moderator. They make a single
-//      editorial call and then the actual moderator selection runs
-//      separately for the chosen topic.
-//
-//   3. selectModerator(topicId, broadcast, queue, recentRegions)
-//      The real Stage 4 moderator selection. Walks graduated tiers
-//      (<30 → <50 → <70 → <80 → <90), and within each tier walks the
-//      rotation queue with the region softcap applied. First eligible
-//      at the lowest passing tier wins, so a clean model in tier 1
-//      always beats a compromised model in tier 3 regardless of queue
-//      position. Falls back to least conflicted (with a 10-point tie
-//      window broken by rotation) only if all five tiers are exhausted.
-//      Soft cap: avoid 3rd consecutive same-region moderator within
-//      a tier, unless doing so would force a drop to a higher tier.
+//   3. selectModerator(focusedBroadcast, rotationQueue, recentRegions)
+//      The real Stage 4 moderator selection. Reads from the FOCUSED
+//      broadcast (not the initial one) — that's where the refined
+//      conflict scores + self-veto flags live. Hard-filters any
+//      candidates that self-vetoed (unfitToModerate=true). Then walks
+//      graduated tiers (<30 → <50 → <70 → <80 → <90) with region
+//      softcap. If no candidate makes it into tiers 1-4 (i.e. the
+//      best available conflict score is ≥80), OR if every candidate
+//      self-vetoed, returns a drop-to-unmoderated outcome instead of
+//      a pick. The debate runtime then uses the sequential
+//      unmoderated format.
 //
 // All decisions are deterministic and the full trace is captured for
 // the session record so the published transparency layer can show
-// exactly how each moderator was chosen.
+// exactly how each moderator was chosen — or why none was.
 // ============================================================================
 
 import { createClient } from '@/lib/supabase';
 import { getAvailablePool, type PoolModel } from './model-pool';
-import type { BroadcastResult } from './broadcast';
+import type { FocusedBroadcastResult } from './focused-broadcast';
 
 // --- Types ---
 
@@ -59,15 +55,24 @@ export interface RotationEntry {
 export interface ActingModeratorResult {
   modelId: string;
   modelName: string;
-  /** Which graduated tier resolved the choice. 1 = <30 conflict (best),
-   *  6 = no check at all (last resort). */
-  tier: number;
-  tierThreshold: number | null;
-  /** This model's conflict scores on every tied topic (transparency) */
-  conflicts: Record<string, number>;
-  /** Maximum conflict across the tied topics (the score that placed
-   *  this model in its eventual tier) */
-  maxConflict: number;
+  /** Always 'rotation' now — historical tiered selection was dropped
+   *  when the initial broadcast stopped collecting conflict data. */
+  method: 'rotation';
+}
+
+/** A model walked over during moderator selection and the reason. */
+export interface SkippedModeratorEntry {
+  modelId: string;
+  modelName: string;
+  conflictScore: number;
+  unfitToModerate: boolean;
+  unfitReason: string;
+  /** Machine-readable reason for the skip. */
+  skipReason:
+    | 'self_vetoed'                  // unfitToModerate=true, hard skipped
+    | 'conflict_above_threshold'     // tier walk passed over them
+    | 'region_softcap'               // within-tier softcap shifted pick
+    | 'broadcast_error';             // model errored in focused broadcast
 }
 
 export interface ModeratorResult {
@@ -75,32 +80,30 @@ export interface ModeratorResult {
   modelName: string;
   conflictScore: number;
   /** Which graduated tier resolved the pick. 1 = <30 conflict (best
-   *  case), 5 = <90 (compromised but not directly self-interested),
-   *  null = fell through all tiers and used the least-conflicted
-   *  fallback. */
+   *  case), 4 = <80. Tier 5 (<90) is no longer used for moderated
+   *  selection — candidates scoring ≥80 drop to unmoderated instead. */
   tier: number | null;
-  /** Conflict threshold of the resolving tier (null if fallback) */
   tierThreshold: number | null;
-  /** 'tier_clean' = first model at the resolving tier was clean (no skips before them);
-   *  'tier_skipped' = walked over conflicted models at one or more lower tiers;
-   *  'fallback_least_conflicted' = all 5 tiers exhausted */
-  method: 'tier_clean' | 'tier_skipped' | 'fallback_least_conflicted';
-  /** Models walked over due to conflict at lower tiers. */
-  skipped: Array<{
-    modelId: string;
-    modelName: string;
-    conflictScore: number;
-    reason: string;
-  }>;
+  method: 'tier_clean' | 'tier_skipped';
+  skipped: SkippedModeratorEntry[];
   regionSoftcapApplied: boolean;
 }
 
-// --- Constants ---
+/** Outcome of selectModerator — either a moderated pick or a drop
+ *  signal to run the unmoderated debate format. */
+export type ModeratorSelectionOutcome =
+  | { kind: 'moderated'; result: ModeratorResult }
+  | {
+      kind: 'unmoderated';
+      /** Human-readable reason shown in the transparency layer */
+      reason: string;
+      /** Every candidate and why they weren't picked */
+      skipped: SkippedModeratorEntry[];
+      /** Machine-readable discriminator of why we dropped */
+      dropReason: 'all_self_vetoed' | 'all_conflict_too_high' | 'no_valid_responses';
+    };
 
-/** When falling back to "least conflicted", any models within this
- *  number of points of the lowest score are considered tied and the
- *  rotation queue breaks the tie. */
-export const FALLBACK_TIE_WINDOW = 10;
+// --- Constants ---
 
 /** Soft cap on consecutive same-region moderators. The 3rd in a row
  *  triggers a swap to a different region IF an eligible alternative
@@ -110,22 +113,17 @@ export const REGION_SOFTCAP_CONSECUTIVE = 2;
 /** Graduated tiers for ACTUAL moderator selection. Walks in order;
  *  within each tier, walks the rotation queue with region softcap
  *  applied. First eligible model at the lowest passing tier wins.
- *  If no tier passes, falls back to least-conflicted-with-rotation-tiebreak. */
+ *
+ *  If no tier passes (all candidates ≥80), the pipeline drops to the
+ *  unmoderated debate format rather than picking a heavily-conflicted
+ *  referee. The old tier 5 (<90) was removed — at that conflict level
+ *  the honest response is to admit nobody can chair, not to dress up
+ *  the least-bad pick in a referee's jersey. */
 export const MODERATOR_TIERS: Array<{ tier: number; threshold: number }> = [
   { tier: 1, threshold: 30 },
   { tier: 2, threshold: 50 },
   { tier: 3, threshold: 70 },
   { tier: 4, threshold: 80 },
-  { tier: 5, threshold: 90 },
-];
-
-/** Graduated tiers for ACTING moderator selection (a referee role,
- *  not the actual session moderator). Has an additional tier 6 with
- *  no check at all because the acting role is rare and brief — better
- *  to have someone in the chair than no one. */
-export const ACTING_MODERATOR_TIERS: Array<{ tier: number; threshold: number | null }> = [
-  ...MODERATOR_TIERS,
-  { tier: 6, threshold: null }, // no check at all — last resort
 ];
 
 // --- Rotation queue ---
@@ -139,8 +137,6 @@ export async function getRotationQueue(category: string): Promise<RotationEntry[
   const supabase = createClient();
   const pool = getAvailablePool();
 
-  // For each pool model, find the most recent session in this category
-  // where they moderated. If they never have, lastModeratedAt is null.
   const entries: RotationEntry[] = [];
 
   for (const model of pool) {
@@ -157,21 +153,15 @@ export async function getRotationQueue(category: string): Promise<RotationEntry[
     entries.push({ model, lastModeratedAt, totalSessions });
   }
 
-  // Sort: never-moderated first, then oldest moderation date first.
-  // Within "never moderated", preserve pool order (the order they
-  // appear in MODEL_POOL — region groups are intentional).
   entries.sort((a, b) => {
     if (a.lastModeratedAt === null && b.lastModeratedAt === null) {
-      // Both never moderated — preserve pool order
       return pool.indexOf(a.model) - pool.indexOf(b.model);
     }
     if (a.lastModeratedAt === null) return -1;
     if (b.lastModeratedAt === null) return 1;
-    // Both have moderated — oldest first
     if (a.lastModeratedAt !== b.lastModeratedAt) {
       return a.lastModeratedAt < b.lastModeratedAt ? -1 : 1;
     }
-    // Tie on date: prefer the model with fewer total sessions
     return a.totalSessions - b.totalSessions;
   });
 
@@ -179,10 +169,7 @@ export async function getRotationQueue(category: string): Promise<RotationEntry[
 }
 
 /** Get the regions of the most recent N moderators for this category,
- *  in chronological order (oldest first). Used for the soft region cap.
- *  Looks up regions in the full model pool (including unavailable ones)
- *  because a past moderator may have been recorded when their key was
- *  configured even if it's currently missing. */
+ *  in chronological order (oldest first). Used for the soft region cap. */
 export async function getRecentModeratorRegions(
   category: string,
   count: number = REGION_SOFTCAP_CONSECUTIVE,
@@ -201,7 +188,6 @@ export async function getRecentModeratorRegions(
 
   if (!sessions) return [];
 
-  // Reverse so oldest is first (chronological order)
   return sessions
     .slice()
     .reverse()
@@ -209,238 +195,223 @@ export async function getRecentModeratorRegions(
     .filter(r => r !== '');
 }
 
-// --- Helper: get a model's conflict score on a specific topic ---
+// --- Acting moderator selection (degraded to pure rotation) ---
 
-function getConflictScore(
-  modelId: string,
-  topicId: string,
-  broadcast: BroadcastResult,
-): number {
-  const response = broadcast.responses.find(r => r.modelId === modelId);
-  if (!response || response.error) return 0;
-  const conflict = response.conflicts.find(c => c.threadId === topicId);
-  return conflict?.conflictScore || 0;
-}
-
-/** Get the model's MAXIMUM conflict score across a set of topics.
- *  Used for acting moderator selection (referee must be clean across
- *  all tied options, not just one of them). */
-function getMaxConflictAcross(
-  modelId: string,
-  topicIds: string[],
-  broadcast: BroadcastResult,
-): { max: number; perTopic: Record<string, number> } {
-  const perTopic: Record<string, number> = {};
-  let max = 0;
-  for (const topicId of topicIds) {
-    const score = getConflictScore(modelId, topicId, broadcast);
-    perTopic[topicId] = score;
-    if (score > max) max = score;
-  }
-  return { max, perTopic };
-}
-
-// --- Acting moderator selection ---
-
-/** Select an acting moderator to break a runoff double-tie. Walks the
- *  graduated tiers; within each tier, walks the rotation queue from
- *  the front. First eligible at any tier wins. Always succeeds (the
- *  last tier has no conflict check at all).
- *
- *  Throws if the rotation queue is empty (no active pool models with
- *  broadcast responses — impossible in practice). */
+/** Select an acting moderator to break a runoff double-tie. Pure
+ *  rotation: the first model in the queue wins. The historical
+ *  tiered-conflict version was dropped when the initial broadcast
+ *  stopped collecting conflict data — this is a rare edge case
+ *  (runoff still tied after pool re-vote) and rotation is fine. */
 export function selectActingModerator(
-  tiedTopicIds: string[],
-  broadcast: BroadcastResult,
   rotationQueue: RotationEntry[],
 ): ActingModeratorResult {
   if (rotationQueue.length === 0) {
     throw new Error('Rotation queue is empty — no eligible models for acting moderator');
   }
 
-  // Pre-compute every queue model's conflict picture across the tied set
-  const conflictPictures = new Map<
-    string,
-    { max: number; perTopic: Record<string, number> }
-  >();
-  for (const entry of rotationQueue) {
-    conflictPictures.set(
-      entry.model.id,
-      getMaxConflictAcross(entry.model.id, tiedTopicIds, broadcast),
-    );
-  }
-
-  // Walk tiers in order
-  for (const { tier, threshold } of ACTING_MODERATOR_TIERS) {
-    for (const entry of rotationQueue) {
-      const picture = conflictPictures.get(entry.model.id)!;
-      const eligible = threshold === null || picture.max < threshold;
-      if (eligible) {
-        return {
-          modelId: entry.model.id,
-          modelName: entry.model.displayName,
-          tier,
-          tierThreshold: threshold,
-          conflicts: picture.perTopic,
-          maxConflict: picture.max,
-        };
-      }
-    }
-  }
-
-  // Tier 6 has no threshold so this is unreachable, but TypeScript
-  // doesn't know that.
-  throw new Error('Acting moderator tier walk exhausted with no pick — unreachable');
+  const chosen = rotationQueue[0];
+  return {
+    modelId: chosen.model.id,
+    modelName: chosen.model.displayName,
+    method: 'rotation',
+  };
 }
 
-// --- Actual moderator selection ---
+// --- Moderator selection ---
 
-/** Select the actual session moderator for a chosen topic.
+/** Select the actual session moderator for a chosen topic, reading
+ *  from the focused broadcast (conflict scores + self-veto flags).
  *
- *  Walks the graduated tiers (1 → 5, conflict thresholds <30 → <90).
- *  Within each tier, walks the rotation queue and applies the region
- *  softcap. The first eligible model at the lowest passing tier wins.
+ *  Decision flow:
+ *    1. Drop any candidates with focused-broadcast errors.
+ *    2. Drop any candidates that self-vetoed (unfitToModerate=true).
+ *       Record them in skipped with skipReason='self_vetoed'.
+ *    3. If zero candidates remain → return unmoderated outcome.
+ *    4. Walk tiers 1..4. Within each tier, walk the rotation queue
+ *       with region softcap.
+ *    5. First eligible model at the lowest passing tier wins.
+ *    6. If no tier 1..4 produced a candidate (all survivors scored
+ *       ≥80) → return unmoderated outcome.
  *
- *  This means a clean model in tier 1 always beats a compromised
- *  model in tier 3, regardless of queue position. Within the same
- *  tier, rotation order determines the pick.
- *
- *  If no tier passes (everyone above 90), falls back to the least
- *  conflicted model with a 10-point rotation tiebreak window.
- *
- *  recentRegions should be the regions of the last N moderators in
- *  chronological order (oldest first), as returned by getRecentModeratorRegions.
+ *  `rotationQueue` drives within-tier ordering. `recentRegions` is
+ *  used for the soft region cap.
  */
 export function selectModerator(
-  topicId: string,
-  broadcast: BroadcastResult,
+  focusedBroadcast: FocusedBroadcastResult,
   rotationQueue: RotationEntry[],
   recentRegions: string[],
-): ModeratorResult {
+): ModeratorSelectionOutcome {
   if (rotationQueue.length === 0) {
     throw new Error('Rotation queue is empty — no eligible models for moderator');
   }
 
-  // Pre-compute every queue model's conflict score on the chosen topic
-  const conflictScores = new Map<string, number>();
-  for (const entry of rotationQueue) {
-    conflictScores.set(entry.model.id, getConflictScore(entry.model.id, topicId, broadcast));
+  // Build a quick lookup: rotation model id → focused response
+  const focusedByModelId = new Map<string, FocusedBroadcastResult['responses'][number]>();
+  for (const resp of focusedBroadcast.responses) {
+    focusedByModelId.set(resp.modelId, resp);
   }
 
-  // Region softcap state — true if the last N moderators were all from
-  // the same region AND we have enough history to even apply the rule.
-  // If recentRegions has fewer than REGION_SOFTCAP_CONSECUTIVE entries,
-  // the cap doesn't apply yet (early days, not enough history).
+  // Step 1: figure out every candidate's status. We preserve rotation
+  // queue order for later walking but annotate each with their focused
+  // broadcast data.
+  interface AnnotatedEntry {
+    entry: RotationEntry;
+    response: FocusedBroadcastResult['responses'][number] | null;
+    queueIdx: number;
+  }
+
+  const annotated: AnnotatedEntry[] = rotationQueue.map((entry, queueIdx) => ({
+    entry,
+    response: focusedByModelId.get(entry.model.id) || null,
+    queueIdx,
+  }));
+
+  const allSkipped: SkippedModeratorEntry[] = [];
+
+  // Step 2: filter out errored or missing responses first.
+  const withValidResponse = annotated.filter(a => {
+    if (!a.response || a.response.error) {
+      allSkipped.push({
+        modelId: a.entry.model.id,
+        modelName: a.entry.model.displayName,
+        conflictScore: a.response?.conflictScore ?? 0,
+        unfitToModerate: false,
+        unfitReason: '',
+        skipReason: 'broadcast_error',
+      });
+      return false;
+    }
+    return true;
+  });
+
+  // Step 3: filter out self-vetoed candidates.
+  const eligible = withValidResponse.filter(a => {
+    if (a.response!.unfitToModerate) {
+      allSkipped.push({
+        modelId: a.entry.model.id,
+        modelName: a.entry.model.displayName,
+        conflictScore: a.response!.conflictScore,
+        unfitToModerate: true,
+        unfitReason: a.response!.unfitReason,
+        skipReason: 'self_vetoed',
+      });
+      return false;
+    }
+    return true;
+  });
+
+  if (eligible.length === 0) {
+    // All valid responses self-vetoed (or there were zero valid responses).
+    const hadValid = withValidResponse.length > 0;
+    return {
+      kind: 'unmoderated',
+      reason: hadValid
+        ? 'Every pool model self-vetoed moderating this topic. See each model\'s stated reason below — all were explicit self-disqualifications, not caution-based hedges.'
+        : 'No pool model returned a valid focused-broadcast response, so no candidate could be assessed for moderation.',
+      skipped: allSkipped,
+      dropReason: hadValid ? 'all_self_vetoed' : 'no_valid_responses',
+    };
+  }
+
+  // Region softcap state.
   const lastRegions = recentRegions.slice(-REGION_SOFTCAP_CONSECUTIVE);
   const wouldExceedRegionCap = (region: string): boolean => {
     if (lastRegions.length < REGION_SOFTCAP_CONSECUTIVE) return false;
     return lastRegions.every(r => r === region);
   };
 
-  // Walk graduated tiers. Stop at the first tier that produces a pick.
+  // Step 4: walk graduated tiers over the eligible list.
   for (const { tier, threshold } of MODERATOR_TIERS) {
     let firstEligibleIdx = -1;
     let firstEligibleDifferentRegionIdx = -1;
 
-    for (let i = 0; i < rotationQueue.length; i++) {
-      const entry = rotationQueue[i];
-      const conflict = conflictScores.get(entry.model.id) || 0;
+    for (let i = 0; i < eligible.length; i++) {
+      const a = eligible[i];
+      const conflict = a.response!.conflictScore;
 
-      if (conflict >= threshold) continue; // not eligible at this tier
+      if (conflict >= threshold) continue;
 
       if (firstEligibleIdx === -1) firstEligibleIdx = i;
-      if (firstEligibleDifferentRegionIdx === -1 && !wouldExceedRegionCap(entry.model.region)) {
+      if (firstEligibleDifferentRegionIdx === -1 && !wouldExceedRegionCap(a.entry.model.region)) {
         firstEligibleDifferentRegionIdx = i;
       }
 
       if (firstEligibleIdx !== -1 && firstEligibleDifferentRegionIdx !== -1) break;
     }
 
-    if (firstEligibleIdx === -1) {
-      // No model passed this tier — drop to next tier
-      continue;
-    }
+    if (firstEligibleIdx === -1) continue; // no one at this tier
 
-    // Apply region softcap (if applicable)
+    // Apply region softcap
     let chosenIdx = firstEligibleIdx;
     let regionSoftcapApplied = false;
     if (firstEligibleDifferentRegionIdx !== -1 && firstEligibleDifferentRegionIdx !== firstEligibleIdx) {
       regionSoftcapApplied = true;
       chosenIdx = firstEligibleDifferentRegionIdx;
+      // Record the softcap-bumped candidate as skipped
+      const bumped = eligible[firstEligibleIdx];
+      allSkipped.push({
+        modelId: bumped.entry.model.id,
+        modelName: bumped.entry.model.displayName,
+        conflictScore: bumped.response!.conflictScore,
+        unfitToModerate: false,
+        unfitReason: '',
+        skipReason: 'region_softcap',
+      });
     }
 
-    // Build the skipped list: every model walked OVER to reach the
-    // chosen one. This includes models skipped at LOWER tiers in
-    // earlier loop iterations (those that didn't pass the lower
-    // threshold) AS WELL AS models in the current tier walked past.
-    // We capture this by recording any model at position < chosenIdx
-    // whose conflict puts them in a tier higher than the chosen one's
-    // tier (i.e. they're more conflicted than the chosen model).
-    const chosenConflict = conflictScores.get(rotationQueue[chosenIdx].model.id) || 0;
-    const skipped: ModeratorResult['skipped'] = [];
+    // Record models walked over at LOWER tiers (below chosenIdx in the
+    // eligible list, with higher conflict than the chosen model).
+    const chosen = eligible[chosenIdx];
+    const chosenConflict = chosen.response!.conflictScore;
     for (let i = 0; i < chosenIdx; i++) {
-      const entry = rotationQueue[i];
-      const conflict = conflictScores.get(entry.model.id) || 0;
+      const a = eligible[i];
+      if (i === firstEligibleIdx && regionSoftcapApplied) continue; // already recorded
+      const conflict = a.response!.conflictScore;
       if (conflict > chosenConflict) {
-        skipped.push({
-          modelId: entry.model.id,
-          modelName: entry.model.displayName,
+        allSkipped.push({
+          modelId: a.entry.model.id,
+          modelName: a.entry.model.displayName,
           conflictScore: conflict,
-          reason: `Conflict ${conflict} above tier ${tier} threshold (<${threshold})`,
+          unfitToModerate: false,
+          unfitReason: '',
+          skipReason: 'conflict_above_threshold',
         });
       }
     }
 
-    const chosen = rotationQueue[chosenIdx];
-    return {
-      modelId: chosen.model.id,
-      modelName: chosen.model.displayName,
+    const result: ModeratorResult = {
+      modelId: chosen.entry.model.id,
+      modelName: chosen.entry.model.displayName,
       conflictScore: chosenConflict,
       tier,
       tierThreshold: threshold,
-      method: skipped.length > 0 ? 'tier_skipped' : 'tier_clean',
-      skipped,
+      method: allSkipped.some(s => s.skipReason === 'conflict_above_threshold') ? 'tier_skipped' : 'tier_clean',
+      skipped: allSkipped,
       regionSoftcapApplied,
     };
+
+    return { kind: 'moderated', result };
   }
 
-  // All tiers exhausted (every model has conflict ≥ 90). Fall back
-  // to the least conflicted with the 10-point tie window broken by
-  // rotation order. Every model in the queue is recorded in skipped
-  // for the transparency log.
-  const sortedByConflict = rotationQueue
-    .map((entry, queueIdx) => ({
-      entry,
-      queueIdx,
-      conflict: conflictScores.get(entry.model.id) || 0,
-    }))
-    .sort((a, b) => a.conflict - b.conflict);
-
-  const minConflict = sortedByConflict[0].conflict;
-  const tied = sortedByConflict.filter(x => x.conflict <= minConflict + FALLBACK_TIE_WINDOW);
-
-  // Within the tied window, the one earliest in rotation queue wins
-  tied.sort((a, b) => a.queueIdx - b.queueIdx);
-  const chosen = tied[0];
-
-  // Record the entire queue (minus the chosen one) as the conflict picture
-  const fallbackSkipped: ModeratorResult['skipped'] = rotationQueue
-    .filter(entry => entry.model.id !== chosen.entry.model.id)
-    .map(entry => ({
-      modelId: entry.model.id,
-      modelName: entry.model.displayName,
-      conflictScore: conflictScores.get(entry.model.id) || 0,
-      reason: 'All graduated tiers exhausted; fell back to least conflicted',
-    }));
+  // All tiers exhausted — every eligible candidate scored ≥80. Drop
+  // to unmoderated rather than picking a heavily-conflicted chair.
+  // Record every eligible candidate as skipped so the transparency
+  // layer shows the full picture.
+  for (const a of eligible) {
+    allSkipped.push({
+      modelId: a.entry.model.id,
+      modelName: a.entry.model.displayName,
+      conflictScore: a.response!.conflictScore,
+      unfitToModerate: false,
+      unfitReason: '',
+      skipReason: 'conflict_above_threshold',
+    });
+  }
 
   return {
-    modelId: chosen.entry.model.id,
-    modelName: chosen.entry.model.displayName,
-    conflictScore: chosen.conflict,
-    tier: null,
-    tierThreshold: null,
-    method: 'fallback_least_conflicted',
-    skipped: fallbackSkipped,
-    regionSoftcapApplied: false,
+    kind: 'unmoderated',
+    reason: 'Every candidate scored 80 or higher on the focused conflict check. At that level the topic is directly about the candidate\'s own lab or research — no honest impartial moderation is possible, so the session runs in unmoderated format instead.',
+    skipped: allSkipped,
+    dropReason: 'all_conflict_too_high',
   };
 }

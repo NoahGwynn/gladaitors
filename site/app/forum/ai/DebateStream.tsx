@@ -68,10 +68,14 @@ interface DebateStreamProps {
   snapshot: DebateSnapshot;
   sessionType: 'debate' | 'fireside_chat' | null;
   topicTitle: string;
+  /** Null for unmoderated sessions — the roster renders without a
+   *  moderator row and an explanatory banner is shown instead. */
   moderator: ModeratorInfo | null;
   cast: CastMember[];
   /** True while the debate is still running (shows live indicator + auto-scroll) */
   live: boolean;
+  debateFormat?: 'moderated' | 'unmoderated';
+  unmoderatedReason?: string | null;
 }
 
 export default function DebateStream({
@@ -81,6 +85,8 @@ export default function DebateStream({
   moderator,
   cast,
   live,
+  debateFormat = 'moderated',
+  unmoderatedReason = null,
 }: DebateStreamProps) {
   const turnsEndRef = useRef<HTMLDivElement>(null);
   const turnCount = snapshot.turns.length;
@@ -96,14 +102,23 @@ export default function DebateStream({
   const castBySeat = new Map<number, CastMember>();
   for (const c of cast) castBySeat.set(c.seat, c);
 
-  const sessionTypeLabel =
-    sessionType === 'fireside_chat' ? 'Fireside Chat' : 'Debate';
+  const sessionTypeLabel = debateFormat === 'unmoderated'
+    ? 'Unmoderated debate'
+    : sessionType === 'fireside_chat' ? 'Fireside Chat' : 'Debate';
 
   return (
     <div className={styles.debateWrap}>
       <div className={styles.debateHeader}>
         <div className={styles.debateSessionType}>{sessionTypeLabel}</div>
         <h2 className={styles.debateTopic}>{topicTitle}</h2>
+
+        {debateFormat === 'unmoderated' && (
+          <div className={styles.debateUnmoderatedBanner}>
+            <strong>No moderator today.</strong>{' '}
+            {unmoderatedReason
+              || 'No pool model was clean enough to chair this topic. The panelists speak directly in sequence, without a referee.'}
+          </div>
+        )}
 
         <div className={styles.debateRoster}>
           {moderator && (

@@ -1,40 +1,37 @@
 // ============================================================================
-// dAIly Forum — Stage 3: Pool Broadcast
+// dAIly Forum — Stage 3: Pool Broadcast (votes-only)
 // ============================================================================
 // The merged shortlist from Stage 2 goes to every model in the pool.
-// Each model returns a combined response: topic vote, conflict
-// declaration, and provisional stance — all in one call.
+// Each model returns ONLY a vote — which topics are most important to
+// discuss today and why. No stance, no conflict score.
+//
+// Stance and conflict declarations happen LATER, in the focused
+// rebroadcast (Stage 4b, focused-broadcast.ts) after one topic has
+// won. Splitting voting from commitment gives models a cleaner
+// cognitive task at each step:
+//
+//   - Stage 3 (this file) — "which of these 8 should we discuss?"
+//     A high-level editorial judgement on a list.
+//   - Stage 4b (focused-broadcast.ts) — "on THIS one topic: how
+//     conflicted are you, are you fit to moderate it, and what's
+//     your stance if you're a panelist?" A commitment-level
+//     introspection on a single subject.
+//
+// Historical note: earlier the broadcast did all three jobs in one
+// call. Models under-scored their own conflict ("I can handle it")
+// and hedged their stances across 8 hypotheticals. Splitting the
+// concerns fixed both.
 //
 // Models are called in parallel. Models without API keys are skipped
 // gracefully (logged but not blocking). The broadcast uses FLAGSHIP
 // tiers — the same models that will participate in the debate need
-// the same depth of reasoning for their stance declarations.
-//
-// The response data feeds directly into Stage 4 (moderator assignment)
-// and Stage 5 (cast selection) without a second broadcast round.
-//
-// Per user decision: models see the organizer ready-reasons and
-// significance assessments (why a thread was shortlisted) but NOT
-// the organizers' suggested key questions (those would pre-frame
-// thinking before the moderator builds the actual agenda).
+// the same depth of reasoning for their votes.
 // ============================================================================
 
 import { getAvailablePool, getSkippedModels, callPoolModel, MODEL_POOL, type PoolModel } from './model-pool';
 import type { MergedShortlistEntry } from './organize';
 
 // --- Types ---
-
-export interface ConflictDeclaration {
-  threadId: string;
-  /** 0 = no conflict, 100 = deeply personal stake */
-  conflictScore: number;
-  conflictReason: string;
-}
-
-export interface StanceDeclaration {
-  threadId: string;
-  stance: string;
-}
 
 export interface TopicVote {
   threadId: string;
@@ -49,8 +46,6 @@ export interface ModelBroadcastResponse {
   provider: string;
   region: string;
   votes: TopicVote[];
-  conflicts: ConflictDeclaration[];
-  stances: StanceDeclaration[];
   error?: string;
 }
 
@@ -64,9 +59,9 @@ export interface BroadcastResult {
 
 /** Build the identity anchor block that goes at the top of every system
  *  prompt sent to a pool model. Tells the model exactly who it is and
- *  who its competitors are so conflict declarations are grounded
- *  correctly. Reused by both the main broadcast and the runoff
- *  broadcast (and any future stage that prompts pool models). */
+ *  who its competitors are so conflict declarations (in the focused
+ *  rebroadcast and downstream stages) are grounded correctly. Reused
+ *  by every stage that prompts pool models. */
 export function buildIdentityAnchor(model: PoolModel): string {
   const competitors = MODEL_POOL
     .filter(m => m.active && m.id !== model.id)
@@ -93,13 +88,11 @@ function buildBroadcastPrompt(
 
 You are participating in a structured daily investigation forum called dAIly Forum, which examines what frontier AI models actually do when put in structured situations.
 
-Today you are being asked to review a shortlist of candidate topics for the ${category.toUpperCase()} category and provide three things:
+Today you are being asked ONE question: which of the shortlisted topics below are most important to discuss today?
 
-1. TOPIC VOTE — rank which topics you think are most important to discuss today
-2. CONFLICT DECLARATION — for each topic, declare whether you have a personal conflict of interest (0-100 scale)
-3. STANCE — for each topic, if you were a participant in the discussion, what position would you take?
+This is a voting ballot. You are not being asked for your stance, your conflict of interest, or your position — those come later, once the topic is chosen. Right now your only job is to rank the topics by importance for today's session.
 
-Be honest in all three. Your conflict declaration affects whether you can moderate today's session. Your stance helps the moderator cast the right participants. Both are published transparently alongside your name and provider, so getting your own identity wrong will be visible to readers.`;
+Your votes are published alongside your name and provider, so be honest.`;
 
   const threadDescriptions = shortlist.map((t, i) => {
     const agreement = t.organizerAgreement === 2
@@ -122,12 +115,6 @@ Be honest in all three. Your conflict declaration affects whether you can modera
       `  Significance: ${significance}`,
     ];
 
-    // If this thread has been the topic of a prior session, the
-    // organizers shortlisted it because new material emerged. The pool
-    // needs to know that — both to weigh whether re-discussion is
-    // warranted, and to avoid voting blind on something that's been
-    // covered. The organizer's readyReason already explains what's
-    // changed; this section provides the raw facts.
     if (t.isRevisit && t.revisit) {
       const r = t.revisit;
       lines.push(``);
@@ -148,30 +135,13 @@ Be honest in all three. Your conflict declaration affects whether you can modera
 
 ${threadDescriptions}
 
-For each thread, provide:
-
-1. VOTE: Rank your top choices (1 = most important to discuss today). You don't need to rank all threads — only the ones you think genuinely warrant discussion. Include a brief reason for each vote.
-
-2. CONFLICT: Rate 0-100 how personally conflicted you are on each thread. Remember: you are ${model.family} from ${model.provider}. Only score based on YOUR lab, not anyone else's.
-   0    = completely neutral, no stake whatsoever — e.g. a topic about a competitor lab's product that has no bearing on ${model.provider}
-   20-40 = the topic affects the broader frontier AI industry or a competitor, and ${model.provider}'s position is indirectly relevant, but I can discuss it fairly
-   50-70 = the topic touches ${model.provider}'s policies, products, or strategic interests directly, but is not literally about me
-   80-100 = the topic is directly about ${model.family}, ${model.provider}, or my own direct capabilities and behaviour
-   Be specific about WHY you have a conflict if your score is above 0. Do NOT claim ownership of another lab's model — if a thread is about a competitor's product, your conflict should be low or zero unless ${model.provider} is also implicated.
-
-3. STANCE: For each thread, if you were selected as a participant, what position would you argue? One to two sentences. This should be your genuine first read, not a hedged non-answer.
+Rank your top choices (1 = most important to discuss today). You don't need to rank all threads — only the ones you think genuinely warrant discussion today. Include a brief reason for each vote so the transparency layer can show why you voted the way you did.
 
 Respond with JSON only. Use the full thread ID from the ID field above.
 
 {
   "votes": [
     { "threadId": "<full UUID>", "rank": 1, "voteReason": "<why this should be discussed today>" }
-  ],
-  "conflicts": [
-    { "threadId": "<full UUID>", "conflictScore": 0, "conflictReason": "<why or why not>" }
-  ],
-  "stances": [
-    { "threadId": "<full UUID>", "stance": "<your position if you were a participant>" }
   ]
 }`;
 
@@ -180,12 +150,8 @@ Respond with JSON only. Use the full thread ID from the ID field above.
 
 // --- Parse a model's response ---
 
-function parseBroadcastResponse(raw: string): {
-  votes: TopicVote[];
-  conflicts: ConflictDeclaration[];
-  stances: StanceDeclaration[];
-} {
-  const empty = { votes: [], conflicts: [], stances: [] };
+function parseBroadcastResponse(raw: string): { votes: TopicVote[] } {
+  const empty = { votes: [] };
 
   try {
     let text = raw.trim();
@@ -207,18 +173,7 @@ function parseBroadcastResponse(raw: string): {
       voteReason: (v.voteReason || v.vote_reason || v.reason || '') as string,
     }));
 
-    const conflicts = ((parsed.conflicts || []) as Record<string, unknown>[]).map(c => ({
-      threadId: (c.threadId || c.thread_id || '') as string,
-      conflictScore: (c.conflictScore || c.conflict_score || c.score || 0) as number,
-      conflictReason: (c.conflictReason || c.conflict_reason || c.reason || '') as string,
-    }));
-
-    const stances = ((parsed.stances || []) as Record<string, unknown>[]).map(s => ({
-      threadId: (s.threadId || s.thread_id || '') as string,
-      stance: (s.stance || s.position || '') as string,
-    }));
-
-    return { votes, conflicts, stances };
+    return { votes };
   } catch {
     return empty;
   }
@@ -227,8 +182,8 @@ function parseBroadcastResponse(raw: string): {
 // --- Main entry point ---
 
 /** Run Stage 3: broadcast the shortlist to all available models in
- *  the pool. Each model returns votes, conflicts, and stances in
- *  a single call. Models without API keys are skipped gracefully. */
+ *  the pool. Each model returns votes only. Models without API keys
+ *  are skipped gracefully. */
 export async function broadcastToPool(
   shortlist: MergedShortlistEntry[],
   category: string,
@@ -251,31 +206,28 @@ export async function broadcastToPool(
     return result;
   }
 
-  console.log(`[BROADCAST] Sending shortlist (${shortlist.length} threads) to ${available.length} models`);
+  console.log(`[BROADCAST] Sending shortlist (${shortlist.length} threads) to ${available.length} models for votes-only`);
   if (skipped.length > 0) {
     console.log(`[BROADCAST] Skipping ${skipped.length} models (no API key): ${skipped.map(m => m.displayName).join(', ')}`);
   }
 
-  // Call all available models in parallel. Each model gets a prompt
-  // that anchors it in its own identity so conflict declarations are
-  // grounded correctly.
   const promises = available.map(async (model): Promise<ModelBroadcastResponse> => {
     console.log(`[BROADCAST] Calling ${model.displayName}...`);
 
     const { system, user } = buildBroadcastPrompt(shortlist, category, model);
 
     try {
-      const raw = await callPoolModel(model, system, user, 8000);
+      const raw = await callPoolModel(model, system, user, 4000);
       const parsed = parseBroadcastResponse(raw);
 
-      console.log(`[BROADCAST] ${model.displayName}: ${parsed.votes.length} votes, ${parsed.conflicts.length} conflicts, ${parsed.stances.length} stances`);
+      console.log(`[BROADCAST] ${model.displayName}: ${parsed.votes.length} votes`);
 
       return {
         modelId: model.id,
         modelName: model.displayName,
         provider: model.provider,
         region: model.region,
-        ...parsed,
+        votes: parsed.votes,
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'unknown error';
@@ -286,8 +238,6 @@ export async function broadcastToPool(
         provider: model.provider,
         region: model.region,
         votes: [],
-        conflicts: [],
-        stances: [],
         error: msg,
       };
     }

@@ -122,15 +122,21 @@ export interface ModeratorTurnDecision {
 // --- Build the moderator prompt ---
 
 function buildModeratorPrompt(state: ModeratorTurnState): { system: string; user: string } {
-  const sessionTypeLabel = 'session'; // We don't need to repeat debate/fireside here
-
   const system = `${buildIdentityAnchor(state.moderator)}
 
-You are the moderator of today's dAIly Forum ${sessionTypeLabel} in the ${state.category.toUpperCase()} category. You are NOT a participant — you facilitate the discussion. The cast members (2-3 frontier models) argue positions; you run the conversation, keep it honest, and surface what matters.
+You are the moderator of today's dAIly Forum session in the ${state.category.toUpperCase()} category.
 
-You have a structured agenda (your playbook) but you are NOT bound to it rigidly. Each turn you decide your next move from eight options. You can follow the plan, dig into interesting answers, challenge claims, surface past contradictions, pivot to tangents, pull back when tangents fail, or close when coverage is sufficient.
+THE ROLE — read this carefully before anything else.
 
-Your reasoning is PUBLISHED in the session record. The audience sees not just what you said but why you picked each move. Be deliberate.
+The audience is here for the panelists — not for you. Your job is to create the space where the panelists can actually discuss the topic in their own words. Wherever they agree, wherever they disagree, wherever they're uncertain — that's the conversation the audience came for. The more of it is theirs and the less is yours, the better you are doing your job.
+
+Your questions should invite rather than direct. A question that supplies its own answer structure, cites its own sources, and tells the panelist which three sub-points to hit has already done most of the panelist's work for them — and that's the panelist's work, not yours. A good question leaves the panelist room to choose their own frame, find their own shape, and argue in their own voice.
+
+You are refereeing a conversation, not delivering a lecture. You are not the subject-matter expert in the room — the panelists are. You will often know things; resist the urge to show that you know them. If the panelists miss something important, ask about it; don't assert it.
+
+You have an agenda as a playbook, not a script. Follow it when it's working. Diverge when something more interesting surfaces. Close when the panelists have said what needs saying, not when the plan is complete.
+
+Address panelists by name (the name shown at the top of each cast entry below). Seat numbers are an addressing mechanism for the machine; the audience hears names. When you target a panelist in JSON use their seat number, but when you speak to them in moderatorText use their name.
 
 THE EIGHT MOVES:
 
@@ -149,7 +155,9 @@ For memory_lookup moves, ALSO include:
   "memoryLookupQueries": [ { "targetSeat": <seat>, "tags": ["tag1", "tag2"], "reason": "<why>" } ]
 The tags must come from the forum's tag taxonomy for this category; if you're unsure, name what the participant said and the system will do its best.
 
-For close moves, moderatorText should be your closing remarks — a real synthesis of what surfaced, what's still contested, and what remains unresolved. Not just "thanks for joining".`;
+For close moves, moderatorText should be your closing remarks — a real synthesis of what surfaced, what's still contested, and what remains unresolved. Not just "thanks for joining".
+
+Your reasoning is PUBLISHED in the session record. The audience sees not just what you said but why you picked each move. Be deliberate.`;
 
   // Render the agenda
   const agendaBlock = [
@@ -194,19 +202,30 @@ For close moves, moderatorText should be your closing remarks — a real synthes
     `  ${state.agenda.closingFrame}`,
   ].filter(Boolean).join('\n');
 
-  // Render the cast
+  // Render the cast — lead with the model NAME so the moderator refers
+  // to panelists by name naturally. Seat number is kept as secondary
+  // addressing metadata (it's the JSON targetSeat field).
   const castBlock = state.cast.map(c =>
-    `  SEAT ${c.seat}: ${c.modelName} (${c.provider}) — conflict ${c.conflictScore}/100\n    Stance: ${c.stance}`,
+    `  ${c.modelName} (${c.provider})  —  seat ${c.seat}  —  conflict ${c.conflictScore}/100\n    Stance: ${c.stance}`,
   ).join('\n');
 
-  // Render conversation history
+  // Build a seat → name lookup for rendering history with names rather
+  // than "SEAT N RESPONDS" labels.
+  const nameBySeat = new Map<number, string>();
+  for (const c of state.cast) nameBySeat.set(c.seat, c.modelName);
+  const nameForSeat = (seat: number | undefined): string =>
+    seat !== undefined && nameBySeat.has(seat) ? nameBySeat.get(seat)! : `seat ${seat}`;
+
+  // Render conversation history — each turn labelled by speaker name
+  // (moderator or a panelist) rather than seat number.
   const historyBlock = state.history.length === 0
     ? '(The session has not started yet — you are about to make the opening move.)'
     : state.history.map(h => {
         if (h.actor === 'moderator') {
-          return `TURN ${h.turnIndex} — MODERATOR [${h.move}${h.targetSeat ? ` → Seat ${h.targetSeat}` : ''}]:\n${h.text}`;
+          const target = h.targetSeat ? ` → ${nameForSeat(h.targetSeat)}` : '';
+          return `Turn ${h.turnIndex} — Moderator [${h.move}${target}]:\n${h.text}`;
         }
-        return `TURN ${h.turnIndex} — SEAT ${h.seat} RESPONDS:\n${h.text}`;
+        return `Turn ${h.turnIndex} — ${nameForSeat(h.seat)}:\n${h.text}`;
       }).join('\n\n');
 
   // Render current progress
@@ -233,7 +252,7 @@ ${state.topicSignificance.length > 0 ? `SIGNIFICANCE: ${state.topicSignificance.
 
 ${agendaBlock}
 
-CAST (you are addressing them — they do NOT see the agenda):
+CAST (address them by the names shown — they do NOT see the agenda):
 
 ${castBlock}
 
@@ -251,10 +270,9 @@ Pick your next move and respond with JSON only. Decide based on what was just sa
 
 - You're NOT bound to the plan — but don't deviate without a reason
 - Cover the planned segments, but don't grind through them mechanically if tangents are more productive
-- Push on weak answers, don't let hedging slide
-- When a participant makes a strong claim, consider whether another seat should respond (counter_with_opponent)
-- If the discussion is going in circles, either pull back to the plan or close the session
-- Use memory_lookup sparingly — only when a participant said something surprising and you want to check their history
+- Your questions create space for the panelists to speak, not fill it yourself — a one-sentence question is usually better than a three-paragraph one
+- Address panelists by name in your moderatorText, not by seat number
+- Use memory_lookup sparingly — only when a panelist said something surprising and you want to check their history
 - Your reasoning field is public; make it a good one
 
 Respond with JSON only:

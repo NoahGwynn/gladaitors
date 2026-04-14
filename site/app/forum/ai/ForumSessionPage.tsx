@@ -211,8 +211,9 @@ function renderDebate(session: SessionRowForJourney, live: boolean) {
     if (entry) topicTitle = entry.threadTitle;
   }
 
-  // Resolve the moderator from MODEL_POOL so we can show provider
-  // colour + display name in both the roster and the turn cards.
+  // Moderated sessions resolve the chair's display info from MODEL_POOL.
+  // Unmoderated sessions have no chair — the DebateStream component
+  // renders without a moderator roster row when this is null.
   const moderatorId = session.moderator_model_id || session.acting_moderator_model_id;
   let moderator: { modelId: string; modelName: string; provider: string } | null = null;
   if (moderatorId) {
@@ -228,6 +229,12 @@ function renderDebate(session: SessionRowForJourney, live: boolean) {
     }
   }
 
+  const debateFormat: 'moderated' | 'unmoderated' =
+    session.debate_format === 'unmoderated' ? 'unmoderated' : 'moderated';
+  const unmoderatedReason = debateFormat === 'unmoderated'
+    ? (session.debate_format_reason ?? null)
+    : null;
+
   return (
     <DebateStream
       snapshot={session.debate_snapshot!}
@@ -236,6 +243,8 @@ function renderDebate(session: SessionRowForJourney, live: boolean) {
       moderator={moderator}
       cast={participants}
       live={live}
+      debateFormat={debateFormat}
+      unmoderatedReason={unmoderatedReason}
     />
   );
 }

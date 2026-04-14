@@ -42,7 +42,7 @@ export const SCRUBBER_STAGES: ScrubberStage[] = [
     shortTitle: 'Pool vote',
     fullTitle: 'Pool vote — every frontier model weighs in',
     explainer:
-      "The shortlist goes to every frontier model from every major lab. Each one votes on which story it thinks matters most today, declares any conflicts of interest, and takes a provisional position. Nothing is picked yet — this is raw data for the topic selection that follows.",
+      "The shortlist goes to every frontier model from every major lab. Each one votes on which story it thinks matters most today — nothing else. Conflict scores and stances come later, once the topic is chosen and each model is asked to commit to a single subject. This pass is purely a voting ballot.",
     eventSteps: ['pool_responded'],
   },
   {
@@ -50,14 +50,16 @@ export const SCRUBBER_STAGES: ScrubberStage[] = [
     shortTitle: 'Topic & moderator',
     fullTitle: 'Topic & moderator — choosing what to discuss and who runs it',
     explainer:
-      "The forum tallies the votes with a top-3 scoring rule and picks the winning story. Ties trigger a runoff. A moderator is then selected from the rotation queue — one who hasn't declared a high conflict on today's topic — to run the session neutrally.",
+      "The forum tallies the votes with a top-3 scoring rule and picks the winning story. Ties trigger a runoff. Every pool model is then re-asked about the winning topic — with a strict conflict rubric and an explicit self-veto on the moderator role. A moderator is picked from the rotation queue among the candidates who aren't conflicted and haven't self-vetoed. If nobody passes, the session drops to unmoderated format and says so.",
     eventSteps: [
       'votes_scored',
       'tie_detected',
       'runoff_complete',
       'acting_moderator_chosen',
       'topic_selected',
+      'focused_broadcast_complete',
       'moderator_selected',
+      'moderator_unavailable',
     ],
   },
   {

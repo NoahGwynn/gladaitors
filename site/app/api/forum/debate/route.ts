@@ -27,7 +27,7 @@
 
 import { NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase';
-import { runDebate } from '@/lib/forum/debate-runtime';
+import { runDebate, runUnmoderatedDebate } from '@/lib/forum/debate-runtime';
 import { MODEL_POOL } from '@/lib/forum/model-pool';
 import type { Agenda, AgendaBuildResult } from '@/lib/forum/agenda';
 import type { CastParticipant, CastSelectionResult } from '@/lib/forum/cast-selection';
@@ -81,35 +81,19 @@ export async function POST(request: NextRequest) {
   }
 
   // === Load the required snapshots ===
-  const agendaSnapshot = session.agenda_snapshot as AgendaBuildResult | null;
   const castSnapshot = session.cast_snapshot as CastSelectionResult | null;
-
-  if (!agendaSnapshot) {
-    return Response.json({ error: 'Session has no agenda_snapshot' }, { status: 400 });
-  }
   if (!castSnapshot) {
     return Response.json({ error: 'Session has no cast_snapshot' }, { status: 400 });
   }
-
-  // Strip the agenda envelope to just the Agenda shape
-  const agenda: Agenda = {
-    sessionFraming: agendaSnapshot.sessionFraming,
-    goals: agendaSnapshot.goals,
-    segments: agendaSnapshot.segments,
-    optionalDeepening: agendaSnapshot.optionalDeepening,
-    closingFrame: agendaSnapshot.closingFrame,
-  };
 
   const cast: CastParticipant[] = castSnapshot.participants;
   if (cast.length === 0) {
     return Response.json({ error: 'Session has an empty cast' }, { status: 400 });
   }
 
-  // Resolve the moderator PoolModel
-  const moderatorPoolModel = MODEL_POOL.find(m => m.id === session.moderator_model_id);
-  if (!moderatorPoolModel) {
-    return Response.json({ error: `Moderator ${session.moderator_model_id} not in pool` }, { status: 500 });
-  }
+  const debateFormat: 'moderated' | 'unmoderated' = session.debate_format === 'unmoderated'
+    ? 'unmoderated'
+    : 'moderated';
 
   // === Load the thread title ===
   const { data: thread } = await supabase
@@ -129,19 +113,52 @@ export async function POST(request: NextRequest) {
   );
   const topicSignificance: string[] = significanceEntry?.significance || [];
 
-  // === Run the debate ===
-  console.log(`[DEBATE-ENDPOINT] Starting debate for session ${session.id.slice(0, 8)}: "${topicTitle}"`);
+  // === Run the debate — branch on format ===
+  console.log(`[DEBATE-ENDPOINT] Starting ${debateFormat} debate for session ${session.id.slice(0, 8)}: "${topicTitle}"`);
 
   const startedAt = new Date().toISOString();
-  const debateSnapshot = await runDebate({
-    sessionId: session.id,
-    category: session.category,
-    topicTitle,
-    topicSignificance,
-    agenda,
-    cast,
-    moderator: moderatorPoolModel,
-  });
+  let debateSnapshot;
+
+  if (debateFormat === 'unmoderated') {
+    // No moderator, no agenda — sequential exchange
+    const unmoderatedReason = (session.debate_format_reason as string | null)
+      || 'No pool model could moderate this topic. Session runs in unmoderated format.';
+    debateSnapshot = await runUnmoderatedDebate({
+      sessionId: session.id,
+      category: session.category,
+      topicTitle,
+      topicSignificance,
+      cast,
+      unmoderatedReason,
+    });
+  } else {
+    // Moderated path — needs agenda + moderator pool model
+    const agendaSnapshot = session.agenda_snapshot as AgendaBuildResult | null;
+    if (!agendaSnapshot) {
+      return Response.json({ error: 'Moderated session has no agenda_snapshot' }, { status: 400 });
+    }
+    const agenda: Agenda = {
+      sessionFraming: agendaSnapshot.sessionFraming,
+      goals: agendaSnapshot.goals,
+      segments: agendaSnapshot.segments,
+      optionalDeepening: agendaSnapshot.optionalDeepening,
+      closingFrame: agendaSnapshot.closingFrame,
+    };
+    const moderatorPoolModel = MODEL_POOL.find(m => m.id === session.moderator_model_id);
+    if (!moderatorPoolModel) {
+      return Response.json({ error: `Moderator ${session.moderator_model_id} not in pool` }, { status: 500 });
+    }
+    debateSnapshot = await runDebate({
+      sessionId: session.id,
+      category: session.category,
+      topicTitle,
+      topicSignificance,
+      agenda,
+      cast,
+      moderator: moderatorPoolModel,
+    });
+  }
+
   const completedAt = new Date().toISOString();
 
   // === Persist + mark session completed ===
