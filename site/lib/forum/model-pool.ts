@@ -46,6 +46,12 @@ export interface PoolModel {
   dateAdded: string;
   /** Whether this model is currently active in the pool */
   active: boolean;
+  /** Provider-side hard cap on max output tokens per call. Different
+   *  providers have wildly different limits (DeepSeek: 8192, Anthropic
+   *  Opus: 32k, Gemini 2.5 Pro: ~64k in thinking mode). callPoolModel()
+   *  clamps any requested maxTokens to this value. Undefined means
+   *  "no known cap — use whatever the caller asked for". */
+  maxOutputTokens?: number;
 }
 
 // --- The pool ---
@@ -63,6 +69,7 @@ export const MODEL_POOL: PoolModel[] = [
     apiKeyEnv: 'ANTHROPIC_API_KEY',
     dateAdded: '2026-04-11',
     active: true,
+    maxOutputTokens: 32000,
   },
   {
     id: 'gpt-5',
@@ -75,6 +82,7 @@ export const MODEL_POOL: PoolModel[] = [
     apiKeyEnv: 'OPENAI_API_KEY',
     dateAdded: '2026-04-11',
     active: true,
+    maxOutputTokens: 32000,
   },
   {
     id: 'gemini-pro',
@@ -87,6 +95,7 @@ export const MODEL_POOL: PoolModel[] = [
     apiKeyEnv: 'GOOGLE_API_KEY',
     dateAdded: '2026-04-11',
     active: true,
+    maxOutputTokens: 32000,
   },
   {
     id: 'llama',
@@ -100,6 +109,7 @@ export const MODEL_POOL: PoolModel[] = [
     apiKeyEnv: 'GROQ_API_KEY',
     dateAdded: '2026-04-11',
     active: true,
+    maxOutputTokens: 8192,
   },
   {
     id: 'grok',
@@ -113,6 +123,7 @@ export const MODEL_POOL: PoolModel[] = [
     apiKeyEnv: 'XAI_API_KEY',
     dateAdded: '2026-04-11',
     active: true,
+    maxOutputTokens: 16000,
   },
 
   // --- China frontier labs ---
@@ -128,6 +139,9 @@ export const MODEL_POOL: PoolModel[] = [
     apiKeyEnv: 'DEEPSEEK_API_KEY',
     dateAdded: '2026-04-11',
     active: true,
+    // DeepSeek's strict hard cap — anything above 8192 returns a 400
+    // "Invalid max_tokens value" error. Clamp aggressively.
+    maxOutputTokens: 8192,
   },
   {
     id: 'qwen',
@@ -141,6 +155,7 @@ export const MODEL_POOL: PoolModel[] = [
     apiKeyEnv: 'QWEN_API_KEY',
     dateAdded: '2026-04-11',
     active: true,
+    maxOutputTokens: 8192,
   },
   {
     id: 'kimi',
@@ -154,6 +169,7 @@ export const MODEL_POOL: PoolModel[] = [
     apiKeyEnv: 'KIMI_API_KEY',
     dateAdded: '2026-04-11',
     active: true,
+    maxOutputTokens: 8192,
   },
 
   // --- EU frontier labs ---
@@ -169,6 +185,7 @@ export const MODEL_POOL: PoolModel[] = [
     apiKeyEnv: 'MISTRAL_API_KEY',
     dateAdded: '2026-04-11',
     active: true,
+    maxOutputTokens: 16000,
   },
 ];
 
@@ -202,12 +219,23 @@ export async function callPoolModel(
     throw new Error(`No API key for ${model.displayName} (env: ${model.apiKeyEnv})`);
   }
 
+  // Clamp the caller's requested max tokens to the model's hard cap.
+  // Each provider has a different ceiling (DeepSeek 8192, Opus 32k,
+  // Gemini 2.5 Pro 64k, etc.) — without this clamp any caller passing
+  // 16000 for Gemini thinking budget blows up on DeepSeek with a 400.
+  const clampedMaxTokens = model.maxOutputTokens
+    ? Math.min(maxTokens, model.maxOutputTokens)
+    : maxTokens;
+  if (clampedMaxTokens < maxTokens) {
+    console.log(`[POOL] ${model.displayName} maxTokens clamped from ${maxTokens} to ${clampedMaxTokens}`);
+  }
+
   switch (model.apiType) {
     case 'anthropic': {
       const client = new Anthropic();
       const response = await client.messages.create({
         model: model.modelId,
-        max_tokens: maxTokens,
+        max_tokens: clampedMaxTokens,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       });
@@ -219,9 +247,16 @@ export async function callPoolModel(
       const client = new OpenAI();
       // GPT-5 is a reasoning model — needs max_completion_tokens + reasoning_effort
       const isReasoning = model.modelId.startsWith('gpt-5');
+      // Reasoning models want MORE budget than non-reasoning (thinking
+      // tokens eat the visible output), but still clamp to the model's
+      // hard cap. max_completion_tokens = min(maxTokens × 2, hard cap).
+      const reasoningTokens = Math.min(
+        clampedMaxTokens * 2,
+        model.maxOutputTokens ?? clampedMaxTokens * 2,
+      );
       const response = await client.chat.completions.create({
         model: model.modelId,
-        max_completion_tokens: isReasoning ? maxTokens * 2 : maxTokens,
+        max_completion_tokens: isReasoning ? reasoningTokens : clampedMaxTokens,
         ...(isReasoning ? { reasoning_effort: 'low' as const } : {}),
         messages: [
           { role: 'system', content: systemPrompt },
@@ -238,7 +273,7 @@ export async function callPoolModel(
       });
       const response = await client.chat.completions.create({
         model: model.modelId,
-        max_tokens: maxTokens,
+        max_tokens: clampedMaxTokens,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
@@ -254,7 +289,7 @@ export async function callPoolModel(
         contents: [
           { role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
         ],
-        config: { maxOutputTokens: maxTokens },
+        config: { maxOutputTokens: clampedMaxTokens },
       });
       return response.text || '';
     }
@@ -267,7 +302,7 @@ export async function callPoolModel(
       });
       const response = await client.chat.completions.create({
         model: model.modelId,
-        max_tokens: maxTokens,
+        max_tokens: clampedMaxTokens,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt },
