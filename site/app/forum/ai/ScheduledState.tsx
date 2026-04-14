@@ -13,7 +13,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { msUntilNextPipelineStart, nextPipelineStart } from '@/lib/forum/schedule';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase';
+import {
+  FORUM_TIMEZONE,
+  msUntilNextPipelineStart,
+  nextPipelineStart,
+  getTodayInForumTz,
+} from '@/lib/forum/schedule';
 import styles from './page.module.scss';
 
 interface ScheduledStateProps {
@@ -38,13 +45,24 @@ function formatStartTime(date: Date): string {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-    timeZone: 'Europe/London',
+    timeZone: FORUM_TIMEZONE,
   }).format(date);
 }
 
-export default function ScheduledState({ category: _category }: ScheduledStateProps) {
+/** Is the next pipeline start later today, or on a future day? */
+function isStartToday(start: Date, now: Date = new Date()): boolean {
+  return getTodayInForumTz(now) === getTodayInForumTz(start);
+}
+
+interface MostRecentSession {
+  session_date: string;
+  status: string;
+}
+
+export default function ScheduledState({ category }: ScheduledStateProps) {
   const [msRemaining, setMsRemaining] = useState<number>(() => msUntilNextPipelineStart());
   const [startsAt] = useState<Date>(() => nextPipelineStart());
+  const [mostRecent, setMostRecent] = useState<MostRecentSession | null>(null);
 
   useEffect(() => {
     const tick = () => setMsRemaining(msUntilNextPipelineStart());
@@ -53,13 +71,37 @@ export default function ScheduledState({ category: _category }: ScheduledStatePr
     return () => clearInterval(id);
   }, []);
 
+  // Look up the most recent completed session so we can offer a
+  // "watch the last one" link while the user waits.
+  useEffect(() => {
+    const supabase = createClient();
+    const today = getTodayInForumTz();
+    (async () => {
+      const { data } = await supabase
+        .from('forum_sessions')
+        .select('session_date, status')
+        .eq('category', category)
+        .eq('status', 'completed')
+        .lt('session_date', today)
+        .order('session_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) setMostRecent(data as MostRecentSession);
+    })();
+  }, [category]);
+
   const { h, m, s } = formatDuration(msRemaining);
   const startsAtFormatted = formatStartTime(startsAt);
+  const startToday = isStartToday(startsAt);
+  const countdownLabel = startToday
+    ? "Today's session begins in"
+    : "Next session begins in";
+  const startDayLabel = startToday ? 'today' : 'tomorrow';
 
   return (
     <div className={styles.scheduledWrap}>
       <div className={styles.countdownCard}>
-        <div className={styles.countdownLabel}>Today&apos;s session begins in</div>
+        <div className={styles.countdownLabel}>{countdownLabel}</div>
         <div className={styles.countdownDigits}>
           <div className={styles.countdownUnit}>
             {h}
@@ -75,8 +117,24 @@ export default function ScheduledState({ category: _category }: ScheduledStatePr
           </div>
         </div>
         <div className={styles.countdownBegin}>
-          Starts at <strong>{startsAtFormatted}</strong> — pipeline runs live from ingestion through the debate.
+          Starts at <strong>{startsAtFormatted}</strong> {startDayLabel} — pipeline runs live from ingestion through the debate.
         </div>
+        {mostRecent && (
+          <Link
+            href={`/forum/${category}/${mostRecent.session_date}`}
+            style={{
+              fontSize: 13,
+              color: 'var(--ui-accent, #e5253f)',
+              textDecoration: 'none',
+              marginTop: 8,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            Watch the previous session ({mostRecent.session_date}) →
+          </Link>
+        )}
       </div>
 
       <div>
