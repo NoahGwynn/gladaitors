@@ -715,7 +715,9 @@ export async function researchTopicDeep(
         category,
         moderatorModel,
       );
-      const queryRaw = await callPoolModel(moderatorModel, queryPrompt.system, queryPrompt.user, 1500);
+      // 4000 tokens — the query generation output is small (3-8 queries)
+      // but Gemini 2.5 Pro eats thinking tokens from the same budget.
+      const queryRaw = await callPoolModel(moderatorModel, queryPrompt.system, queryPrompt.user, 4000);
       const generatedQueries = parseGeneratedQueries(queryRaw);
       webSearchesRequested = generatedQueries.length;
 

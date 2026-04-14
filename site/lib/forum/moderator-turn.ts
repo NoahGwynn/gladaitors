@@ -336,15 +336,29 @@ export async function callModeratorTurn(
 
   let raw: string;
   try {
-    raw = await callPoolModel(state.moderator, system, user, 2500);
+    // 16000 tokens — this matches the pattern we arrived at for Gemini
+    // 2.5 Pro / Flash in deep research synthesis and organize. Thinking
+    // models consume internal tokens from this budget; the visible
+    // moderator output (move + text + reasoning) is only ~400-800
+    // tokens, but Gemini can easily spend 4-8k tokens thinking on a
+    // complex turn with this much input (huge agenda + history + all
+    // 8 moves). 8000 was too tight — Gemini 2.5 Pro hit the limit
+    // before producing any visible output on the very first moderator
+    // call and the entire debate collapsed to the error-close fallback.
+    //
+    // Cost impact is minimal: we only pay for tokens actually
+    // generated, not the max budget. Extra headroom is free insurance.
+    raw = await callPoolModel(state.moderator, system, user, 16000);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown error';
-    console.error(`[DEBATE] Moderator call failed: ${msg}`);
+    const stack = err instanceof Error ? err.stack : '';
+    console.error(`[DEBATE] Moderator call failed for ${state.moderator.displayName}: ${msg}`);
+    if (stack) console.error(stack.split('\n').slice(0, 5).join('\n'));
     return {
       chosenMove: 'close',
       targetSeat: null,
       moderatorText: 'I need to end the session here — a technical issue is preventing me from continuing cleanly.',
-      reasoning: `Moderator call failed: ${msg}. Gracefully closing.`,
+      reasoning: `Moderator call failed (${state.moderator.displayName}): ${msg}. Gracefully closing.`,
       error: msg,
     };
   }

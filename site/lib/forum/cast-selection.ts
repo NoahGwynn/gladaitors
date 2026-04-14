@@ -286,7 +286,9 @@ export async function selectCast(
 
   let raw: string;
   try {
-    raw = await callPoolModel(moderatorModel, system, user, 3000);
+    // 8000 tokens — Gemini 2.5 Pro's thinking mode consumes internal
+    // tokens from this budget. 3000 was tight when Gemini moderates.
+    raw = await callPoolModel(moderatorModel, system, user, 8000);
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'unknown error';
     console.error(`[CAST] ${moderatorModel.displayName} call failed: ${msg}`);
