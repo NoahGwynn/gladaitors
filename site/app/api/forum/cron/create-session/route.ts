@@ -1,16 +1,19 @@
 // ============================================================================
-// POST /api/forum/cron/create-session
+// POST /api/forum/cron/create-session — Stage 1 of the daily cron chain
 // ============================================================================
 // Creates today's forum_sessions row with status='scheduled' so the page
-// is live with a countdown before the pipeline kicks off. Runs daily at
-// midnight (configurable via FORUM_SESSION_CREATE_HOUR) in the forum tz.
+// has something to render before organize runs. Railway fires this once
+// per day at whatever time you configure in its cron dashboard.
 //
-// Idempotent — if today's row already exists, returns it without creating
-// a duplicate.
+// Pipeline position:
+//   create-session  →  organize  →  prepare  →  debate
 //
-// Security: requires Authorization header with a cron secret. Set
-// CRON_SECRET in env. Usable from Railway scheduled jobs OR manually
-// via curl for testing.
+// Idempotent — if today's row already exists, returns it without
+// creating a duplicate. Safe to re-run manually.
+//
+// Security: CRON_SECRET-gated. Set CRON_SECRET in env and include
+// `Authorization: Bearer ${CRON_SECRET}` in the request. If CRON_SECRET
+// is unset (dev mode), the endpoint is open.
 // ============================================================================
 
 import { NextRequest } from 'next/server';

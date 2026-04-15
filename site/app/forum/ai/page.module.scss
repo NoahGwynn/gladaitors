@@ -84,65 +84,101 @@
   gap: $space-2xl;
 }
 
-.countdownCard {
+// Schedule card — replaces the old countdown. Shows today's three
+// stage times (organize / prepare / debate) with titles + descriptions.
+// Deliberately no countdown: audiences should see the full schedule
+// and choose when to arrive, not be funnelled toward the debate start.
+.scheduleCard {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: $space-2xl $space-lg;
+  padding: $space-xl $space-lg;
   background: linear-gradient(180deg, $bg-card 0%, $bg-surface 100%);
   border: 1px solid $border;
   border-radius: $radius-lg;
   gap: $space-lg;
 }
 
-.countdownLabel {
+.scheduleCardLabel {
   font-family: $font-mono;
   font-size: $size-xs;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: $text-muted;
+  text-align: center;
 }
 
-.countdownDigits {
+.scheduleList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
+  flex-direction: column;
   gap: $space-md;
+}
+
+.scheduleLine {
+  display: flex;
+  gap: $space-lg;
+  padding: $space-md $space-sm;
+  border-top: 1px solid $border;
+
+  &:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+}
+
+.scheduleLineTime {
   font-family: $font-mono;
-  font-size: 56px;
+  font-size: 28px;
   font-weight: 700;
   color: $text-primary;
   letter-spacing: -0.02em;
+  min-width: 90px;
+  flex-shrink: 0;
 
   @media (max-width: 640px) {
-    font-size: 40px;
-    gap: $space-sm;
+    font-size: 22px;
+    min-width: 70px;
   }
 }
 
-.countdownUnit {
+.scheduleLineBody {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-width: 72px;
-
-  @media (max-width: 640px) {
-    min-width: 56px;
-  }
+  gap: $space-xs;
 }
 
-.countdownUnitLabel {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: $text-muted;
-  margin-top: $space-xs;
-  font-weight: 400;
-}
-
-.countdownBegin {
+.scheduleLineTitle {
   font-size: $size-md;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.scheduleLineText {
+  font-size: $size-sm;
   color: $text-secondary;
+  line-height: 1.5;
+}
+
+.scheduleCardFooter {
+  font-size: $size-xs;
+  color: $text-muted;
+  text-align: center;
+  padding-top: $space-md;
+  border-top: 1px solid $border;
+}
+
+.scheduleWatchPrevious {
+  font-size: $size-sm;
+  color: $ui-accent;
+  text-decoration: none;
+  text-align: center;
   margin-top: $space-sm;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .overviewTitle {

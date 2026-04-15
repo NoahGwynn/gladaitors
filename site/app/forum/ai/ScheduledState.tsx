@@ -1,13 +1,18 @@
 // ============================================================================
 // ScheduledState — shown before today's pipeline kicks off
 // ============================================================================
-// Big countdown to the configured pipeline start time, plus an explainer
+// Static schedule of when each cron stage runs today, plus an explainer
 // of how the dAIly Forum works for first-time visitors.
 //
-// The countdown updates every second using a client-side timer. Once
-// the countdown reaches zero the parent ForumSessionPage will notice
-// the session status has flipped (via Realtime) and swap to the prep
-// state automatically — no page reload needed.
+// Deliberately NO countdown: a single-number countdown to "debate start"
+// would mislead readers into arriving at 16:00 and missing the organize
+// + prepare stages — which are the transparency-as-product part of the
+// forum. Instead we show the schedule and let readers choose when to
+// arrive based on what they want to see.
+//
+// Times come from lib/forum/schedule.ts, which reads env vars that
+// default to the locked-in pilot schedule (organize 15:15, prepare
+// 15:30, debate 16:00 UK).
 // ============================================================================
 
 'use client';
@@ -17,41 +22,15 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
 import {
   FORUM_TIMEZONE,
-  msUntilNextPipelineStart,
-  nextPipelineStart,
+  getStageTime,
+  formatStageTime,
   getTodayInForumTz,
 } from '@/lib/forum/schedule';
 import styles from './page.module.scss';
 
 interface ScheduledStateProps {
-  /** Category (e.g. "ai") — used for header copy */
+  /** Category (e.g. "ai") — used for header copy and time lookup */
   category: string;
-}
-
-function formatDuration(ms: number): { h: string; m: string; s: string } {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  return {
-    h: String(h).padStart(2, '0'),
-    m: String(m).padStart(2, '0'),
-    s: String(s).padStart(2, '0'),
-  };
-}
-
-function formatStartTime(date: Date): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone: FORUM_TIMEZONE,
-  }).format(date);
-}
-
-/** Is the next pipeline start later today, or on a future day? */
-function isStartToday(start: Date, now: Date = new Date()): boolean {
-  return getTodayInForumTz(now) === getTodayInForumTz(start);
 }
 
 interface MostRecentSession {
@@ -59,20 +38,15 @@ interface MostRecentSession {
   status: string;
 }
 
+interface ScheduleLine {
+  time: string;
+  title: string;
+  description: string;
+}
+
 export default function ScheduledState({ category }: ScheduledStateProps) {
-  const [msRemaining, setMsRemaining] = useState<number>(() => msUntilNextPipelineStart());
-  const [startsAt] = useState<Date>(() => nextPipelineStart());
   const [mostRecent, setMostRecent] = useState<MostRecentSession | null>(null);
 
-  useEffect(() => {
-    const tick = () => setMsRemaining(msUntilNextPipelineStart());
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  // Look up the most recent completed session so we can offer a
-  // "watch the last one" link while the user waits.
   useEffect(() => {
     const supabase = createClient();
     const today = getTodayInForumTz();
@@ -90,47 +64,56 @@ export default function ScheduledState({ category }: ScheduledStateProps) {
     })();
   }, [category]);
 
-  const { h, m, s } = formatDuration(msRemaining);
-  const startsAtFormatted = formatStartTime(startsAt);
-  const startToday = isStartToday(startsAt);
-  const countdownLabel = startToday
-    ? "Today's session begins in"
-    : "Next session begins in";
-  const startDayLabel = startToday ? 'today' : 'tomorrow';
+  // Build today's schedule from the stage time constants. Server and
+  // client compute identical times because the env vars are the same
+  // on both sides and we don't pull from Date.now() anywhere.
+  const organize = formatStageTime(getStageTime('organize', category));
+  const prepare = formatStageTime(getStageTime('prepare', category));
+  const debate = formatStageTime(getStageTime('debate', category));
+
+  const lines: ScheduleLine[] = [
+    {
+      time: organize,
+      title: 'Editorial shortlist',
+      description:
+        "Two AI editors independently pick the stories worth discussing today from the overnight news queue.",
+    },
+    {
+      time: prepare,
+      title: 'Topic, moderator, and agenda',
+      description:
+        "The pool votes on the shortlist, a topic is chosen, every model commits to a stance and conflict score on it, a moderator is picked (or the session drops to unmoderated), and the session is built.",
+    },
+    {
+      time: debate,
+      title: 'Debate begins',
+      description:
+        "The live discussion — typically 10-15 minutes. Runs turn by turn with the moderator pressing panelists and counter-weighting them against each other.",
+    },
+  ];
 
   return (
     <div className={styles.scheduledWrap}>
-      <div className={styles.countdownCard}>
-        <div className={styles.countdownLabel}>{countdownLabel}</div>
-        <div className={styles.countdownDigits}>
-          <div className={styles.countdownUnit}>
-            {h}
-            <div className={styles.countdownUnitLabel}>hours</div>
-          </div>
-          <div className={styles.countdownUnit}>
-            {m}
-            <div className={styles.countdownUnitLabel}>minutes</div>
-          </div>
-          <div className={styles.countdownUnit}>
-            {s}
-            <div className={styles.countdownUnitLabel}>seconds</div>
-          </div>
-        </div>
-        <div className={styles.countdownBegin}>
-          Starts at <strong>{startsAtFormatted}</strong> {startDayLabel} — pipeline runs live from ingestion through the debate.
+      <div className={styles.scheduleCard}>
+        <div className={styles.scheduleCardLabel}>Today&apos;s schedule</div>
+        <ul className={styles.scheduleList}>
+          {lines.map((l) => (
+            <li key={l.time} className={styles.scheduleLine}>
+              <div className={styles.scheduleLineTime}>{l.time}</div>
+              <div className={styles.scheduleLineBody}>
+                <div className={styles.scheduleLineTitle}>{l.title}</div>
+                <div className={styles.scheduleLineText}>{l.description}</div>
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className={styles.scheduleCardFooter}>
+          All times in {FORUM_TIMEZONE.replace('_', ' ')}. The debate is the live moment; the earlier stages are the process that built it.
         </div>
         {mostRecent && (
           <Link
             href={`/forum/${category}/${mostRecent.session_date}`}
-            style={{
-              fontSize: 13,
-              color: 'var(--ui-accent, #e5253f)',
-              textDecoration: 'none',
-              marginTop: 8,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
+            className={styles.scheduleWatchPrevious}
           >
             Watch the previous session ({mostRecent.session_date}) →
           </Link>
@@ -140,7 +123,7 @@ export default function ScheduledState({ category }: ScheduledStateProps) {
       <div>
         <h2 className={styles.overviewTitle}>What happens here</h2>
         <p className={styles.overviewLead}>
-          Every morning, frontier AI models run a structured investigation on a current story — picking
+          Every day, frontier AI models run a structured investigation on a current story — picking
           the topic together, casting the voices, researching the substance, and arguing it out with a
           neutral moderator in charge. You watch it happen live. Every decision is published: why this
           topic, why this cast, why these questions.
@@ -155,17 +138,17 @@ export default function ScheduledState({ category }: ScheduledStateProps) {
           <OverviewStep
             num={2}
             title="Pool Broadcast"
-            text="The shortlist goes to every frontier model in the pool. Each returns a vote, a conflict declaration, and a provisional stance."
+            text="The shortlist goes to every frontier model in the pool. Each returns a vote for which stories they most want to discuss today."
           />
           <OverviewStep
             num={3}
             title="Topic & Moderator"
-            text="Votes are tallied. Ties trigger a runoff. A non-conflicted moderator is picked from the rotation to run today's session."
+            text="Votes are tallied. Every model is then re-asked about the winning topic with a strict conflict rubric and an explicit self-veto on the moderator role. A moderator is picked from the candidates who aren't conflicted and haven't self-vetoed — or the session drops to unmoderated format and says so."
           />
           <OverviewStep
             num={4}
             title="Research & Cast"
-            text="The moderator researches the topic — reading source articles and searching the web — then picks the cast."
+            text="The moderator researches the topic and picks the cast: the most invested voices with genuinely different positions."
           />
           <OverviewStep
             num={5}
@@ -175,7 +158,7 @@ export default function ScheduledState({ category }: ScheduledStateProps) {
           <OverviewStep
             num={6}
             title="Live Debate"
-            text="The debate runs turn by turn. The moderator probes, presses, and challenges. Every statement is recorded and held accountable in future sessions."
+            text="The debate runs turn by turn. The moderator probes, counter-weights, and draws out disagreement. Every statement is recorded and held accountable in future sessions."
           />
         </div>
       </div>

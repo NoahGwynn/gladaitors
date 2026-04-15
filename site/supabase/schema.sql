@@ -991,8 +991,8 @@ create table if not exists public.forum_sessions (
 
   -- Debate format: 'moderated' (a pool model chairs) or 'unmoderated'
   -- (sequential round-robin with no chair, used when every candidate
-  -- scored ≥80 conflict or self-vetoed). Set by /api/forum/select right
-  -- after moderator selection resolves.
+  -- scored ≥80 conflict or self-vetoed). Set by /api/forum/cron/prepare
+  -- right after moderator selection resolves.
   debate_format text default 'moderated',
   -- Human-readable explanation for why the format is what it is.
   -- Populated for unmoderated sessions (why no moderator was picked);

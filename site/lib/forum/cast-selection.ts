@@ -1,7 +1,7 @@
 // ============================================================================
 // dAIly Forum — Stage 5b: Cast Selection
 // ============================================================================
-// Two flavours, picked by /api/forum/select based on whether Stage 4
+// Two flavours, picked by /api/forum/cron/prepare based on whether Stage 4
 // produced a moderator or dropped to the unmoderated format:
 //
 //   selectCast (MODERATED PATH)
