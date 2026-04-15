@@ -94,6 +94,17 @@ create index if not exists idx_debates_session on public.debates(creator_session
 alter table public.profiles enable row level security;
 alter table public.debates enable row level security;
 
+-- Backfill columns referenced by the RLS policy below. These MUST run
+-- before the policy CREATEs because the policy definition references
+-- them — without these alters, re-running the schema on an older
+-- install produces "column does not exist" errors. The same columns
+-- are also backfilled further down the file for other migrations; the
+-- `if not exists` guards make both locations safe.
+alter table public.debates
+  add column if not exists is_public boolean not null default false;
+alter table public.debates
+  add column if not exists owner_only boolean not null default false;
+
 -- Drop all existing policies to rebuild cleanly
 drop policy if exists "Users can view own profile" on public.profiles;
 drop policy if exists "Users can update own profile" on public.profiles;
