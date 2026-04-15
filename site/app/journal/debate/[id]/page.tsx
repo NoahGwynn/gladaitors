@@ -18,6 +18,7 @@ import type { Metadata } from "next";
 import { createServerSupabase } from "@/lib/supabase-server";
 import { getModelName } from "@/lib/models";
 import SharedDebateView from "./SharedDebateView";
+import DecisionSynthesis from "./DecisionSynthesis";
 import styles from "../page.module.scss";
 
 /** Generate unique display names — adds numbering when the same model appears twice */
@@ -120,5 +121,25 @@ export default async function SharedDebatePage({ params }: Props) {
   const supabase = await createServerSupabase();
   supabase.rpc("extend_debate_ttl", { debate_id: id }).then(() => {});
 
-  return <SharedDebateView debate={debate} />;
+  // Owner check — only the creator sees the editable decision fields.
+  // Non-owners viewing a public debate see the auto-generated
+  // synthesis (if it's already been created) but not the user's
+  // private reflective fields.
+  const { data: { user } } = await supabase.auth.getUser();
+  const isOwner = !!(user && debate.creator_user_id === user.id);
+
+  return (
+    <>
+      <SharedDebateView debate={debate} />
+      {debate.is_complete && (
+        <DecisionSynthesis
+          debateId={debate.id}
+          isOwner={isOwner}
+          initialSynthesis={debate.decision_synthesis || null}
+          initialWhatWouldChangeMyMind={debate.what_would_change_my_mind || null}
+          initialUserDecision={debate.user_decision || null}
+        />
+      )}
+    </>
+  );
 }

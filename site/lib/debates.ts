@@ -32,6 +32,9 @@ export async function createDebateRecord(params: {
   revealIdentities?: boolean;
   /** 'concise' or 'detailed'. Controls argument length via the system prompt. */
   responseLength?: 'concise' | 'detailed';
+  /** v3 utility pivot: which template this debate was created from.
+   *  NULL for free-form debates. */
+  templateSlug?: string | null;
 }): Promise<string | null> {
   const supabase = createClient();
   const {
@@ -66,6 +69,7 @@ export async function createDebateRecord(params: {
       reveal_identities: params.revealIdentities ?? null,
       response_length: params.responseLength ?? null,
       owner_only: ownerOnlyDefault,
+      template_slug: params.templateSlug ?? null,
     })
     .select("id")
     .single();

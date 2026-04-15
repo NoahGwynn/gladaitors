@@ -1,0 +1,280 @@
+@use '../../../../styles/variables' as *;
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xl;
+  margin-top: $space-2xl;
+  padding: $space-xl $space-lg;
+  background: linear-gradient(180deg, rgba($ui-accent, 0.04) 0%, rgba($ui-accent, 0.01) 100%);
+  border: 1px solid rgba($ui-accent, 0.25);
+  border-radius: $radius-lg;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+  padding-bottom: $space-md;
+  border-bottom: 1px solid $border;
+}
+
+.label {
+  font-family: $font-mono;
+  font-size: $size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: $ui-accent;
+  font-weight: 700;
+}
+
+.sublabel {
+  font-size: $size-sm;
+  color: $text-secondary;
+  font-style: italic;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.sectionTitle {
+  font-size: $size-md;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0;
+}
+
+.sectionHint {
+  font-size: $size-sm;
+  color: $text-muted;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.summary {
+  font-size: $size-md;
+  color: $text-primary;
+  line-height: 1.6;
+  margin: 0;
+  padding: $space-md $space-lg;
+  background: $bg-elevated;
+  border-left: 3px solid $ui-accent;
+  border-radius: $radius-sm;
+}
+
+.sidesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: $space-md;
+}
+
+.sideCard {
+  padding: $space-md $space-lg;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+}
+
+.sideHeader {
+  margin-bottom: $space-sm;
+  padding-bottom: $space-sm;
+  border-bottom: 1px solid $border;
+}
+
+.sideModelName {
+  font-size: $size-sm;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.sidePosition {
+  font-size: $size-xs;
+  color: $text-muted;
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.sidePoints {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+
+  li {
+    font-size: $size-sm;
+    color: $text-secondary;
+    line-height: 1.55;
+    padding-left: $space-md;
+    position: relative;
+
+    &::before {
+      content: '→';
+      position: absolute;
+      left: 0;
+      color: $ui-accent;
+    }
+  }
+}
+
+.tensions {
+  list-style: decimal;
+  margin: 0;
+  padding-left: $space-lg;
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+
+  li {
+    font-size: $size-sm;
+    color: $text-primary;
+    line-height: 1.55;
+    padding-left: $space-xs;
+
+    &::marker {
+      color: $ui-accent;
+      font-weight: 700;
+    }
+  }
+}
+
+.generatingBox {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: $space-md $space-lg;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.5;
+}
+
+.spinnerDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: $ui-accent;
+  flex-shrink: 0;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.errorBox {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+  padding: $space-md $space-lg;
+  background: rgba($ui-danger, 0.08);
+  border: 1px solid rgba($ui-danger, 0.3);
+  border-radius: $radius-md;
+  font-size: $size-sm;
+  color: $ui-danger;
+}
+
+.retryButton {
+  margin-left: auto;
+  padding: $space-xs $space-md;
+  background: $ui-danger;
+  color: white;
+  border: none;
+  border-radius: $radius-sm;
+  font-size: $size-xs;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: $space-sm $space-md;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  color: $text-primary;
+  font-family: inherit;
+  font-size: $size-sm;
+  line-height: 1.5;
+  resize: vertical;
+
+  &:focus {
+    outline: none;
+    border-color: $ui-accent;
+  }
+
+  &::placeholder {
+    color: $text-muted;
+  }
+}
+
+.input {
+  width: 100%;
+  padding: $space-sm $space-md;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  color: $text-primary;
+  font-family: inherit;
+  font-size: $size-sm;
+
+  &:focus {
+    outline: none;
+    border-color: $ui-accent;
+  }
+
+  &::placeholder {
+    color: $text-muted;
+  }
+}
+
+.inputLabel {
+  display: block;
+  font-size: $size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $text-muted;
+  margin-top: $space-sm;
+  margin-bottom: $space-xs;
+}
+
+.saveRow {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+  margin-top: $space-sm;
+}
+
+.saveButton {
+  padding: $space-xs $space-lg;
+  background: $ui-accent;
+  color: white;
+  border: none;
+  border-radius: $radius-md;
+  font-size: $size-sm;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+
+  &:hover {
+    opacity: 0.9;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.savedAt {
+  font-size: $size-xs;
+  color: $text-muted;
+}

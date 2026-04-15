@@ -129,6 +129,10 @@ export interface StartDebateConfig {
   context: string;
   revealIdentities: boolean;
   responseLength: 'concise' | 'detailed';
+  /** v3 utility pivot: which template this debate was created from.
+   *  NULL for free-form debates. Persisted on the debate row for
+   *  per-template analytics and UI labelling. */
+  templateSlug?: string | null;
 }
 
 export type ErrorReason = "insufficient_tokens" | "safety" | "auth" | "other";
@@ -956,6 +960,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
         autoAssigned: config.debaters.map((d) => d.assignmentMode === "auto"),
         responseLength: config.responseLength,
         revealIdentities: config.revealIdentities,
+        templateSlug: config.templateSlug ?? null,
       });
       if (newId) {
         debateIdRef.current = newId;

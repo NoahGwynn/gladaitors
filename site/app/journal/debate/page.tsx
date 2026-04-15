@@ -43,6 +43,7 @@ import UserTurnInput from '@/components/UserTurnInput';
 import ExtendDebateModal from '@/components/ExtendDebateModal';
 import { STARTER_TOPICS } from '@/lib/starter-topics';
 import { DEBATE_TEMPLATES, getTemplateBySlug, type DebateTemplate } from '@/lib/debate-templates';
+import DecisionSynthesis from './[id]/DecisionSynthesis';
 import { MODELS, findModel, getModelColour, getModelName, getModelTokenCost } from '@/lib/models';
 import { X, LockKeyhole, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
 import styles from './page.module.scss';
@@ -477,6 +478,7 @@ function DebateArenaContent() {
       context: debateContext,
       revealIdentities: debateReveal,
       responseLength: debateResponseLength,
+      templateSlug: selectedTemplate?.slug ?? null,
     });
   }
 
@@ -1308,6 +1310,21 @@ function DebateArenaContent() {
                     }}
                   >Run Again</button>
                 </div>
+
+                {/* Decision synthesis — v3 utility pivot Phase 3.
+                    Renders below the debate's post-completion actions.
+                    Only appears for owners of completed debates. The
+                    component auto-triggers synthesis generation on mount
+                    if one doesn't exist yet. */}
+                {isLoggedIn && activeDebate.id && !liveArguments.every(a => a.refused) && (
+                  <DecisionSynthesis
+                    debateId={activeDebate.id}
+                    isOwner={true}
+                    initialSynthesis={null}
+                    initialWhatWouldChangeMyMind={null}
+                    initialUserDecision={null}
+                  />
+                )}
               </div>
             )}
 
