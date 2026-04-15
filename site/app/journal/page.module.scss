@@ -1,0 +1,139 @@
+@use '../../styles/variables' as *;
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: $space-2xl;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: $space-2xl $space-lg $space-4xl;
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  text-align: center;
+}
+
+.title {
+  font-size: $size-2xl;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: $text-primary;
+  margin: 0;
+
+  @media (max-width: 640px) {
+    font-size: $size-xl;
+  }
+}
+
+.titleAccent {
+  color: $ui-accent;
+}
+
+.subtitle {
+  font-size: $size-md;
+  color: $text-secondary;
+  line-height: 1.6;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.intro {
+  padding: $space-xl $space-lg;
+  background: $bg-card;
+  border: 1px solid $border;
+  border-radius: $radius-lg;
+  color: $text-secondary;
+  line-height: 1.7;
+  font-size: $size-md;
+
+  strong {
+    color: $text-primary;
+  }
+}
+
+.formatsLabel {
+  font-family: $font-mono;
+  font-size: $size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: $text-muted;
+  margin: 0 0 $space-md;
+  text-align: center;
+}
+
+.formats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: $space-lg;
+}
+
+.formatCard {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  padding: $space-xl $space-lg;
+  background: linear-gradient(180deg, $bg-card 0%, $bg-surface 100%);
+  border: 1px solid $border;
+  border-radius: $radius-lg;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 120ms ease, transform 120ms ease;
+
+  &:hover {
+    border-color: $ui-accent;
+    transform: translateY(-2px);
+  }
+}
+
+.formatCardInactive {
+  @extend .formatCard;
+  opacity: 0.55;
+  cursor: default;
+  pointer-events: none;
+
+  &:hover {
+    border-color: $border;
+    transform: none;
+  }
+}
+
+.formatName {
+  font-size: $size-lg;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0;
+}
+
+.formatTag {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $ui-accent;
+  font-weight: 700;
+}
+
+.formatTagMuted {
+  @extend .formatTag;
+  color: $text-muted;
+}
+
+.formatDescription {
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.formatFooter {
+  margin-top: auto;
+  padding-top: $space-sm;
+  font-family: $font-mono;
+  font-size: $size-xs;
+  color: $text-muted;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
