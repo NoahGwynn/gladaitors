@@ -534,6 +534,22 @@ details[open] > .optionalSummary > .detailsChevron {
   text-align: center;
 }
 
+// Privacy-by-default note shown under the Start Debate button, so
+// users know from the start that their debate stays private unless
+// they explicitly publish it.
+.privacyNote {
+  font-size: $size-xs;
+  color: $text-muted;
+  text-align: center;
+  margin: $space-sm 0 0;
+  line-height: 1.5;
+
+  strong {
+    color: $text-secondary;
+    font-weight: 600;
+  }
+}
+
 .buyLink {
   font-family: $font-ui;
   font-size: $size-sm;
@@ -847,6 +863,42 @@ details[open] > .optionalSummary > .detailsChevron {
     font-size: $size-md;
     margin-bottom: $space-xs;
     line-height: 1.3;
+  }
+}
+
+// Privacy state badge — sits between the debate title and the
+// positions row. Shows the current visibility at a glance so users
+// always know whether their debate is private or public.
+.debatePrivacyBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  font-family: $font-mono;
+  font-size: $size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $text-muted;
+  margin-bottom: $space-sm;
+  padding: 4px 10px;
+  background: rgba($bg-elevated, 0.5);
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+  width: fit-content;
+}
+
+.privacyBadgeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+
+  &[data-state="private"] {
+    background: $text-muted;
+  }
+
+  &[data-state="public"] {
+    background: $ui-success;
   }
 }
 

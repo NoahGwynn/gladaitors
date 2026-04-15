@@ -701,6 +701,9 @@ function DebateArenaContent() {
             {generating ? 'Debating...' : `Start Debate (${totalDebateCost} ${totalDebateCost === 1 ? 'token' : 'tokens'})`}
           </button>
         </div>
+        <p className={styles.privacyNote}>
+          Your debates are <strong>private by default</strong> — only you can see them. After it finishes you can choose to publish to /explore.
+        </p>
         {isValid && canAffordAny && !canAffordFull && (
           <p className={styles.tokenWarning}>
             This debate costs {totalDebateCost} tokens but you have {tokenBalance}. It will stop when your tokens run out.
@@ -909,6 +912,19 @@ function DebateArenaContent() {
                 </div>
               )}
               <h2 className={styles.debateTitle}>{activeDebate.topic}</h2>
+              <div className={styles.debatePrivacyBadge}>
+                {activeDebate.isPublic ? (
+                  <>
+                    <span className={styles.privacyBadgeDot} data-state="public" />
+                    Public · listed on /explore
+                  </>
+                ) : (
+                  <>
+                    <span className={styles.privacyBadgeDot} data-state="private" />
+                    Private · only you can see this
+                  </>
+                )}
+              </div>
               <div className={styles.debatePositions}>
                 {activeDebate.debaters.map((d, i) => {
                   const version = findModel(d.modelId)?.version;
@@ -1137,20 +1153,20 @@ function DebateArenaContent() {
                     <div className={styles.publicToggleText}>
                       <span className={styles.publicToggleLabel}>
                         {activeDebate.isPublic
-                          ? 'Listed on /explore'
-                          : 'Get more eyes on this debate'}
+                          ? 'Public — listed on /explore'
+                          : 'Private — only you can see this'}
                       </span>
                       <span className={styles.publicToggleDescription}>
                         {activeDebate.isPublic
-                          ? 'Anyone browsing the explore feed can find it.'
-                          : 'Add it to /explore so anyone browsing can discover it.'}
+                          ? 'Anyone browsing the explore feed can find it. Flip the switch off to unlist.'
+                          : 'Debates are private by default. Flip the switch on to publish to /explore.'}
                       </span>
                     </div>
                     <button
                       type="button"
                       className={`${styles.switch} ${activeDebate.isPublic ? styles.switchOn : ''}`}
                       onClick={() => toggleDebateVisibility(!activeDebate.isPublic)}
-                      aria-label="Toggle public listing"
+                      aria-label={activeDebate.isPublic ? 'Unlist from /explore' : 'Publish to /explore'}
                     >
                       <span className={styles.switchKnob} />
                     </button>
