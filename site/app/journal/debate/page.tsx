@@ -702,7 +702,15 @@ function DebateArenaContent() {
           </button>
         </div>
         <p className={styles.privacyNote}>
-          Your debates are <strong>private by default</strong> — only you can see them. After it finishes you can choose to publish to /explore.
+          {isLoggedIn ? (
+            <>
+              Your debates are <strong>private by default</strong> — only you can see them, even with the URL. After it finishes you can choose to publish to /explore.
+            </>
+          ) : (
+            <>
+              Anonymous debates are <strong>shareable by link</strong> — anyone with the URL can view. <button type="button" className={styles.privacyNoteLink} onClick={() => setShowAuth(true)}>Sign in</button> for private debates (owner-only, even with the URL).
+            </>
+          )}
         </p>
         {isValid && canAffordAny && !canAffordFull && (
           <p className={styles.tokenWarning}>

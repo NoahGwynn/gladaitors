@@ -534,9 +534,11 @@ details[open] > .optionalSummary > .detailsChevron {
   text-align: center;
 }
 
-// Privacy-by-default note shown under the Start Debate button, so
-// users know from the start that their debate stays private unless
-// they explicitly publish it.
+// Privacy note shown under the Start Debate button. Conditional on
+// login state: logged-in users get "private by default", anonymous
+// users get "shareable link by default" with a Sign In prompt for
+// real privacy. Anonymous users can't have true URL-gated privacy
+// because Postgres RLS can't read their localStorage session IDs.
 .privacyNote {
   font-size: $size-xs;
   color: $text-muted;
@@ -547,6 +549,22 @@ details[open] > .optionalSummary > .detailsChevron {
   strong {
     color: $text-secondary;
     font-weight: 600;
+  }
+}
+
+.privacyNoteLink {
+  font-family: inherit;
+  font-size: inherit;
+  color: $ui-accent;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover {
+    opacity: 0.85;
   }
 }
 
