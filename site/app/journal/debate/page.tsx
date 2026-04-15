@@ -42,6 +42,7 @@ import VotingPanel, { type VoteOption } from '@/components/VotingPanel';
 import UserTurnInput from '@/components/UserTurnInput';
 import ExtendDebateModal from '@/components/ExtendDebateModal';
 import { STARTER_TOPICS } from '@/lib/starter-topics';
+import { DEBATE_TEMPLATES, getTemplateBySlug, type DebateTemplate } from '@/lib/debate-templates';
 import { MODELS, findModel, getModelColour, getModelName, getModelTokenCost } from '@/lib/models';
 import { X, LockKeyhole, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
 import styles from './page.module.scss';
@@ -125,6 +126,15 @@ function DebateArenaContent() {
   const [context, setContext] = useState('');
   const [revealIdentities, setRevealIdentities] = useState(true);
   const [responseLength, setResponseLength] = useState<'concise' | 'detailed'>('detailed');
+
+  // --- Template state ---
+  // v3 utility pivot: pre-built templates for common decision use cases.
+  // Selecting a template pre-fills the form; the user can still edit
+  // before starting. Deep-link via ?template=<slug> so homepage entry
+  // points land directly on a configured form.
+  const [selectedTemplate, setSelectedTemplate] = useState<DebateTemplate | null>(() =>
+    getTemplateBySlug(searchParams.get('template')),
+  );
 
   // --- Debate state (sourced from the layout-mounted orchestrator provider) ---
   // Lifting this state out of the page is what allows in-app navigation
@@ -362,7 +372,47 @@ function DebateArenaContent() {
       { modelId: 'gpt-4o', position: '' },
     ]);
     setRounds(isLoggedIn ? 5 : 3);
+    setSelectedTemplate(null);
   }
+
+  // Apply a template to the form. Pre-fills positions, context, and
+  // rounds. Does NOT pre-fill the topic — that's the user's input, the
+  // placeholder changes to hint at what they might type. Free-form
+  // debates still work — templates are just shortcuts.
+  function applyTemplate(template: DebateTemplate) {
+    setSelectedTemplate(template);
+    setDebaters((prev) => {
+      const next = [...prev];
+      // Ensure at least 2 debater slots exist — templates are all 2-sided
+      while (next.length < 2) {
+        next.push({ modelId: 'claude-sonnet', position: '' });
+      }
+      next[0] = { ...next[0], position: template.positions[0], assignmentMode: 'manual' };
+      next[1] = { ...next[1], position: template.positions[1], assignmentMode: 'manual' };
+      return next;
+    });
+    setContext(template.contextHint);
+    setRounds(template.suggestedRounds);
+  }
+
+  function clearTemplate() {
+    setSelectedTemplate(null);
+    setContext('');
+    setDebaters((prev) => prev.map((d) => ({ ...d, position: '' })));
+  }
+
+  // On first mount, if the URL carries ?template=<slug>, apply it
+  // automatically so homepage entry points land directly on a
+  // configured form.
+  useEffect(() => {
+    const slug = searchParams.get('template');
+    if (!slug) return;
+    const template = getTemplateBySlug(slug);
+    if (template) applyTemplate(template);
+    // Intentional: run once on mount. We don't want to re-apply when
+    // searchParams change during client navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ========================================================================
   // View a saved debate (from history)
@@ -480,12 +530,69 @@ function DebateArenaContent() {
       {/* LEFT PANEL: Form                                                 */}
       {/* ================================================================ */}
       <div className={`${styles.formPanel} ${hasDebate ? styles.formPanelHidden : ''}`}>
+        {/* ============================================================ */}
+        {/* DECISION TEMPLATES — v3 utility pivot entry points.          */}
+        {/* Clicking a card pre-fills positions, context, and rounds.   */}
+        {/* User can still edit the form after selecting a template, or  */}
+        {/* skip templates entirely and configure free-form.             */}
+        {/* ============================================================ */}
+        {!selectedTemplate && !generating && (
+          <div className={styles.templatesSection}>
+            <div className={styles.templatesHeader}>
+              <span className={styles.templatesLabel}>Decision templates</span>
+              <span className={styles.templatesSubhead}>
+                Stress-test a decision by having two models argue opposite sides. Pick a template or scroll down to configure free-form.
+              </span>
+            </div>
+            <div className={styles.templatesGrid}>
+              {DEBATE_TEMPLATES.map((t) => (
+                <button
+                  key={t.slug}
+                  type="button"
+                  className={styles.templateCard}
+                  onClick={() => applyTemplate(t)}
+                >
+                  <span className={styles.templateIcon}>{t.icon}</span>
+                  <div className={styles.templateBody}>
+                    <div className={styles.templateName}>{t.name}</div>
+                    <div className={styles.templateTagline}>{t.tagline}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {selectedTemplate && !generating && (
+          <div className={styles.templatesSelectedBanner}>
+            <div className={styles.templatesSelectedContent}>
+              <span className={styles.templateIcon}>{selectedTemplate.icon}</span>
+              <div>
+                <div className={styles.templatesSelectedLabel}>
+                  Using template: <strong>{selectedTemplate.name}</strong>
+                </div>
+                <div className={styles.templatesSelectedDescription}>
+                  {selectedTemplate.description}
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              className={styles.templatesClear}
+              onClick={clearTemplate}
+              aria-label="Clear template"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
         <div className={styles.field}>
           <label className={styles.label}>What should they debate?</label>
           <input
             className={styles.topicInput}
             type="text"
-            placeholder="e.g. Is a banana a berry?"
+            placeholder={selectedTemplate?.topicPlaceholder || "e.g. Is a banana a berry?"}
             maxLength={config.maxTopicLength}
             value={topic}
             onChange={e => setTopic(e.target.value)}

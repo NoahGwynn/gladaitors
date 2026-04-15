@@ -85,6 +85,160 @@
   margin-bottom: $space-sm;
 }
 
+// ============================================================================
+// Decision templates (v3 utility pivot)
+// Pre-built configurations that land above the form. Clicking a card
+// pre-fills positions, context, and rounds. Selected template shows a
+// compact banner instead of the grid so the form stays tight.
+// ============================================================================
+.templatesSection {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+  margin-bottom: $space-lg;
+  padding-bottom: $space-lg;
+  border-bottom: 1px solid $border;
+}
+
+.templatesHeader {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.templatesLabel {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: $ui-accent;
+  font-weight: 700;
+}
+
+.templatesSubhead {
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.5;
+}
+
+.templatesGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $space-sm;
+
+  @media (max-width: 600px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.templateCard {
+  display: flex;
+  align-items: flex-start;
+  gap: $space-sm;
+  padding: $space-md;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+  font-family: inherit;
+  color: inherit;
+
+  &:hover {
+    border-color: $ui-accent;
+    background: rgba($ui-accent, 0.04);
+    transform: translateY(-1px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid $ui-accent;
+    outline-offset: 2px;
+  }
+}
+
+.templateIcon {
+  font-size: 20px;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.templateBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.templateName {
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.templateTagline {
+  font-size: $size-xs;
+  color: $text-muted;
+  line-height: 1.4;
+}
+
+.templatesSelectedBanner {
+  display: flex;
+  align-items: flex-start;
+  gap: $space-md;
+  padding: $space-md $space-lg;
+  margin-bottom: $space-lg;
+  background: linear-gradient(180deg, rgba($ui-accent, 0.06) 0%, rgba($ui-accent, 0.02) 100%);
+  border: 1px solid rgba($ui-accent, 0.3);
+  border-left: 3px solid $ui-accent;
+  border-radius: $radius-md;
+}
+
+.templatesSelectedContent {
+  display: flex;
+  align-items: flex-start;
+  gap: $space-sm;
+  flex: 1;
+}
+
+.templatesSelectedLabel {
+  font-size: $size-sm;
+  color: $text-secondary;
+  margin-bottom: 2px;
+
+  strong {
+    color: $text-primary;
+    font-weight: 700;
+  }
+}
+
+.templatesSelectedDescription {
+  font-size: $size-xs;
+  color: $text-muted;
+  line-height: 1.5;
+}
+
+.templatesClear {
+  font-family: $font-mono;
+  font-size: $size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $text-muted;
+  background: transparent;
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+  padding: 4px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 120ms ease, border-color 120ms ease;
+
+  &:hover {
+    color: $ui-accent;
+    border-color: $ui-accent;
+  }
+}
+
 .field {
   display: flex;
   flex-direction: column;

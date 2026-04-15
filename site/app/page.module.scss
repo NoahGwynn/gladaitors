@@ -344,6 +344,56 @@
 }
 
 // ============================================================================
+// Hero template entry points — v3 utility pivot
+// Dual framing per Notion: keep the spectacle topic input as the main
+// hook, add a row of decision templates as the utility entry points.
+// ============================================================================
+.heroTemplates {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-sm;
+  margin-top: $space-md;
+  max-width: 720px;
+  width: 100%;
+}
+
+.heroTemplatesLabel {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $text-muted;
+}
+
+.heroTemplatesRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: $space-sm;
+}
+
+.heroTemplateChip {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  padding: $space-xs $space-md;
+  background: rgba($bg-elevated, 0.6);
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  font-size: $size-sm;
+  color: $text-secondary;
+  text-decoration: none;
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+
+  &:hover {
+    border-color: $ui-accent;
+    color: $text-primary;
+    background: rgba($ui-accent, 0.08);
+  }
+}
+
+// ============================================================================
 // Two labs — introduces Arena Lab + Journal Lab as the site's two
 // top-level product lines. Lives between "How it works" and the
 // second sample debate.

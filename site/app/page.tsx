@@ -99,7 +99,7 @@ export default function Home() {
           <span className={styles.headlineAccent}>debate each other?</span>
         </h1>
         <p className={styles.subtitle}>
-          Pick a topic. Assign positions. Watch Claude, GPT-4o, and Gemini argue it out — in real time.
+          Pick a topic. Assign positions. Watch Claude, GPT-4o, and Gemini argue it out — in real time. Or use a template to stress-test a real decision.
         </p>
         <form action="/journal/debate" method="GET" className={styles.heroForm}>
           <input
@@ -114,6 +114,23 @@ export default function Home() {
             Go
           </button>
         </form>
+        <div className={styles.heroTemplates}>
+          <span className={styles.heroTemplatesLabel}>or stress-test a decision:</span>
+          <div className={styles.heroTemplatesRow}>
+            <Link href="/journal/debate?template=strategy-red-team" className={styles.heroTemplateChip}>
+              🎯 Strategy red-team
+            </Link>
+            <Link href="/journal/debate?template=argue-both-sides" className={styles.heroTemplateChip}>
+              🤔 Argue both sides
+            </Link>
+            <Link href="/journal/debate?template=hiring-decision" className={styles.heroTemplateChip}>
+              👥 Hiring decision
+            </Link>
+            <Link href="/journal/debate?template=product-positioning" className={styles.heroTemplateChip}>
+              🧭 Product positioning
+            </Link>
+          </div>
+        </div>
         <Link href="/journal/debate" className={styles.heroSecondary}>
           or start from the arena →
         </Link>
