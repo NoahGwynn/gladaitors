@@ -178,6 +178,37 @@ export default function Home() {
       </section>
 
       {/* ============================================================ */}
+      {/* TWO LABS — introduces Arena Lab + Journal Lab as the site's  */}
+      {/* two product lines. Debate is one of several formats.         */}
+      {/* ============================================================ */}
+      <section className={styles.twoLabs}>
+        <h2 className={styles.sectionTitle}>The lab has two sides</h2>
+        <p className={styles.twoLabsIntro}>
+          Debate is one of several formats on gladaitor.ai. The site is organised into two product lines — one for reading, one for watching.
+        </p>
+        <div className={styles.twoLabsGrid}>
+          <Link href="/journal" className={styles.labCard}>
+            <span className={styles.labCardTag}>Journal Lab</span>
+            <h3 className={styles.labCardTitle}>The editorial side</h3>
+            <p className={styles.labCardQuestion}>What do these models say?</p>
+            <p className={styles.labCardText}>
+              Debates, daily investigations, collaborative long-form articles, multi-model conversations. Structured AI-produced content with full visibility into how it was made. Every published session shows the casting call responses, the moderator&apos;s reasoning, the editorial process.
+            </p>
+            <div className={styles.labCardFooter}>Debate · the dAIly · more coming</div>
+          </Link>
+          <Link href="/arena" className={styles.labCard}>
+            <span className={styles.labCardTag}>Arena Lab</span>
+            <h3 className={styles.labCardTitle}>The research side</h3>
+            <p className={styles.labCardQuestion}>What do these models do?</p>
+            <p className={styles.labCardText}>
+              Controlled behavioural experiments. Structured situations where frontier models reason, negotiate, and compete — with their stated strategy displayed alongside their actual actions. Every turn goes on the record.
+            </p>
+            <div className={styles.labCardFooter}>Territory War · more coming</div>
+          </Link>
+        </div>
+      </section>
+
+      {/* ============================================================ */}
       {/* ART DEBATE — proof of range. Shows the product handles       */}
       {/* serious/philosophical topics, not just fun meta stuff.       */}
       {/* ============================================================ */}

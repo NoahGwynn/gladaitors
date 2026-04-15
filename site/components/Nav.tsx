@@ -121,8 +121,8 @@ export default function Nav() {
               Series
             </Link>
           )}
-          <Link href="/arena/territory-war" className={linkClass('/arena', styles.link)}>
-            The Arena
+          <Link href="/arena" className={linkClass('/arena', styles.link)}>
+            Arena
           </Link>
           <Link href="/journal" className={linkClass('/journal', styles.link)}>
             Journal
@@ -194,8 +194,8 @@ export default function Nav() {
               </div>
             )}
 
-            <Link href="/arena/territory-war" className={linkClass('/arena', styles.mobileLink)} onClick={closeMobileMenu}>
-              The Arena
+            <Link href="/arena" className={linkClass('/arena', styles.mobileLink)} onClick={closeMobileMenu}>
+              Arena
             </Link>
             <Link href="/journal" className={linkClass('/journal', styles.mobileLink)} onClick={closeMobileMenu}>
               Journal

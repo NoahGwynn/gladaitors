@@ -344,6 +344,100 @@
 }
 
 // ============================================================================
+// Two labs — introduces Arena Lab + Journal Lab as the site's two
+// top-level product lines. Lives between "How it works" and the
+// second sample debate.
+// ============================================================================
+
+.twoLabs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-xl;
+  padding: $space-3xl $space-lg;
+  background: $bg-void;
+  border-top: 1px solid $border;
+  border-bottom: 1px solid $border;
+}
+
+.twoLabsIntro {
+  max-width: 640px;
+  text-align: center;
+  color: $text-secondary;
+  font-size: $size-md;
+  line-height: 1.6;
+}
+
+.twoLabsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: $space-lg;
+  max-width: 900px;
+  width: 100%;
+
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.labCard {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  padding: $space-xl $space-lg;
+  background: linear-gradient(180deg, $bg-card 0%, $bg-surface 100%);
+  border: 1px solid $border;
+  border-radius: $radius-lg;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 120ms ease, transform 120ms ease;
+
+  &:hover {
+    border-color: $ui-accent;
+    transform: translateY(-2px);
+  }
+}
+
+.labCardTag {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $ui-accent;
+  font-weight: 700;
+}
+
+.labCardTitle {
+  font-size: $size-lg;
+  font-weight: 700;
+  color: $text-primary;
+  margin: 0;
+}
+
+.labCardQuestion {
+  font-size: $size-md;
+  color: $text-primary;
+  font-style: italic;
+  line-height: 1.4;
+  margin: $space-xs 0 $space-sm;
+}
+
+.labCardText {
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.55;
+}
+
+.labCardFooter {
+  margin-top: $space-sm;
+  font-family: $font-mono;
+  font-size: $size-xs;
+  color: $text-muted;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+// ============================================================================
 // Topic ideas
 // ============================================================================
 
