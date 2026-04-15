@@ -47,9 +47,15 @@ export async function POST(request: NextRequest, { params }: Params) {
     return Response.json({ error: 'Only completed debates can be listed' }, { status: 400 });
   }
 
+  // Toggling to public implicitly drops owner_only — the debate is now
+  // viewable by anyone regardless of the URL-gate flag. Toggling back to
+  // private restores owner_only=true so the URL gate kicks back in.
   const { error: updateError } = await supabase
     .from('debates')
-    .update({ is_public: body.public })
+    .update({
+      is_public: body.public,
+      owner_only: body.public ? false : true,
+    })
     .eq('id', id);
 
   if (updateError) {

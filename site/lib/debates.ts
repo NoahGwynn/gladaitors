@@ -39,6 +39,16 @@ export async function createDebateRecord(params: {
   } = await supabase.auth.getUser();
   const sessionId = getSessionId();
 
+  // Privacy default:
+  //   - Logged-in users: owner_only=true. Real URL-level privacy — only
+  //     the creator can view the debate even if someone has the link.
+  //     Required for the Debate utility pivot's professional use cases
+  //     (hiring, strategy red-teams, sensitive product positioning).
+  //   - Anonymous users: owner_only=false. Backwards-compat with the
+  //     throwaway-share-via-link flow. If an anonymous user wants real
+  //     privacy they must sign up — RLS can't check session IDs.
+  const ownerOnlyDefault = !!user;
+
   const { data, error } = await supabase
     .from("debates")
     .insert({
@@ -55,6 +65,7 @@ export async function createDebateRecord(params: {
       auto_assigned: params.autoAssigned ?? null,
       reveal_identities: params.revealIdentities ?? null,
       response_length: params.responseLength ?? null,
+      owner_only: ownerOnlyDefault,
     })
     .select("id")
     .single();

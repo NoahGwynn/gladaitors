@@ -98,6 +98,7 @@ alter table public.debates enable row level security;
 drop policy if exists "Users can view own profile" on public.profiles;
 drop policy if exists "Users can update own profile" on public.profiles;
 drop policy if exists "Anyone can view debates" on public.debates;
+drop policy if exists "Debates viewable if public or link or owner" on public.debates;
 drop policy if exists "Authenticated users can create debates" on public.debates;
 drop policy if exists "Anon can create debates" on public.debates;
 drop policy if exists "Anyone can create debates" on public.debates;
@@ -111,9 +112,24 @@ create policy "Users can view own profile"
 create policy "Users can update own profile"
   on public.profiles for update using (auth.uid() = id);
 
--- Debates policies
-create policy "Anyone can view debates"
-  on public.debates for select using (true);
+-- Debates SELECT policy
+-- Three states of visibility, enforced at the database level:
+--   1. is_public = true           — listed on /explore, viewable by anyone
+--   2. owner_only = false         — link-shareable, viewable by anyone with
+--                                    the URL, not listed on /explore. The
+--                                    default for anonymous debates so casual
+--                                    sharing still works.
+--   3. creator_user_id = auth.uid() — owner-only mode. True privacy. The
+--                                      default for logged-in users' new debates.
+-- Anonymous ownership (creator_session_id) cannot be checked in RLS because
+-- session IDs live in localStorage/cookies, not auth. Anonymous users who
+-- want privacy must sign up.
+create policy "Debates viewable if public or link or owner"
+  on public.debates for select using (
+    is_public = true
+    or owner_only = false
+    or creator_user_id = auth.uid()
+  );
 
 create policy "Anyone can create debates"
   on public.debates for insert with check (true);
@@ -435,12 +451,24 @@ $$ language plpgsql security definer;
 -- Add a view counter to debates so milestone notifications can fire
 alter table public.debates add column if not exists view_count int not null default 0;
 
--- Public feed opt-in. Default false: debates are only accessible by direct link
--- unless the creator explicitly opts in to listing them in the public feed.
+-- Public feed opt-in. True = listed on /explore AND viewable by anyone.
+-- False = not listed. Controls inclusion in the public feed only.
 alter table public.debates add column if not exists is_public boolean not null default false;
 create index if not exists debates_public
   on public.debates(is_public, created_at desc)
   where is_public = true;
+
+-- True URL-level privacy gate. When TRUE, only the creator (matched by
+-- auth.uid()) can view the debate — not even someone with the URL. The
+-- RLS policy above enforces this at the DB level.
+--
+-- Default FALSE for backwards compatibility with pre-existing anonymous
+-- debates that were shared via link. The application layer
+-- (createDebateRecord in lib/debates.ts) sets owner_only=TRUE for
+-- newly-created debates by logged-in users so professional use cases
+-- (hiring debates, strategy red-teams, sensitive positioning) get real
+-- privacy. Anonymous users who want privacy must sign up first.
+alter table public.debates add column if not exists owner_only boolean not null default false;
 
 -- Per-debater "the model picked its own stance" flag, aligned to the models
 -- array by index. NULL on legacy rows where this metadata wasn't recorded.
