@@ -2,13 +2,13 @@
 // Next.js instrumentation hook — in-process cron scheduler
 // ============================================================================
 // Runs once per Next.js server boot. Registers four cron jobs that
-// fire the forum pipeline stages on schedule by making internal HTTP
+// fire the dAIly pipeline stages on schedule by making internal HTTP
 // requests back to the same server with the CRON_SECRET auth header.
 //
 // Why in-process instead of external scheduling:
 // - Single Railway service, no extra services to manage
 // - Scheduling config lives next to the endpoints it triggers (one
-//   source of truth via lib/forum/schedule.ts)
+//   source of truth via lib/daily/schedule.ts)
 // - Uses the exact same HTTP + CRON_SECRET path as any external
 //   caller, so manual curl and automated cron behave identically
 //
@@ -47,7 +47,7 @@ export async function register() {
   }
 
   const cron = await import('node-cron');
-  const { getStageTime, FORUM_TIMEZONE } = await import('./lib/forum/schedule');
+  const { getStageTime, SITE_TIMEZONE } = await import('./lib/daily/schedule');
 
   // The pilot only runs the 'ai' category. When you add more
   // categories, extend this array — each gets its own independent
@@ -65,17 +65,17 @@ export async function register() {
   }
 
   console.log(`[CRON] Registering in-process scheduler. Base URL: ${baseUrl}`);
-  console.log(`[CRON] Timezone: ${FORUM_TIMEZONE}`);
+  console.log(`[CRON] Timezone: ${SITE_TIMEZONE}`);
 
   type StageKey = 'createSession' | 'organize' | 'prepare' | 'debate';
 
   /** URL path for each cron endpoint — matches the routes in
-   *  app/api/forum/cron/. */
+   *  app/api/daily/cron/. */
   const PATH_BY_STAGE: Record<StageKey, string> = {
-    createSession: '/api/forum/cron/create-session',
-    organize: '/api/forum/cron/organize',
-    prepare: '/api/forum/cron/prepare',
-    debate: '/api/forum/cron/debate',
+    createSession: '/api/daily/cron/create-session',
+    organize: '/api/daily/cron/organize',
+    prepare: '/api/daily/cron/prepare',
+    debate: '/api/daily/cron/debate',
   };
 
   /** Fire one internal HTTP request to a cron endpoint. Logs outcome
@@ -126,9 +126,9 @@ export async function register() {
           // fire-and-forget; don't await inside the cron callback
           fire(stage, category);
         },
-        { timezone: FORUM_TIMEZONE },
+        { timezone: SITE_TIMEZONE },
       );
-      console.log(`[CRON] Scheduled ${stage} (${category}) at "${cronString}" ${FORUM_TIMEZONE}`);
+      console.log(`[CRON] Scheduled ${stage} (${category}) at "${cronString}" ${SITE_TIMEZONE}`);
     }
   }
 

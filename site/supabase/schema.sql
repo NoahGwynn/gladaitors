@@ -807,9 +807,9 @@ create policy "Challenge turns are server-inserted"
   on public.challenge_turns for insert with check (true);
 
 -- ============================================================================
--- dAIly Forum — Ingestion Layer
+-- the dAIly — Ingestion Layer
 -- ============================================================================
--- Three tables for the data pipeline that feeds the dAIly Forum:
+-- Three tables for the data pipeline that feeds the the dAIly:
 --   forum_sources  — registry of configured data sources per category
 --   forum_items    — raw ingested items (articles, papers, posts)
 --   forum_threads  — clustered narratives built from related items
@@ -939,7 +939,7 @@ create or replace function public.match_thread(
 $$;
 
 -- ============================================================================
--- dAIly Forum — Stage 4: Sessions
+-- the dAIly — Stage 4: Sessions
 -- ============================================================================
 -- One row per category-day forum run. Stores the full decision trace
 -- for topic selection (with optional runoff and acting moderator paths)
@@ -991,7 +991,7 @@ create table if not exists public.forum_sessions (
 
   -- Debate format: 'moderated' (a pool model chairs) or 'unmoderated'
   -- (sequential round-robin with no chair, used when every candidate
-  -- scored ≥80 conflict or self-vetoed). Set by /api/forum/cron/prepare
+  -- scored ≥80 conflict or self-vetoed). Set by /api/daily/cron/prepare
   -- right after moderator selection resolves.
   debate_format text default 'moderated',
   -- Human-readable explanation for why the format is what it is.
@@ -1066,7 +1066,7 @@ create index if not exists forum_sessions_moderator
   where moderator_model_id is not null;
 
 -- ============================================================================
--- dAIly Forum — Tagged Memory (Stage 6 + cross-session accountability)
+-- the dAIly — Tagged Memory (Stage 6 + cross-session accountability)
 -- ============================================================================
 -- Every cast member's spoken response in every debate is persisted here
 -- with topic tags and an embedding. This is the substrate for the

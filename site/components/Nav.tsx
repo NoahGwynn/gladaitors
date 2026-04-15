@@ -124,8 +124,8 @@ export default function Nav() {
           <Link href="/arena/debate" className={linkClass('/arena', styles.link)}>
             The Arena
           </Link>
-          <Link href="/forum" className={linkClass('/forum', styles.link)}>
-            Forum
+          <Link href="/journal/daily" className={linkClass('/journal', styles.link)}>
+            dAIly
           </Link>
           <Link href="/explore" className={linkClass('/explore', styles.link)}>
             Explore
@@ -197,8 +197,8 @@ export default function Nav() {
             <Link href="/arena/debate" className={linkClass('/arena', styles.mobileLink)} onClick={closeMobileMenu}>
               The Arena
             </Link>
-            <Link href="/forum" className={linkClass('/forum', styles.mobileLink)} onClick={closeMobileMenu}>
-              Forum
+            <Link href="/journal/daily" className={linkClass('/journal', styles.mobileLink)} onClick={closeMobileMenu}>
+              dAIly
             </Link>
             <Link href="/explore" className={linkClass('/explore', styles.mobileLink)} onClick={closeMobileMenu}>
               Explore
