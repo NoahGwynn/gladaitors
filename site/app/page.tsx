@@ -101,7 +101,7 @@ export default function Home() {
         <p className={styles.subtitle}>
           Pick a topic. Assign positions. Watch Claude, GPT-4o, and Gemini argue it out — in real time.
         </p>
-        <form action="/arena/debate" method="GET" className={styles.heroForm}>
+        <form action="/journal/debate" method="GET" className={styles.heroForm}>
           <input
             type="text"
             name="topic"
@@ -114,7 +114,7 @@ export default function Home() {
             Go
           </button>
         </form>
-        <Link href="/arena/debate" className={styles.heroSecondary}>
+        <Link href="/journal/debate" className={styles.heroSecondary}>
           or start from the arena →
         </Link>
       </section>
@@ -144,7 +144,7 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <Link href={`/arena/debate/${META_DEBATE.id}`} className={styles.ctaSecondary}>
+        <Link href={`/journal/debate/${META_DEBATE.id}`} className={styles.ctaSecondary}>
           Read the full debate and vote
         </Link>
       </section>
@@ -199,7 +199,7 @@ export default function Home() {
             </div>
           ))}
         </div>
-        <Link href={`/arena/debate/${SAMPLE_DEBATE.id}`} className={styles.ctaSecondary}>
+        <Link href={`/journal/debate/${SAMPLE_DEBATE.id}`} className={styles.ctaSecondary}>
           See how this debate ended
         </Link>
       </section>
@@ -211,12 +211,12 @@ export default function Home() {
         <h2 className={styles.sectionTitle}>What would you make them debate?</h2>
         <div className={styles.topicGrid}>
           {TOPIC_IDEAS.map((topic) => (
-            <Link key={topic} href={`/arena/debate?topic=${encodeURIComponent(topic)}`} className={styles.topicChip}>
+            <Link key={topic} href={`/journal/debate?topic=${encodeURIComponent(topic)}`} className={styles.topicChip}>
               {topic}
             </Link>
           ))}
         </div>
-        <Link href="/arena/debate" className={styles.ctaPrimary}>
+        <Link href="/journal/debate" className={styles.ctaPrimary}>
           Start a Free Debate
         </Link>
         <Link href="/explore" className={styles.ctaSecondary}>

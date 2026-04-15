@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       token_amount: String(pack),
     },
-    return_url: `${origin}/arena/debate?checkout=complete`,
+    return_url: `${origin}/journal/debate?checkout=complete`,
   });
 
   return Response.json({ clientSecret: session.client_secret });

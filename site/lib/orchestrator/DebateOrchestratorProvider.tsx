@@ -6,7 +6,7 @@
 // WHY THIS EXISTS:
 //   The orchestrator (the loop that POSTs each round, reads SSE tokens,
 //   handles user-turn pauses, and persists state) used to live inside the
-//   /arena/debate page component. When the user navigated away from that
+//   /journal/debate page component. When the user navigated away from that
 //   page — to /explore, the history sidebar, etc. — the page unmounted,
 //   React tore down the state, and the in-flight fetch aborted. The debate
 //   died mid-stream.

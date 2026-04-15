@@ -102,9 +102,9 @@ export default function NotificationsBell() {
 
   function notificationHref(n: Notification): string {
     if (n.content_type === 'debate' && n.content_id) {
-      return `/arena/debate/${n.content_id}`;
+      return `/journal/debate/${n.content_id}`;
     }
-    return '/arena/debate';
+    return '/journal/debate';
   }
 
   return (

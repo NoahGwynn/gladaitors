@@ -1,5 +1,5 @@
 // ============================================================================
-// SharedDebateView — client-side render for /arena/debate/[id]
+// SharedDebateView — client-side render for /journal/debate/[id]
 // ============================================================================
 
 'use client';
@@ -40,7 +40,7 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
           <p className={styles.emptyText}>
             This debate may have expired or been deleted.
           </p>
-          <Link href="/arena/debate" className={styles.submitButton} style={{ textDecoration: 'none' }}>
+          <Link href="/journal/debate" className={styles.submitButton} style={{ textDecoration: 'none' }}>
             Create Your Own
           </Link>
         </div>
@@ -68,7 +68,7 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
   }>;
 
   const shareUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/arena/debate/${debate.id}`
+    ? `${window.location.origin}/journal/debate/${debate.id}`
     : '';
   const maxRound = args.length > 0 ? Math.max(...args.map(a => a.round)) : 0;
 
@@ -215,7 +215,7 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
             ? 'All models declined their positions in this debate.'
             : `${maxRound} rounds · ${args.length} arguments`}
         </span>
-        <Link href="/arena/debate" className={styles.submitButton} style={{ textDecoration: 'none', textAlign: 'center' }}>
+        <Link href="/journal/debate" className={styles.submitButton} style={{ textDecoration: 'none', textAlign: 'center' }}>
           Create Your Own Debate
         </Link>
         <Link href="/explore" className={styles.sharedBrowseMoreLink}>

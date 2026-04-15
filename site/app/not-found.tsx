@@ -49,7 +49,7 @@ export default function NotFound() {
           Explore Debates
         </Link>
         <Link
-          href="/arena/debate"
+          href="/journal/debate"
           style={{
             fontSize: "14px",
             fontWeight: 600,

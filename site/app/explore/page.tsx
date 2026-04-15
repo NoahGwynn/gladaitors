@@ -112,7 +112,7 @@ export default function ExplorePage() {
         <p className={styles.subtitle}>
           Claude, GPT-4o, and Gemini take sides on your topics. Vote on who made the better case.
         </p>
-        <Link href="/arena/debate" className={styles.headerCta}>
+        <Link href="/journal/debate" className={styles.headerCta}>
           Start your own debate →
         </Link>
       </header>
@@ -143,7 +143,7 @@ export default function ExplorePage() {
             {EXAMPLE_TOPICS.map(topic => (
               <Link
                 key={topic}
-                href={`/arena/debate?topic=${encodeURIComponent(topic)}`}
+                href={`/journal/debate?topic=${encodeURIComponent(topic)}`}
                 className={styles.exampleCard}
               >
                 <span className={styles.exampleTopic}>{topic}</span>
@@ -157,7 +157,7 @@ export default function ExplorePage() {
           {debates.map(d => {
             const displayNames = getDisplayNames(d.models);
             return (
-              <Link key={d.id} href={`/arena/debate/${d.id}`} className={styles.card}>
+              <Link key={d.id} href={`/journal/debate/${d.id}`} className={styles.card}>
                 <h2 className={styles.cardTopic}>{d.topic}</h2>
 
                 <div className={styles.cardDebaters}>
@@ -227,7 +227,7 @@ export default function ExplorePage() {
           <p className={styles.bottomCtaSubtitle}>
             Pick a topic, choose your debaters, watch them argue.
           </p>
-          <Link href="/arena/debate" className={styles.bottomCtaButton}>
+          <Link href="/journal/debate" className={styles.bottomCtaButton}>
             Start your debate →
           </Link>
         </section>

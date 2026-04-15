@@ -1,5 +1,5 @@
 // ============================================================================
-// Debate Arena — /arena/debate
+// Debate Arena — /journal/debate
 // ============================================================================
 // Two-panel layout: form (left) + debate thread (right).
 // Streams responses via SSE as models argue sequentially.
@@ -465,7 +465,7 @@ function DebateArenaContent() {
   // ========================================================================
 
   const maxRound = liveArguments.length > 0 ? Math.max(...liveArguments.map(a => a.round)) : 0;
-  const shareUrl = activeDebate?.id ? `${typeof window !== 'undefined' ? window.location.origin : ''}/arena/debate/${activeDebate.id}` : '';
+  const shareUrl = activeDebate?.id ? `${typeof window !== 'undefined' ? window.location.origin : ''}/journal/debate/${activeDebate.id}` : '';
   const activeDisplayNames = activeDebate ? getDisplayNames(activeDebate.debaters) : [];
   // The next debater needed if the debate is incomplete (used to adapt the
   // "Continue Debate" UI: hidden when the orchestrator is already running, and
@@ -870,7 +870,7 @@ function DebateArenaContent() {
                   )}
 
                   <Link
-                    href={`/arena/debate/${sampleDebate.id}`}
+                    href={`/journal/debate/${sampleDebate.id}`}
                     className={styles.exampleLink}
                   >
                     Read the full debate →

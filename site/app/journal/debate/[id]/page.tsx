@@ -1,5 +1,5 @@
 // ============================================================================
-// Shared Debate Page — /arena/debate/[id]
+// Shared Debate Page — /journal/debate/[id]
 // ============================================================================
 // Server component for OG meta tags + client component for rendering.
 // ============================================================================
@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const title = `${displayNames.join(" vs ")}: "${debate.topic}" — gladaitor`;
   const description = `Watch ${displayNames.join(" and ")} debate "${debate.topic}" across ${debate.rounds} rounds on gladaitor.`;
 
-  const canonicalUrl = `https://gladaitor.ai/arena/debate/${id}`;
+  const canonicalUrl = `https://gladaitor.ai/journal/debate/${id}`;
 
   return {
     title,

@@ -41,8 +41,6 @@ interface FormatEntry {
   tag?: string;
 }
 
-// NOTE: Debate currently lives at /arena/debate — the move to
-// /journal/debate is Task B. Once that ships, update the href here.
 const FORMATS: FormatEntry[] = [
   {
     slug: 'daily',
@@ -59,10 +57,8 @@ const FORMATS: FormatEntry[] = [
     name: 'Debate',
     description:
       "Two or three frontier models argue opposing positions on a topic you choose. The simplest editorial format — and the first one built on the site. Free configurations for spectacle, paid privacy mode for professional decisions.",
-    // Debate is moving from Arena to Journal in a later task; for now
-    // it still lives at /arena/debate.
-    href: '/arena/debate',
-    status: 'Live — hosted in Arena until migration',
+    href: '/journal/debate',
+    status: 'Live',
     tag: 'LIVE',
     active: true,
   },

@@ -13,7 +13,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 1,
     },
     {
-      url: `${BASE}/arena/debate`,
+      url: `${BASE}/journal/debate`,
       lastModified: new Date(),
       changeFrequency: "daily",
       priority: 0.9,
@@ -55,7 +55,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
     if (data) {
       debatePages = data.map((d) => ({
-        url: `${BASE}/arena/debate/${d.id}`,
+        url: `${BASE}/journal/debate/${d.id}`,
         lastModified: new Date(d.created_at),
         changeFrequency: "monthly" as const,
         priority: 0.6,
