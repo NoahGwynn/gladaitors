@@ -31,6 +31,8 @@ import { runDebate, runUnmoderatedDebate } from '@/lib/daily/debate-runtime';
 import { MODEL_POOL } from '@/lib/daily/model-pool';
 import type { Agenda, AgendaBuildResult } from '@/lib/daily/agenda';
 import type { CastParticipant, CastSelectionResult } from '@/lib/daily/cast-selection';
+import type { ResearchResult, DeepResearchResult } from '@/lib/daily/research';
+import { runModerationPipeline } from '@/lib/daily/moderation-pipeline';
 import { getTodayInForumTz } from '@/lib/daily/schedule';
 
 const DEFAULT_CATEGORY = 'ai';
@@ -187,18 +189,96 @@ export async function POST(request: NextRequest) {
 
   const completedAt = new Date().toISOString();
 
+  // Persist the debate snapshot immediately — the moderation pipeline
+  // runs next but we want the debate visible in the transparency layer
+  // even while moderation is still deciding, so the operator can see
+  // exactly what was generated.
   await supabase
     .from('forum_sessions')
     .update({
-      status: 'completed',
       debate_snapshot: {
         _startedAt: startedAt,
         _completedAt: completedAt,
         ...debateSnapshot,
       },
+    })
+    .eq('id', session.id);
+
+  // === Stage 7: Shared moderation pipeline ===
+  // Every generated debate goes through three Sonnet-class screening
+  // checks before publication. If any critical finding is raised, the
+  // session is held and the operator clears it manually. The critical
+  // rule: skipping a day is always acceptable; publishing a bad day
+  // is not.
+  console.log(`[DEBATE-CRON] Running moderation pipeline...`);
+  const research = session.research_snapshot as ResearchResult | null;
+  const deepResearch = session.deep_research_snapshot as DeepResearchResult | null;
+
+  if (!research) {
+    // Shouldn't happen — prepare always writes research_snapshot.
+    // Defensive: hold the session and log.
+    console.error('[DEBATE-CRON] research_snapshot missing — cannot run hallucination check. Holding for moderation.');
+    await supabase
+      .from('forum_sessions')
+      .update({
+        status: 'held_for_moderation',
+        completed_at: completedAt,
+        error: 'research_snapshot missing at moderation stage — held for manual review',
+      })
+      .eq('id', session.id);
+    return Response.json({
+      error: 'research_snapshot missing; session held for manual review',
+      sessionId: session.id,
+    }, { status: 500 });
+  }
+
+  let moderationResult;
+  try {
+    moderationResult = await runModerationPipeline({
+      category: session.category,
+      topicTitle,
+      topicSignificance,
+      debateSnapshot,
+      research,
+      deepResearch: deepResearch || null,
+      cast,
+    });
+  } catch (err) {
+    // A moderation-pipeline-level crash holds the session rather than
+    // failing it outright. The debate output is already persisted;
+    // the operator can decide whether to publish manually.
+    const msg = err instanceof Error ? err.message : 'unknown error';
+    console.error(`[DEBATE-CRON] Moderation pipeline crashed: ${msg}`);
+    await supabase
+      .from('forum_sessions')
+      .update({
+        status: 'held_for_moderation',
+        completed_at: completedAt,
+        error: `Moderation pipeline crashed: ${msg}`,
+      })
+      .eq('id', session.id);
+    return Response.json({
+      error: `Moderation pipeline crashed: ${msg}`,
+      sessionId: session.id,
+    }, { status: 500 });
+  }
+
+  // Persist the moderation snapshot and decide final status
+  const finalStatus =
+    moderationResult.decision === 'publish'
+      ? 'completed'
+      : 'held_for_moderation';
+
+  await supabase
+    .from('forum_sessions')
+    .update({
+      status: finalStatus,
+      moderation_snapshot: moderationResult,
       completed_at: completedAt,
     })
     .eq('id', session.id);
+
+  console.log(`[DEBATE-CRON] Session ${session.id.slice(0, 8)} → ${finalStatus}. ${moderationResult.decisionReason}`);
 
   const { data: finalSession } = await supabase
     .from('forum_sessions')
@@ -209,6 +289,8 @@ export async function POST(request: NextRequest) {
   return Response.json({
     session: finalSession,
     debate: debateSnapshot,
+    moderation: moderationResult,
+    status: finalStatus,
   });
 }
 

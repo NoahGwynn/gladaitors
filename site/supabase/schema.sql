@@ -960,7 +960,21 @@ create table if not exists public.forum_sessions (
   category text not null,                          -- 'ai', 'science', etc.
   session_date date not null,                      -- the day this session is for
   status text not null default 'in_progress',
-  -- 'in_progress' | 'topic_selected' | 'moderator_selected' | 'completed' | 'failed'
+  -- Pipeline state. The UI uses this to decide what to render and the
+  -- in-process cron uses it for idempotency checks. Values, in order:
+  --   'scheduled'              — row created, pipeline not yet running
+  --   'in_progress'            — Stage 1 started (organize / broadcast)
+  --   'topic_selected'         — Stage 4a topic pick persisted
+  --   'moderator_selected'     — Stage 4c moderator pick persisted
+  --   'researched'             — Stage 5a light research complete
+  --   'cast_selected'          — Stage 5b cast picked
+  --   'deep_researched'        — Stage 5c-i deep research complete
+  --   'agenda_built'           — Stage 5c-ii agenda done (or skipped for unmoderated)
+  --   'debate_in_progress'     — Stage 6 debate running
+  --   'held_for_moderation'    — Stage 7 flagged a critical finding; session is
+  --                              generated but NOT published until operator clears it
+  --   'completed'              — Stage 7 passed and the session is published
+  --   'failed'                 — pipeline errored; see `error` column
 
   -- Stage 2 + Stage 3 snapshots (frozen for reproducibility AND used
   -- as the source of truth for the published session journey UI).
@@ -1017,6 +1031,16 @@ create table if not exists public.forum_sessions (
   agenda_snapshot jsonb,                           -- moderator's structured debate playbook (5c-ii)
   debate_snapshot jsonb,                           -- full turn-by-turn transcript + move history (Stage 6)
 
+  -- Stage 7 — shared moderation pipeline
+  -- After the debate completes, its full output is run through three
+  -- Sonnet-class screening checks (defamation, hallucination,
+  -- tone/bias) before publication. The full results live here so
+  -- the operator (and later the audience) can see what was screened
+  -- and what passed or failed. If any check raises a critical
+  -- finding, status flips to 'held_for_moderation' and the session
+  -- does NOT publish until the operator clears it manually.
+  moderation_snapshot jsonb,
+
   -- Stage 6 hook — populated when the debate completes
   session_summary text,
 
@@ -1052,6 +1076,8 @@ alter table public.forum_sessions
   add column if not exists debate_format text default 'moderated';
 alter table public.forum_sessions
   add column if not exists debate_format_reason text;
+alter table public.forum_sessions
+  add column if not exists moderation_snapshot jsonb;
 
 -- One session per category per day — enforces idempotency.
 create unique index if not exists forum_sessions_unique

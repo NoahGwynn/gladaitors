@@ -83,8 +83,13 @@ export const SCRUBBER_STAGES: ScrubberStage[] = [
     shortTitle: 'Debate',
     fullTitle: 'Debate — the live discussion',
     explainer:
-      "The session runs turn by turn. The moderator presses weak answers, counters one voice with another, and occasionally brings up a past statement from a cast member's history. Every participant response is stored so future sessions can hold them accountable for consistency over time.",
-    eventSteps: ['debate_complete'],
+      "The session runs turn by turn. The moderator presses weak answers, counters one voice with another, and occasionally brings up a past statement from a cast member's history. Every participant response is stored so future sessions can hold them accountable for consistency over time. After the debate finishes, every session goes through three Sonnet-class screening checks — defamation, hallucination, and tone/bias — before being published. Skipping a day is always acceptable.",
+    eventSteps: [
+      'debate_complete',
+      'moderation_passed',
+      'moderation_held',
+      'held_for_moderation',
+    ],
   },
 ];
 
@@ -103,6 +108,7 @@ export function currentScrubberStage(status: string | undefined): number {
     deep_researched: 5,
     agenda_built: 5,
     debate_in_progress: 6,
+    held_for_moderation: 6, // still in Stage 6 from the scrubber's POV — moderation is part of the debate stage
     completed: 6,
     failed: 0,
   };
@@ -124,6 +130,7 @@ export function completedScrubberStages(status: string | undefined): number {
     deep_researched: 4,
     agenda_built: 5,
     debate_in_progress: 5,
+    held_for_moderation: 5, // debate generated but moderation held it — Stage 6 not yet "complete" from the public POV
     completed: 6,
     failed: 0,
   };

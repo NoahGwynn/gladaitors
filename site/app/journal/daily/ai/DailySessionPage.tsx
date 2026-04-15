@@ -166,6 +166,7 @@ function renderContent(
   const debateSnapshot = session.debate_snapshot;
   const hasDebateData = debateSnapshot != null && debateSnapshot.turns.length > 0;
   const debateLive = status === 'debate_in_progress';
+  const isHeldForModeration = status === 'held_for_moderation';
 
   return (
     <>
@@ -183,6 +184,7 @@ function renderContent(
           onClose={() => setSelectedStage(null)}
         />
       )}
+      {isHeldForModeration && renderHeldForModerationBanner(session)}
       {hasDebateData && renderDebate(session, debateLive)}
       {!hasDebateData && (
         <div className={styles.prepStatus} style={{ marginTop: 64 }}>
@@ -195,6 +197,63 @@ function renderContent(
         </div>
       )}
     </>
+  );
+}
+
+// Renders a banner explaining why a session is being held from public
+// publication. Only shown to whoever is looking at the page during
+// the held state — which is the operator during the pilot, and in
+// future may be gated to admins only.
+function renderHeldForModerationBanner(session: SessionRowForJourney) {
+  const mod = session.moderation_snapshot;
+  const reason = mod?.decisionReason || session.error || 'Critical finding raised by the moderation pipeline.';
+  const critical = mod?.criticalCount ?? 0;
+  const minor = mod?.minorCount ?? 0;
+
+  // Collect the critical findings across all checks for display
+  const criticalFindings = (mod?.checks || [])
+    .flatMap((c) => c.findings || [])
+    .filter((f) => f.severity === 'critical');
+
+  return (
+    <div className={styles.heldBanner}>
+      <div className={styles.heldBannerLabel}>
+        Held for operator review — not published
+      </div>
+      <p className={styles.heldBannerText}>
+        This session was generated and ran through the shared moderation
+        pipeline. {critical > 0 && (
+          <>
+            <strong>{critical} critical finding{critical === 1 ? '' : 's'}</strong>
+            {minor > 0 ? ` (plus ${minor} minor)` : ''} {critical === 1 ? 'was' : 'were'} raised,
+            so the session is held until the operator reviews it.
+          </>
+        )}{' '}
+        {reason}
+      </p>
+      {criticalFindings.length > 0 && (
+        <details className={styles.heldBannerFindings}>
+          <summary>Show critical findings ({criticalFindings.length})</summary>
+          <ul>
+            {criticalFindings.map((f, i) => (
+              <li key={i}>
+                <div className={styles.heldFindingCheck}>{f.check} · {f.location}</div>
+                <div className={styles.heldFindingIssue}>{f.issue}</div>
+                <div className={styles.heldFindingRationale}>{f.rationale}</div>
+                {f.suggestion && (
+                  <div className={styles.heldFindingSuggestion}>
+                    <strong>Suggestion:</strong> {f.suggestion}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      <p className={styles.heldBannerFooter}>
+        The dAIly&apos;s rule: skipping a day is always acceptable. A skipped day is fine. A bad day is not.
+      </p>
+    </div>
   );
 }
 

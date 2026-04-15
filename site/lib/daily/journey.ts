@@ -26,6 +26,7 @@ import type { ResearchResult, DeepResearchResult } from './research';
 import type { CastSelectionResult, CastParticipant, AlsoInvitedEntry } from './cast-selection';
 import type { AgendaBuildResult, AgendaSegment } from './agenda';
 import type { DebateSnapshot } from './debate-runtime';
+import type { ModerationPipelineResult } from './moderation-pipeline';
 
 // --- Types ---
 
@@ -77,6 +78,7 @@ export interface SessionRowForJourney {
   deep_research_snapshot?: (DeepResearchResult & SnapshotMeta) | null;
   agenda_snapshot?: (AgendaBuildResult & SnapshotMeta) | null;
   debate_snapshot?: (DebateSnapshot & SnapshotMeta) | null;
+  moderation_snapshot?: ModerationPipelineResult | null;
 
   vote_scores?: Array<{ threadId: string; score: number; voterCount: number }> | null;
   was_runoff?: boolean | null;
@@ -117,6 +119,7 @@ const STAGE_NAMES: Record<number, string> = {
   4: 'Topic & Moderator Selection',
   5: 'Moderator Preparation',
   6: 'Debate Session',
+  7: 'Moderation Screening',
 };
 
 // --- Derivation ---
@@ -205,6 +208,28 @@ export function deriveSessionJourney(session: SessionRowForJourney): JourneyEven
   // === Stage 6: Debate ===
   if (session.debate_snapshot) {
     events.push(buildDebateEvent(session.debate_snapshot, session.session_type));
+  }
+
+  // === Stage 7: Shared moderation pipeline ===
+  if (session.moderation_snapshot) {
+    events.push(buildModerationEvent(session.moderation_snapshot));
+  }
+
+  // === Held for moderation (operator review pending) ===
+  if (session.status === 'held_for_moderation') {
+    events.push({
+      stage: 6,
+      stageName: STAGE_NAMES[6],
+      step: 'held_for_moderation',
+      title: 'Held for operator review',
+      description:
+        `The debate completed and went through the shared moderation pipeline, but one or more critical findings were raised. The session is held — not published to the public archive — until the operator reviews the findings and decides whether to release, revise, or skip the day. Skipping is always an acceptable outcome; a skipped day is fine, a bad day is not.`,
+      timestamp: session.completed_at || undefined,
+      data: {
+        reason: session.moderation_snapshot?.decisionReason
+          || 'Critical finding raised — see moderation snapshot',
+      },
+    });
   }
 
   // === Failure ===
@@ -1056,6 +1081,57 @@ function buildDebateEvent(
       utterancesStored: snapshot.utterancesStored,
       // Full transcript included for the UI to render drill-down views
       turns: snapshot.turns,
+    },
+  };
+}
+
+// --- Stage 7: Shared moderation pipeline event ---
+
+function buildModerationEvent(snapshot: ModerationPipelineResult): JourneyEvent {
+  const descParts: string[] = [];
+
+  const passed = snapshot.decision === 'publish';
+  const totalFindings = snapshot.criticalCount + snapshot.minorCount;
+
+  if (passed) {
+    descParts.push(
+      `After the debate finished, the full transcript went through three Sonnet-class screening checks before publication — one for defamation, one for hallucination, one for tone and bias. Each check is a separate model reading the whole debate against the category's criteria.`,
+    );
+    if (totalFindings === 0) {
+      descParts.push(`All three checks passed cleanly with zero findings.`);
+    } else {
+      descParts.push(
+        `All three critical checks passed. ${snapshot.minorCount} minor finding${snapshot.minorCount === 1 ? ' was' : 's were'} logged as warnings but did not block publication — they're the kind of thing worth noting but not fixing the day around.`,
+      );
+    }
+  } else {
+    descParts.push(
+      `After the debate finished, the full transcript went through three Sonnet-class screening checks — defamation, hallucination, and tone/bias. ${snapshot.criticalCount} critical finding${snapshot.criticalCount === 1 ? ' was' : 's were'} raised, so the session has been held for manual review instead of being published.`,
+    );
+    descParts.push(
+      `The dAIly's critical rule is that skipping a day is always acceptable and a bad day is not. Held sessions are visible to the operator but don't appear on the public archive until the operator clears them — by judging the findings are borderline and releasing the session, by rewriting the problematic passage and re-running just the moderation check, or by skipping the day entirely.`,
+    );
+  }
+
+  descParts.push(`Reason given by the pipeline: ${snapshot.decisionReason}`);
+
+  return {
+    stage: 7,
+    stageName: STAGE_NAMES[7],
+    step: snapshot.decision === 'publish' ? 'moderation_passed' : 'moderation_held',
+    title: snapshot.decision === 'publish'
+      ? `Moderation pipeline passed`
+      : `Moderation held ${snapshot.criticalCount} critical finding${snapshot.criticalCount === 1 ? '' : 's'}`,
+    description: descParts.join(' '),
+    timestamp: snapshot.completedAt,
+    data: {
+      decision: snapshot.decision,
+      decisionReason: snapshot.decisionReason,
+      criticalCount: snapshot.criticalCount,
+      minorCount: snapshot.minorCount,
+      criteriaLabel: snapshot.criteriaLabel,
+      screenerModelId: snapshot.screenerModelId,
+      checks: snapshot.checks,
     },
   };
 }

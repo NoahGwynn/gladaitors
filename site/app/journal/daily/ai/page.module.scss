@@ -1133,3 +1133,107 @@
   font-size: $size-sm;
   margin-bottom: $space-lg;
 }
+
+// ============================================================================
+// Held-for-moderation banner — shown when a session has been generated
+// but the moderation pipeline raised a critical finding. The session is
+// held from public publication until the operator reviews and clears it.
+// ============================================================================
+.heldBanner {
+  margin-top: $space-2xl;
+  padding: $space-xl $space-lg;
+  background: linear-gradient(180deg, rgba($ui-accent, 0.06) 0%, rgba($ui-accent, 0.02) 100%);
+  border-left: 3px solid $ui-accent;
+  border-radius: $radius-md;
+  color: $text-secondary;
+  line-height: 1.55;
+}
+
+.heldBannerLabel {
+  font-family: $font-mono;
+  font-size: $size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: $ui-accent;
+  font-weight: 700;
+  margin-bottom: $space-md;
+}
+
+.heldBannerText {
+  font-size: $size-md;
+  color: $text-primary;
+  margin: 0 0 $space-md;
+
+  strong {
+    color: $ui-accent;
+  }
+}
+
+.heldBannerFindings {
+  margin: $space-md 0;
+  padding: $space-md $space-lg;
+  background: rgba($bg-elevated, 0.6);
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: $text-primary;
+    font-size: $size-sm;
+    padding: $space-xs 0;
+  }
+
+  ul {
+    list-style: none;
+    margin: $space-md 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: $space-md;
+  }
+
+  li {
+    padding: $space-sm $space-md;
+    background: rgba($bg-card, 0.4);
+    border-left: 2px solid $ui-accent;
+    border-radius: $radius-sm;
+  }
+}
+
+.heldFindingCheck {
+  font-family: $font-mono;
+  font-size: $size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $text-muted;
+  margin-bottom: $space-xs;
+}
+
+.heldFindingIssue {
+  font-weight: 600;
+  color: $text-primary;
+  font-size: $size-sm;
+  margin-bottom: $space-xs;
+}
+
+.heldFindingRationale {
+  font-size: $size-sm;
+  color: $text-secondary;
+}
+
+.heldFindingSuggestion {
+  margin-top: $space-xs;
+  font-size: $size-sm;
+  color: $text-secondary;
+  padding: $space-xs $space-sm;
+  background: rgba($ui-accent, 0.04);
+  border-radius: $radius-sm;
+}
+
+.heldBannerFooter {
+  font-size: $size-xs;
+  color: $text-muted;
+  font-style: italic;
+  margin: $space-md 0 0;
+}
