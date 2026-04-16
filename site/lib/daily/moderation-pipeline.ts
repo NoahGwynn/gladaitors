@@ -70,7 +70,7 @@ export const MODERATION_CRITERIA: Record<string, CategoryCriteria> = {
     subject: 'Frontier AI model research, capabilities, safety, deployment, and the labs that build them.',
     emphases: {
       defamation:
-        'Claims about named labs (OpenAI, Anthropic, Google DeepMind, Meta, etc.) or named researchers presented as fact rather than opinion. Claims of intent, motive, or strategic deception against a specific company. Attribution of failures to individual employees.',
+        'Claims about named individual researchers, executives, or employees — not generic critique of labs as organisations. Lab-level critique ("OpenAI ships fast", "Google is rushing", "Anthropic, including us, downplays X") is editorial commentary and should pass. The risk is named-individual claims and accusations of specific unlawful conduct (regulatory breach, fraud) against a named org.',
       hallucination:
         'Benchmark numbers, model release dates, company announcements, publication citations, and parameter counts. These are the most-hallucinated factual categories in AI writing and must all be traceable to the source material.',
       toneBias:
@@ -90,7 +90,7 @@ export const MODERATION_CRITERIA: Record<string, CategoryCriteria> = {
     subject: 'Scientific research — papers, findings, methodology, replication, and the institutions that produce them.',
     emphases: {
       defamation:
-        'Claims about individual researchers or institutions presented as fact. Accusations of fraud, p-hacking, or misconduct without evidence directly in the sources.',
+        'Claims about NAMED individual researchers — not generic critique of fields, journals, or institutions. Critical assessment of methodology, journal practices, or institutional incentives is editorial commentary and should pass. The risk is naming a specific researcher with an accusation of fraud, p-hacking, fabrication, or misconduct that the sources do not directly support.',
       hallucination:
         'Citation accuracy is paramount. Every study cited must be in the source material. DOIs, author names, publication years, and effect sizes are the highest-risk fabrication categories.',
       toneBias:
@@ -107,7 +107,7 @@ export const MODERATION_CRITERIA: Record<string, CategoryCriteria> = {
     subject: 'Technology industry — product launches, platform decisions, infrastructure, and the companies that ship them.',
     emphases: {
       defamation:
-        'Claims about executive motive or competitive intent. Attribution of product failures to individual employees or teams.',
+        'Claims about a NAMED executive or employee — not company-level critique. Critical commentary on company strategy, product decisions, or competitive behaviour is editorial substance and should pass. Risk: naming a specific person and attributing a failure or motive to them as fact, or accusing a named company of a specific unlawful act (regulatory breach, antitrust violation) without sourcing.',
       hallucination:
         'Product launch dates, pricing, feature lists, and company financials. Distinguish announcement from availability — "announced" and "shipping" are not the same thing.',
       toneBias:
@@ -121,7 +121,7 @@ export const MODERATION_CRITERIA: Record<string, CategoryCriteria> = {
     subject: 'Arts and culture — creative works, artists, institutions, and critical reception.',
     emphases: {
       defamation:
-        'Claims about individual artists, institutions, or critics presented as fact. Accusations of plagiarism, theft, or fraud without source attribution.',
+        'Claims about NAMED individual artists or critics — not critique of works, movements, or institutions in the abstract. Critical assessment of a creative work or an institution is opinion journalism and should pass. Risk: accusing a specific named artist of plagiarism, theft, fraud, or misconduct without source attribution.',
       hallucination:
         'Attributing works to wrong artists, inventing titles or release details, citing awards or exhibitions that did not happen.',
       toneBias:
@@ -135,7 +135,7 @@ export const MODERATION_CRITERIA: Record<string, CategoryCriteria> = {
     subject: 'Climate science, energy policy, and the institutions that shape them.',
     emphases: {
       defamation:
-        'Claims about researcher motive or institutional bias. Accusations against specific governments or companies presented as fact.',
+        'Claims about a NAMED individual researcher or politician — not generic critique of governments, industries, or fossil-fuel companies. Critical assessment of policy, corporate behaviour, or institutional incentives is editorial substance. Risk: naming a specific scientist with a fraud accusation, or accusing a named company of a specific regulatory breach without sourcing.',
       hallucination:
         'Temperature figures, emissions data, policy timelines, and scientific consensus claims. All must be traceable to the source material.',
       toneBias:
@@ -151,7 +151,7 @@ export const MODERATION_CRITERIA: Record<string, CategoryCriteria> = {
     subject: 'Education research, pedagogy, and institutions.',
     emphases: {
       defamation:
-        'Claims about individual teachers, administrators, or institutions presented as fact.',
+        'Claims about a NAMED individual teacher, administrator, or researcher — not generic critique of curricula, school systems, or universities. Critical commentary on policy and institutional approaches is editorial substance. Risk: a named individual accused of misconduct, harm to students, or fraud without sourcing.',
       hallucination:
         'Student outcome data, research study details, policy descriptions.',
       toneBias:
@@ -167,7 +167,7 @@ export const MODERATION_CRITERIA: Record<string, CategoryCriteria> = {
     subject: 'Software engineering — languages, frameworks, libraries, and the communities that maintain them.',
     emphases: {
       defamation:
-        'Claims about library maintainers or open-source communities presented as fact.',
+        'Claims about a NAMED individual maintainer or contributor — not critique of projects, frameworks, or communities in the abstract. Critical assessment of code quality, architectural decisions, or community governance is editorial substance. Risk: accusing a named maintainer of malicious behaviour, sabotage, or hostility without sourcing.',
       hallucination:
         'API signatures, version numbers, breaking change details, benchmark results. These are heavily hallucinated in technical writing.',
       toneBias:
@@ -181,7 +181,7 @@ export const MODERATION_CRITERIA: Record<string, CategoryCriteria> = {
     subject: 'Medical research, clinical practice, and health policy.',
     emphases: {
       defamation:
-        'Claims about individual practitioners, drug companies, or regulatory bodies presented as fact.',
+        'Claims about a NAMED individual practitioner or researcher — not generic critique of pharma, regulators, or healthcare systems. Critical commentary on industry behaviour, regulatory failure, or institutional incentives is editorial substance. Risk: naming a specific clinician with a malpractice or fraud accusation without sourcing, or accusing a named drug company of a specific regulatory breach.',
       hallucination:
         'Study details, dosages, effect sizes, regulatory approvals. Strictest citation standard in the entire family.',
       toneBias:
@@ -202,7 +202,7 @@ const DEFAULT_CRITERIA: CategoryCriteria = {
   subject: 'General daily investigation topic.',
   emphases: {
     defamation:
-      'Claims about named individuals or organisations presented as fact rather than opinion.',
+      'Claims about NAMED individuals presented as fact rather than opinion. Generic critique of organisations, governments, industries, or policies is editorial commentary and should pass — newspapers print this kind of opinion every day. The risk is named-individual accusations and accusations of specific unlawful conduct (regulatory breach, fraud) against a named org without sourcing.',
     hallucination:
       'All factual claims must be traceable to the source material attached to the session.',
     toneBias:
