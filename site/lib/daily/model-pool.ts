@@ -284,12 +284,27 @@ export async function callPoolModel(
 
     case 'google': {
       const client = new GoogleGenAI({ apiKey });
+      // Cap Gemini's thinking budget so it can't consume the whole
+      // output allocation before producing a visible response.
+      // gemini-2.5-pro defaults to dynamic thinking which can spend
+      // the entire requested budget reasoning, returning empty text.
+      // 25% of the requested budget for thinking, floor 512 (gives
+      // it real room to plan), cap 8192 (well above what any single
+      // turn needs). Models that don't support thinking ignore the
+      // field, so it's safe across the family.
+      const thinkingBudget = Math.min(
+        Math.max(Math.floor(clampedMaxTokens / 4), 512),
+        8192,
+      );
       const response = await client.models.generateContent({
         model: model.modelId,
         contents: [
           { role: 'user', parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }] },
         ],
-        config: { maxOutputTokens: clampedMaxTokens },
+        config: {
+          maxOutputTokens: clampedMaxTokens,
+          thinkingConfig: { thinkingBudget },
+        },
       });
       return response.text || '';
     }
