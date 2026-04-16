@@ -185,8 +185,16 @@ function renderContent(
         />
       )}
       {isHeldForModeration && renderHeldForModerationBanner(session)}
-      {hasDebateData && renderDebate(session, debateLive)}
-      {!hasDebateData && (
+      {/* CRITICAL: never render the debate transcript when held for
+          moderation. The screening pipeline raised a critical finding
+          OR errored — either way we cannot publish content we have
+          not screened cleanly. The held banner above explains what
+          happened. The debate body is intentionally hidden until
+          an operator clears the session.
+          (Per the dAIly's rule: skipping a day is always acceptable.
+          A skipped day is fine. A bad day is not.) */}
+      {!isHeldForModeration && hasDebateData && renderDebate(session, debateLive)}
+      {!isHeldForModeration && !hasDebateData && (
         <div className={styles.prepStatus} style={{ marginTop: 64 }}>
           <span className={styles.prepStatusDot} />
           <span>

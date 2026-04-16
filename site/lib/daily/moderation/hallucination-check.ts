@@ -220,19 +220,28 @@ export async function runHallucinationCheck(
   const { system, user } = buildPrompt(input);
 
   try {
-    const raw = await callModerationModel(PRIMARY_SCREENER, system, user, 12000);
-    const parsed = parseFindingsResponse(raw, 'hallucination');
+    let raw = await callModerationModel(PRIMARY_SCREENER, system, user, 12000);
+    let parsed = parseFindingsResponse(raw, 'hallucination');
+
+    // Retry once on parse failure with a stricter JSON instruction —
+    // see defamation-check.ts for the rationale.
+    if ('error' in parsed) {
+      console.warn(`[MODERATION] Hallucination parse failed: ${parsed.error}. Retrying with stricter instruction...`);
+      const retryUser = user + '\n\nIMPORTANT: Return STRICT JSON only. Inside every string value, escape any double quotes as \\". Do not include literal newlines inside string values — use \\n. Your previous response was not valid JSON.';
+      raw = await callModerationModel(PRIMARY_SCREENER, system, retryUser, 12000);
+      parsed = parseFindingsResponse(raw, 'hallucination');
+    }
 
     const durationSeconds = (Date.now() - startedAt) / 1000;
 
     if ('error' in parsed) {
-      console.error(`[MODERATION] Hallucination check parse failed: ${parsed.error}`);
+      console.error(`[MODERATION] Hallucination check parse failed (after retry): ${parsed.error}`);
       return {
         check: 'hallucination',
         durationSeconds,
         ok: false,
         findings: [],
-        error: `Parse failed: ${parsed.error}`,
+        error: `Parse failed after retry: ${parsed.error}`,
       };
     }
 

@@ -412,8 +412,52 @@ export function renderDebateTranscript(
   return lines.join('\n');
 }
 
+/** Escape literal newlines that appear inside JSON string values.
+ *  Walks the input character by character tracking whether we're
+ *  inside a quoted string; when we are, raw \n / \r get replaced with
+ *  the JSON escape sequence so JSON.parse stops choking on them. */
+function escapeNewlinesInStrings(input: string): string {
+  let inString = false;
+  let escaped = false;
+  let out = '';
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    if (inString) {
+      if (escaped) {
+        out += ch;
+        escaped = false;
+      } else if (ch === '\\') {
+        out += ch;
+        escaped = true;
+      } else if (ch === '"') {
+        out += ch;
+        inString = false;
+      } else if (ch === '\n') {
+        out += '\\n';
+      } else if (ch === '\r') {
+        out += '\\r';
+      } else if (ch === '\t') {
+        out += '\\t';
+      } else {
+        out += ch;
+      }
+    } else {
+      if (ch === '"') inString = true;
+      out += ch;
+    }
+  }
+  return out;
+}
+
 /** Shared JSON parser for check responses. Each check returns a JSON
- *  object with a `findings` array; this extracts and sanitises it. */
+ *  object with a `findings` array; this extracts and sanitises it.
+ *
+ *  Resilience strategy: the screener models occasionally emit slightly
+ *  malformed JSON (trailing commas, literal newlines inside string
+ *  values, smart quotes). We try a strict parse first, then a series
+ *  of cheap repairs before giving up. The check itself retries the
+ *  call once on a parse failure return — this parser is the first
+ *  line of defence. */
 export function parseFindingsResponse(
   raw: string,
   check: ModerationFinding['check'],
@@ -427,10 +471,41 @@ export function parseFindingsResponse(
     const jsonEnd = text.lastIndexOf('}');
     if (jsonStart === -1 || jsonEnd === -1) return { error: 'No JSON object found in response' };
 
-    let jsonStr = text.slice(jsonStart, jsonEnd + 1);
-    jsonStr = jsonStr.replace(/,\s*([}\]])/g, '$1');
+    const slice = text.slice(jsonStart, jsonEnd + 1);
 
-    const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+    // Try a series of progressively more aggressive repairs. Stop at
+    // the first one that parses cleanly. If none work, fall through
+    // to the error path so the check returns ok: false.
+    const candidates: string[] = [
+      slice,
+      // Strip trailing commas before } or ]
+      slice.replace(/,\s*([}\]])/g, '$1'),
+      // Replace smart quotes with straight quotes (some models emit
+      // curly quotes that JSON doesn't recognise)
+      slice.replace(/[\u201C\u201D]/g, '"').replace(/[\u2018\u2019]/g, "'"),
+      // Escape literal newlines inside string values. JSON forbids
+      // them, but models occasionally embed them in the rationale or
+      // suggestion fields. This conservative pass only touches
+      // newlines that are clearly inside quoted strings.
+      escapeNewlinesInStrings(slice.replace(/,\s*([}\]])/g, '$1')),
+    ];
+
+    let parsed: Record<string, unknown> | null = null;
+    for (const candidate of candidates) {
+      try {
+        parsed = JSON.parse(candidate) as Record<string, unknown>;
+        break;
+      } catch {
+        continue;
+      }
+    }
+    if (!parsed) {
+      // Last attempt: re-throw the strict parse to capture a useful error message.
+      JSON.parse(slice);
+      // Unreachable, but satisfies the type narrowing.
+      return { error: 'parse failed' };
+    }
+
     const rawFindings = Array.isArray(parsed.findings) ? parsed.findings : [];
 
     const findings: ModerationFinding[] = (rawFindings as Array<Record<string, unknown>>).map(f => {

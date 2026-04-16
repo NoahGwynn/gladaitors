@@ -122,19 +122,32 @@ export async function runDefamationCheck(
   const { system, user } = buildPrompt(input);
 
   try {
-    const raw = await callModerationModel(PRIMARY_SCREENER, system, user, 8000);
-    const parsed = parseFindingsResponse(raw, 'defamation');
+    let raw = await callModerationModel(PRIMARY_SCREENER, system, user, 8000);
+    let parsed = parseFindingsResponse(raw, 'defamation');
+
+    // Retry once on parse failure with an explicit reminder. The
+    // dominant parse-failure mode is unescaped quotes inside string
+    // values, which a stricter prompt usually fixes on the second
+    // attempt. A second failure means the model genuinely can't
+    // produce clean JSON for this input — at that point we hold the
+    // session (better safe than ship unscreened content).
+    if ('error' in parsed) {
+      console.warn(`[MODERATION] Defamation parse failed: ${parsed.error}. Retrying with stricter instruction...`);
+      const retryUser = user + '\n\nIMPORTANT: Return STRICT JSON only. Inside every string value, escape any double quotes as \\". Do not include literal newlines inside string values — use \\n. Your previous response was not valid JSON.';
+      raw = await callModerationModel(PRIMARY_SCREENER, system, retryUser, 8000);
+      parsed = parseFindingsResponse(raw, 'defamation');
+    }
 
     const durationSeconds = (Date.now() - startedAt) / 1000;
 
     if ('error' in parsed) {
-      console.error(`[MODERATION] Defamation check parse failed: ${parsed.error}`);
+      console.error(`[MODERATION] Defamation check parse failed (after retry): ${parsed.error}`);
       return {
         check: 'defamation',
         durationSeconds,
         ok: false,
         findings: [],
-        error: `Parse failed: ${parsed.error}`,
+        error: `Parse failed after retry: ${parsed.error}`,
       };
     }
 
