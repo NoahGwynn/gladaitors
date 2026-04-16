@@ -119,13 +119,16 @@ Respond with JSON only. Your job is to flag real bias, not to find something wro
   "findings": [
     {
       "severity": "critical" | "minor",
-      "location": "<turn reference like 'T04' or a short quoted snippet>",
+      "turnIndex": <integer — copy the integer straight from the transcript label. The transcript labels turns "T00", "T01", "T02", etc. For a finding about T04, set turnIndex: 4. Null only if the bias pattern genuinely spans many turns rather than living in one specific message.>,
+      "location": "<turn reference like 'T04' or a short quoted snippet for human display>",
       "issue": "<one sentence: what's loaded or partisan about the phrasing>",
       "rationale": "<why this reads as editorial position rather than evidence-weighing, and what a reader who disagreed with the conclusion would think on reading it>",
       "suggestion": "<optional: an evidence-weighing rephrase that keeps the substance>"
     }
   ]
-}`;
+}
+
+CRITICAL: every finding MUST include turnIndex (a number, or null if it genuinely spans many turns). The operator review tooling uses turnIndex to bind the finding to the specific message. Don't skip it.`;
 
   const transcript = renderDebateTranscript(input.debateSnapshot, input.cast);
 

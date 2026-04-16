@@ -23,6 +23,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { MODERATOR_COLOR, getProviderColor } from '@/lib/daily/session-colors';
+import type { TurnFlag } from '@/lib/daily/turn-flags';
+import { Check, RotateCw, ShieldAlert, Loader2 } from 'lucide-react';
 import styles from './page.module.scss';
 
 // --- Types (matches what debate-runtime.ts persists) ---
@@ -76,6 +78,16 @@ interface DebateStreamProps {
   live: boolean;
   debateFormat?: 'moderated' | 'unmoderated';
   unmoderatedReason?: string | null;
+  /** Per-turn moderation flags. Map<turn.index, TurnFlag>. Optional —
+   *  pages that don't go through moderation just pass undefined and
+   *  every turn renders normally. */
+  turnFlags?: Map<number, TurnFlag>;
+  /** True when the current viewer is an admin/operator. Admins always
+   *  see flagged turn bodies + per-turn approve/rerun controls. */
+  isAdmin?: boolean;
+  /** Forum session id — needed for the admin approve/rerun API calls.
+   *  Required when isAdmin is true. */
+  sessionId?: string;
 }
 
 export default function DebateStream({
@@ -87,6 +99,9 @@ export default function DebateStream({
   live,
   debateFormat = 'moderated',
   unmoderatedReason = null,
+  turnFlags,
+  isAdmin = false,
+  sessionId,
 }: DebateStreamProps) {
   const turnsEndRef = useRef<HTMLDivElement>(null);
   const turnCount = snapshot.turns.length;
@@ -167,6 +182,9 @@ export default function DebateStream({
             turn={turn}
             castBySeat={castBySeat}
             moderatorName={moderator?.modelName ?? null}
+            flag={turnFlags?.get(turn.index) ?? null}
+            isAdmin={isAdmin}
+            sessionId={sessionId}
           />
         ))}
         <div ref={turnsEndRef} />
@@ -181,17 +199,35 @@ interface DebateTurnCardProps {
   turn: DebateTurn;
   castBySeat: Map<number, CastMember>;
   moderatorName: string | null;
+  flag: TurnFlag | null;
+  isAdmin: boolean;
+  sessionId?: string;
 }
 
-function DebateTurnCard({ turn, castBySeat, moderatorName }: DebateTurnCardProps) {
+function DebateTurnCard({ turn, castBySeat, moderatorName, flag, isAdmin, sessionId }: DebateTurnCardProps) {
   const [reasoningOpen, setReasoningOpen] = useState(false);
 
-  if (turn.actor === 'moderator') {
-    return (
-      <div
-        className={`${styles.turn} ${styles.turnModerator}`}
-        style={{ '--turn-color': MODERATOR_COLOR } as CSSProperties}
-      >
+  // Decide what body to render. Three states:
+  //   1. Hidden for the public — flagged + no decision yet + not admin.
+  //      We show a placeholder card explaining the message is held.
+  //   2. Visible with chrome — flagged but viewer is admin OR the
+  //      operator has resolved (approved/rerun). Body shows normally;
+  //      admin gets the finding details + approve/rerun controls inline.
+  //   3. Plain — no findings on this turn. Renders as before.
+  const hasUnresolved = flag && flag.criticalFindings.length > 0 && flag.decision === null;
+  const hideForPublic = hasUnresolved && !isAdmin;
+
+  // Common header pieces (built once, used by both moderator + participant branches).
+  const isModerator = turn.actor === 'moderator';
+  const castMember = !isModerator && turn.seat != null ? castBySeat.get(turn.seat) : null;
+  const color = isModerator
+    ? MODERATOR_COLOR
+    : (castMember ? getProviderColor(castMember.provider) : '#8e8eae');
+  const cardClass = `${styles.turn} ${isModerator ? styles.turnModerator : ''} ${hasUnresolved ? styles.turnFlagged : ''}`.trim();
+
+  function header() {
+    if (isModerator) {
+      return (
         <div className={styles.turnHeader}>
           <span className={`${styles.turnActor} ${styles.turnActorModerator}`}>
             {moderatorName ? `Moderator · ${moderatorName}` : 'Moderator'}
@@ -202,34 +238,9 @@ function DebateTurnCard({ turn, castBySeat, moderatorName }: DebateTurnCardProps
           )}
           <span className={styles.turnNumber}>Turn {turn.exchangeTurn + 1}</span>
         </div>
-        {turn.moderatorReasoning && (
-          <>
-            <button
-              type="button"
-              className={styles.turnReasoningToggle}
-              onClick={() => setReasoningOpen((o) => !o)}
-            >
-              {reasoningOpen ? '▾ Hide reasoning' : '▸ Why this move'}
-            </button>
-            {reasoningOpen && (
-              <div className={styles.turnReasoning}>{turn.moderatorReasoning}</div>
-            )}
-          </>
-        )}
-        <div className={styles.turnContent}>{turn.text}</div>
-      </div>
-    );
-  }
-
-  // Participant turn
-  const castMember = turn.seat != null ? castBySeat.get(turn.seat) : null;
-  const color = castMember ? getProviderColor(castMember.provider) : '#8e8eae';
-
-  return (
-    <div
-      className={styles.turn}
-      style={{ '--turn-color': color } as CSSProperties}
-    >
+      );
+    }
+    return (
       <div className={styles.turnHeader}>
         <span className={styles.turnActor} style={{ color }}>
           {turn.modelName || castMember?.modelName || `Seat ${turn.seat}`}
@@ -237,7 +248,172 @@ function DebateTurnCard({ turn, castBySeat, moderatorName }: DebateTurnCardProps
         <span className={styles.turnTarget}>Seat {turn.seat}</span>
         <span className={styles.turnNumber}>Turn {turn.exchangeTurn + 1}</span>
       </div>
+    );
+  }
+
+  function moderatorReasoningBlock() {
+    if (!isModerator || !turn.moderatorReasoning) return null;
+    return (
+      <>
+        <button
+          type="button"
+          className={styles.turnReasoningToggle}
+          onClick={() => setReasoningOpen((o) => !o)}
+        >
+          {reasoningOpen ? '▾ Hide reasoning' : '▸ Why this move'}
+        </button>
+        {reasoningOpen && (
+          <div className={styles.turnReasoning}>{turn.moderatorReasoning}</div>
+        )}
+      </>
+    );
+  }
+
+  // 1. Hidden-for-public state.
+  if (hideForPublic && flag) {
+    return (
+      <div
+        className={cardClass}
+        style={{ '--turn-color': color } as CSSProperties}
+      >
+        {header()}
+        <div className={styles.turnHeldPlaceholder}>
+          <ShieldAlert size={16} />
+          <span>
+            This message is held pending operator review. The rest of the
+            debate is unaffected — the moderation pipeline flagged just
+            this passage. Skipping is always acceptable; a clean dAIly
+            beats a fast one.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  // 2 + 3. Visible body. If admin AND flagged, layer on the finding
+  // details + approve/rerun controls.
+  return (
+    <div
+      className={cardClass}
+      style={{ '--turn-color': color } as CSSProperties}
+    >
+      {header()}
+      {moderatorReasoningBlock()}
       <div className={styles.turnContent}>{turn.text}</div>
+      {isAdmin && flag && (flag.criticalFindings.length > 0 || flag.decision) && (
+        <AdminTurnPanel
+          flag={flag}
+          turnIndex={turn.index}
+          sessionId={sessionId}
+        />
+      )}
+    </div>
+  );
+}
+
+// --- Admin per-turn panel: finding details + approve/rerun controls ---
+
+interface AdminTurnPanelProps {
+  flag: TurnFlag;
+  turnIndex: number;
+  sessionId?: string;
+}
+
+function AdminTurnPanel({ flag, turnIndex, sessionId }: AdminTurnPanelProps) {
+  const [busy, setBusy] = useState<'approve' | 'rerun' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function call(action: 'approve' | 'rerun') {
+    if (!sessionId) {
+      setError('Missing session id — page reload required.');
+      return;
+    }
+    setBusy(action);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/daily/sessions/${sessionId}/turns/${turnIndex}/${action}`,
+        { method: 'POST' },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error || `Request failed (${res.status})`);
+      }
+      // The Realtime subscription on the page will pick up the
+      // updated session row and re-render with the new decision.
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // Already actioned — show the resolution, no buttons.
+  if (flag.decision) {
+    return (
+      <div className={styles.adminTurnPanel} data-resolved="true">
+        <div className={styles.adminTurnPanelHeader}>
+          {flag.decision.action === 'approved' ? (
+            <>
+              <Check size={14} />
+              <span>Approved — kept as-is after operator review</span>
+            </>
+          ) : (
+            <>
+              <RotateCw size={14} />
+              <span>Rephrased to address the finding</span>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.adminTurnPanel}>
+      <div className={styles.adminTurnPanelHeader}>
+        <ShieldAlert size={14} />
+        <span>
+          {flag.criticalFindings.length} critical finding{flag.criticalFindings.length === 1 ? '' : 's'} on this turn
+        </span>
+      </div>
+      <ul className={styles.adminTurnFindings}>
+        {flag.criticalFindings.map((f, i) => (
+          <li key={i}>
+            <span className={styles.adminTurnFindingCheck}>{f.check}</span>
+            <span className={styles.adminTurnFindingIssue}>{f.issue}</span>
+            {f.rationale && (
+              <span className={styles.adminTurnFindingRationale}>{f.rationale}</span>
+            )}
+            {f.suggestion && (
+              <span className={styles.adminTurnFindingSuggestion}>
+                <strong>Suggestion:</strong> {f.suggestion}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <div className={styles.adminTurnActions}>
+        <button
+          type="button"
+          className={styles.adminTurnApprove}
+          onClick={() => call('approve')}
+          disabled={busy !== null}
+        >
+          {busy === 'approve' ? <Loader2 size={14} className={styles.adminTurnSpinner} /> : <Check size={14} />}
+          Approve as-is
+        </button>
+        <button
+          type="button"
+          className={styles.adminTurnRerun}
+          onClick={() => call('rerun')}
+          disabled={busy !== null}
+        >
+          {busy === 'rerun' ? <Loader2 size={14} className={styles.adminTurnSpinner} /> : <RotateCw size={14} />}
+          Rephrase to fix
+        </button>
+      </div>
+      {error && <div className={styles.adminTurnError}>{error}</div>}
     </div>
   );
 }

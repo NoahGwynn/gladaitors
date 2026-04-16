@@ -50,6 +50,40 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- Admin flag — gates the dAIly operator review tooling
+-- (approve/rerun on flagged debate turns). Set manually via SQL on
+-- accounts that should have operator access. Idempotent backfill so
+-- re-running the schema is safe.
+alter table public.profiles
+  add column if not exists is_admin boolean not null default false;
+create index if not exists idx_profiles_is_admin
+  on public.profiles(is_admin)
+  where is_admin = true;
+
+-- Privilege-escalation guard. The "Users can update own profile" RLS
+-- policy lets a user update any column on their own row — including
+-- is_admin. Without this trigger, a logged-in user could grant
+-- themselves admin via the API. The trigger blocks any UPDATE that
+-- changes is_admin when the caller is the `authenticated` role
+-- (Supabase's role for logged-in API requests). Direct SQL via the
+-- service role / postgres owner still works, so the operator can
+-- still grant access via Supabase Studio.
+create or replace function public.protect_is_admin()
+returns trigger as $$
+begin
+  if new.is_admin is distinct from old.is_admin
+     and current_user = 'authenticated' then
+    raise exception 'is_admin cannot be modified through the API';
+  end if;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+drop trigger if exists profiles_protect_is_admin on public.profiles;
+create trigger profiles_protect_is_admin
+  before update on public.profiles
+  for each row execute function public.protect_is_admin();
+
 -- Auto-create profile on signup
 create or replace function public.handle_new_user()
 returns trigger as $$
@@ -1142,6 +1176,14 @@ alter table public.forum_sessions
   add column if not exists debate_format_reason text;
 alter table public.forum_sessions
   add column if not exists moderation_snapshot jsonb;
+-- Per-turn operator decisions on flagged turns. Map keyed by turn
+-- index (string) → { action: 'approved'|'rerun', byUserId, atIso,
+-- originalText? }. Approve = dismiss the finding(s) on this turn,
+-- Rerun = the turn was regenerated to address the issue (the
+-- original text is preserved here so the operator can revert).
+-- Empty/null when no admin action has been taken yet.
+alter table public.forum_sessions
+  add column if not exists turn_decisions jsonb;
 
 -- One session per category per day — enforces idempotency.
 create unique index if not exists forum_sessions_unique

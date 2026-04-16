@@ -224,8 +224,16 @@ export interface ModerationFinding {
   /** Severity — critical blocks publication, minor is a warning only */
   severity: 'critical' | 'minor';
   /** Where in the debate the problem is. Free-text quoted snippet or
-   *  turn reference. */
+   *  turn reference (e.g. "T04" or a quoted snippet). Kept for
+   *  display; finding→turn binding uses turnIndex. */
   location: string;
+  /** Structured turn index that matches DebateTurn.index in the
+   *  debate snapshot. Set when the finding is bound to one specific
+   *  turn. Lets the operator UI hide / approve / rerun the exact turn
+   *  rather than blanking the whole debate. Null when the finding
+   *  spans multiple turns or the whole session — those fall through
+   *  to the legacy "hide the body" hold behaviour. */
+  turnIndex?: number | null;
   /** One-sentence description of what's wrong */
   issue: string;
   /** Why it matters — the reasoning the screener gave */
@@ -511,10 +519,22 @@ export function parseFindingsResponse(
     const findings: ModerationFinding[] = (rawFindings as Array<Record<string, unknown>>).map(f => {
       const severity: 'critical' | 'minor' =
         f.severity === 'critical' ? 'critical' : 'minor';
+      const location = typeof f.location === 'string' ? f.location : '(unspecified)';
+      // Prefer the structured turnIndex the prompt now asks for. Fall
+      // back to extracting "T04" / "T4" patterns from the location
+      // string for backwards compat with older snapshots.
+      let turnIndex: number | null = null;
+      if (typeof f.turnIndex === 'number' && Number.isFinite(f.turnIndex) && f.turnIndex >= 0) {
+        turnIndex = Math.floor(f.turnIndex);
+      } else {
+        const match = location.match(/\bT(\d{1,3})\b/);
+        if (match) turnIndex = Number.parseInt(match[1], 10);
+      }
       return {
         check,
         severity,
-        location: typeof f.location === 'string' ? f.location : '(unspecified)',
+        location,
+        turnIndex,
         issue: typeof f.issue === 'string' ? f.issue : '(no description)',
         rationale: typeof f.rationale === 'string' ? f.rationale : '',
         suggestion: typeof f.suggestion === 'string' ? f.suggestion : undefined,

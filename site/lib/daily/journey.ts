@@ -79,6 +79,14 @@ export interface SessionRowForJourney {
   agenda_snapshot?: (AgendaBuildResult & SnapshotMeta) | null;
   debate_snapshot?: (DebateSnapshot & SnapshotMeta) | null;
   moderation_snapshot?: ModerationPipelineResult | null;
+  /** Per-turn operator decisions on flagged turns. Keyed by turn
+   *  index (string). Populated by the admin approve/rerun routes. */
+  turn_decisions?: Record<string, {
+    action: 'approved' | 'rerun';
+    byUserId: string;
+    atIso: string;
+    originalText?: string;
+  }> | null;
 
   vote_scores?: Array<{ threadId: string; score: number; voterCount: number }> | null;
   was_runoff?: boolean | null;

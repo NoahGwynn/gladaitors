@@ -1139,6 +1139,166 @@
 // but the moderation pipeline raised a critical finding. The session is
 // held from public publication until the operator reviews and clears it.
 // ============================================================================
+
+// --- Per-turn flagged state ---
+//
+// .turnFlagged sits on a turn card whose moderation snapshot raised at
+// least one critical finding. Visible to public readers as a slim
+// amber border + held-placeholder body. Visible to admins as the full
+// content + an inline AdminTurnPanel below it.
+
+.turnFlagged {
+  border-left: 3px solid $ui-warning;
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.turnHeldPlaceholder {
+  display: flex;
+  align-items: flex-start;
+  gap: $space-sm;
+  padding: $space-md $space-lg;
+  margin-top: $space-sm;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px dashed rgba(245, 158, 11, 0.4);
+  border-radius: $radius-sm;
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.5;
+}
+
+// --- Admin per-turn panel (operator review chrome) ---
+
+.adminTurnPanel {
+  margin-top: $space-md;
+  padding: $space-md $space-lg;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-left: 3px solid $ui-accent;
+  border-radius: $radius-sm;
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  font-size: $size-sm;
+
+  &[data-resolved='true'] {
+    border-left-color: $ui-success;
+    background: rgba(34, 197, 94, 0.06);
+  }
+}
+
+.adminTurnPanelHeader {
+  display: flex;
+  align-items: center;
+  gap: $space-xs;
+  font-family: $font-mono;
+  font-size: $size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $ui-accent;
+  font-weight: 700;
+
+  [data-resolved='true'] & {
+    color: $ui-success;
+  }
+}
+
+.adminTurnFindings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: $space-sm $space-md;
+    background: $bg-card;
+    border: 1px solid $border;
+    border-radius: $radius-sm;
+  }
+}
+
+.adminTurnFindingCheck {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $text-muted;
+  font-weight: 700;
+}
+
+.adminTurnFindingIssue {
+  font-size: $size-sm;
+  color: $text-primary;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.adminTurnFindingRationale {
+  font-size: $size-xs;
+  color: $text-secondary;
+  line-height: 1.5;
+}
+
+.adminTurnFindingSuggestion {
+  font-size: $size-xs;
+  color: $text-secondary;
+  line-height: 1.5;
+  padding-top: $space-xs;
+  border-top: 1px dashed $border;
+}
+
+.adminTurnActions {
+  display: flex;
+  gap: $space-sm;
+}
+
+.adminTurnApprove,
+.adminTurnRerun {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  padding: $space-xs $space-md;
+  border-radius: $radius-sm;
+  font-size: $size-xs;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid $border;
+  background: $bg-surface;
+  color: $text-secondary;
+  transition: border-color 120ms ease, color 120ms ease;
+
+  &:hover { color: $text-primary; border-color: $ui-accent; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.adminTurnApprove {
+  &:hover { color: $ui-success; border-color: $ui-success; }
+}
+
+.adminTurnRerun {
+  &:hover { color: $ui-accent; border-color: $ui-accent; }
+}
+
+.adminTurnSpinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.adminTurnError {
+  font-size: $size-xs;
+  color: $ui-danger;
+  padding: $space-xs $space-sm;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: $radius-sm;
+}
+
 .heldBanner {
   margin-top: $space-2xl;
   padding: $space-xl $space-lg;

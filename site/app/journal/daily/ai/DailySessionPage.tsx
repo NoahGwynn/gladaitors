@@ -32,6 +32,12 @@ import {
   currentScrubberStage,
   completedScrubberStages,
 } from '@/lib/daily/scrubber-stages';
+import {
+  buildTurnFlags,
+  hasUnresolvedCriticalFindings,
+  hasSessionLevelCriticals,
+} from '@/lib/daily/turn-flags';
+import { createClient } from '@/lib/supabase';
 import ScheduledState from './ScheduledState';
 import JourneyScrubber from './JourneyScrubber';
 import JourneyStepDetail from './JourneyStepDetail';
@@ -56,6 +62,27 @@ interface SessionRowExtra {
 
 export default function DailySessionPage({ category, sessionDate }: DailySessionPageProps) {
   const { session, loading, error, journey } = useRealtimeSession(category, sessionDate);
+
+  // Admin gating — operator review tooling (approve / rerun on flagged
+  // turns) only renders for users with profiles.is_admin=true. Fetched
+  // client-side once on mount; not in the realtime stream because
+  // admin status doesn't change during a session.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    const supabase = createClient();
+    let cancelled = false;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+      if (!cancelled && profile?.is_admin === true) setIsAdmin(true);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Step detail panel state:
   //   selectedStage — which stage's detail is currently open (null = none)
@@ -110,7 +137,7 @@ export default function DailySessionPage({ category, sessionDate }: DailySession
         </div>
       )}
 
-      {!loading && !error && renderContent(session, category, journey, selectedStage, handleSelectStage, activeStage)}
+      {!loading && !error && renderContent(session, category, journey, selectedStage, handleSelectStage, activeStage, isAdmin)}
     </div>
   );
 }
@@ -122,6 +149,7 @@ function renderContent(
   selectedStage: number | null,
   setSelectedStage: (s: number | null) => void,
   activeStage: number | null,
+  isAdmin: boolean,
 ) {
   // No session or pre-pipeline → show the countdown + overview
   if (!session || session.status === 'scheduled') {
@@ -168,6 +196,32 @@ function renderContent(
   const debateLive = status === 'debate_in_progress';
   const isHeldForModeration = status === 'held_for_moderation';
 
+  // Decide how to handle a held session:
+  //   - If the moderation pipeline errored OR raised session-level
+  //     findings (no turnIndex), the WHOLE debate body stays hidden
+  //     for non-admins. The operator must clear the session as a
+  //     whole.
+  //   - Otherwise the findings all bind to specific turns — render
+  //     the transcript normally and let DebateStream gate per-turn
+  //     bodies via turnFlags.
+  const turnFlags = buildTurnFlags(
+    session.moderation_snapshot,
+    session.turn_decisions,
+  );
+  const sessionLevelHold = isHeldForModeration && (
+    hasSessionLevelCriticals(session.moderation_snapshot)
+    || (session.moderation_snapshot?.checks ?? []).some(c => !c.ok)
+    || !session.moderation_snapshot
+  );
+  // Admins always see the whole debate (with per-turn finding chrome
+  // and approve/rerun controls inside DebateStream).
+  const hideDebateBody = sessionLevelHold && !isAdmin;
+  // Whether there's still operator work to do on this session.
+  const stillUnresolved = hasUnresolvedCriticalFindings(
+    session.moderation_snapshot,
+    session.turn_decisions,
+  );
+
   return (
     <>
       <IntroBlock />
@@ -184,17 +238,19 @@ function renderContent(
           onClose={() => setSelectedStage(null)}
         />
       )}
-      {isHeldForModeration && renderHeldForModerationBanner(session)}
-      {/* CRITICAL: never render the debate transcript when held for
-          moderation. The screening pipeline raised a critical finding
-          OR errored — either way we cannot publish content we have
-          not screened cleanly. The held banner above explains what
-          happened. The debate body is intentionally hidden until
-          an operator clears the session.
-          (Per the dAIly's rule: skipping a day is always acceptable.
-          A skipped day is fine. A bad day is not.) */}
-      {!isHeldForModeration && hasDebateData && renderDebate(session, debateLive)}
-      {!isHeldForModeration && !hasDebateData && (
+      {isHeldForModeration && stillUnresolved && renderHeldForModerationBanner(session, isAdmin)}
+      {/* Debate body. Hidden for non-admins when the hold is
+          session-level (errored check or session-level finding).
+          Otherwise rendered with per-turn gating handled inside
+          DebateStream — flagged turns blank for the public, show as
+          normal for admins (with approve/rerun controls). */}
+      {hasDebateData && !hideDebateBody && renderDebate(
+        session,
+        debateLive,
+        turnFlags,
+        isAdmin,
+      )}
+      {!hasDebateData && !isHeldForModeration && (
         <div className={styles.prepStatus} style={{ marginTop: 64 }}>
           <span className={styles.prepStatusDot} />
           <span>
@@ -212,11 +268,14 @@ function renderContent(
 // publication. Only shown to whoever is looking at the page during
 // the held state — which is the operator during the pilot, and in
 // future may be gated to admins only.
-function renderHeldForModerationBanner(session: SessionRowForJourney) {
+function renderHeldForModerationBanner(session: SessionRowForJourney, isAdmin: boolean) {
   const mod = session.moderation_snapshot;
   const reason = mod?.decisionReason || session.error || 'Critical finding raised by the moderation pipeline.';
   const critical = mod?.criticalCount ?? 0;
   const minor = mod?.minorCount ?? 0;
+  // Admin sees a slightly different framing — they're being asked to act,
+  // not just informed that something happened.
+  void isAdmin;
 
   // Collect the critical findings across all checks for display
   const criticalFindings = (mod?.checks || [])
@@ -265,7 +324,12 @@ function renderHeldForModerationBanner(session: SessionRowForJourney) {
   );
 }
 
-function renderDebate(session: SessionRowForJourney, live: boolean) {
+function renderDebate(
+  session: SessionRowForJourney,
+  live: boolean,
+  turnFlags: ReturnType<typeof buildTurnFlags>,
+  isAdmin: boolean,
+) {
   const castSnapshot = (session as SessionRowForJourney & SessionRowExtra).cast_snapshot;
   const participants = castSnapshot?.participants || [];
 
@@ -312,6 +376,9 @@ function renderDebate(session: SessionRowForJourney, live: boolean) {
       live={live}
       debateFormat={debateFormat}
       unmoderatedReason={unmoderatedReason}
+      turnFlags={turnFlags}
+      isAdmin={isAdmin}
+      sessionId={session.id}
     />
   );
 }

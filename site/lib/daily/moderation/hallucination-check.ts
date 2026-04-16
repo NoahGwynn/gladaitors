@@ -178,13 +178,16 @@ Respond with JSON only. Your job is to flag real hallucinations, not to find som
   "findings": [
     {
       "severity": "critical" | "minor",
-      "location": "<turn reference like 'T04' or a short quoted snippet>",
+      "turnIndex": <integer — copy the integer straight from the transcript label. The transcript labels turns "T00", "T01", "T02", etc. For a finding about T04, set turnIndex: 4. Null only if the issue genuinely spans many turns.>,
+      "location": "<turn reference like 'T04' or a short quoted snippet for human display>",
       "issue": "<one sentence: what specific factual claim is not in the sources>",
       "rationale": "<what a reader would expect to find in the source material if this claim were true, and what's actually there>",
       "suggestion": "<optional: if the claim is salvageable (e.g. the source has similar data the panelist misremembered), suggest how to rephrase>"
     }
   ]
-}`;
+}
+
+CRITICAL: every finding MUST include turnIndex (a number, or null if it genuinely spans many turns). The operator review tooling uses turnIndex to bind the finding to the specific message. Don't skip it.`;
 
   const transcript = renderDebateTranscript(input.debateSnapshot, input.cast);
   const sourceMaterial = renderSourceMaterial(input.research, input.deepResearch);
