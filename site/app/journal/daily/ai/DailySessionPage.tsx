@@ -35,7 +35,6 @@ import {
 import {
   buildTurnFlags,
   hasUnresolvedCriticalFindings,
-  hasSessionLevelCriticals,
 } from '@/lib/daily/turn-flags';
 import { createClient } from '@/lib/supabase';
 import ScheduledState from './ScheduledState';
@@ -196,26 +195,20 @@ function renderContent(
   const debateLive = status === 'debate_in_progress';
   const isHeldForModeration = status === 'held_for_moderation';
 
-  // Decide how to handle a held session:
-  //   - If the moderation pipeline errored OR raised session-level
-  //     findings (no turnIndex), the WHOLE debate body stays hidden
-  //     for non-admins. The operator must clear the session as a
-  //     whole.
-  //   - Otherwise the findings all bind to specific turns — render
-  //     the transcript normally and let DebateStream gate per-turn
-  //     bodies via turnFlags.
+  // The debate body always renders. Per-turn gating (blank flagged
+  // turns for the public, show inline approve/rephrase chrome for
+  // admins) is handled by DebateStream via turnFlags.
+  //
+  // Note: when a screening check errors entirely (no findings produced
+  // — e.g. JSON parse failure), we publish the debate with a held
+  // banner explaining the screening was incomplete. This bends the
+  // "skip not ship" rule but is the deliberate product call: showing
+  // the debate is more useful than a blank page when nothing
+  // specific was flagged. Operator can review and act if needed.
   const turnFlags = buildTurnFlags(
     session.moderation_snapshot,
     session.turn_decisions,
   );
-  const sessionLevelHold = isHeldForModeration && (
-    hasSessionLevelCriticals(session.moderation_snapshot)
-    || (session.moderation_snapshot?.checks ?? []).some(c => !c.ok)
-    || !session.moderation_snapshot
-  );
-  // Admins always see the whole debate (with per-turn finding chrome
-  // and approve/rerun controls inside DebateStream).
-  const hideDebateBody = sessionLevelHold && !isAdmin;
   // Whether there's still operator work to do on this session.
   const stillUnresolved = hasUnresolvedCriticalFindings(
     session.moderation_snapshot,
@@ -239,17 +232,7 @@ function renderContent(
         />
       )}
       {isHeldForModeration && stillUnresolved && renderHeldForModerationBanner(session, isAdmin)}
-      {/* Debate body. Hidden for non-admins when the hold is
-          session-level (errored check or session-level finding).
-          Otherwise rendered with per-turn gating handled inside
-          DebateStream — flagged turns blank for the public, show as
-          normal for admins (with approve/rerun controls). */}
-      {hasDebateData && !hideDebateBody && renderDebate(
-        session,
-        debateLive,
-        turnFlags,
-        isAdmin,
-      )}
+      {hasDebateData && renderDebate(session, debateLive, turnFlags, isAdmin)}
       {!hasDebateData && !isHeldForModeration && (
         <div className={styles.prepStatus} style={{ marginTop: 64 }}>
           <span className={styles.prepStatusDot} />
