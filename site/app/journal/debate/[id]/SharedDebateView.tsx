@@ -80,9 +80,9 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
           they sit at the page-content edges, not floating above the
           centered debate body. */}
       <div className={styles.sharedTopNav}>
-        <Link href="/explore" className={styles.sharedBackLink}>
+        <Link href="/journal/debates" className={styles.sharedBackLink}>
           <ChevronLeft size={16} />
-          <span>Explore</span>
+          <span>Browse debates</span>
         </Link>
         {shareUrl && (
           <ShareMenu
@@ -232,7 +232,7 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
         <Link href="/journal/debate" className={styles.submitButton} style={{ textDecoration: 'none', textAlign: 'center' }}>
           Create Your Own Debate
         </Link>
-        <Link href="/explore" className={styles.sharedBrowseMoreLink}>
+        <Link href="/journal/debates" className={styles.sharedBrowseMoreLink}>
           or browse more debates →
         </Link>
       </div>

@@ -127,9 +127,6 @@ export default function Nav() {
           <Link href="/journal" className={linkClass('/journal', styles.link)}>
             Journal
           </Link>
-          <Link href="/explore" className={linkClass('/explore', styles.link)}>
-            Explore
-          </Link>
 
           {user ? (
             <>
@@ -199,9 +196,6 @@ export default function Nav() {
             </Link>
             <Link href="/journal" className={linkClass('/journal', styles.mobileLink)} onClick={closeMobileMenu}>
               Journal
-            </Link>
-            <Link href="/explore" className={linkClass('/explore', styles.mobileLink)} onClick={closeMobileMenu}>
-              Explore
             </Link>
             {config.seriesEnabled && (
               <Link href="/series" className={styles.mobileLink} onClick={closeMobileMenu}>

@@ -18,10 +18,10 @@ interface ShareModalProps {
   topic: string;
   modelNames: string[];
   onClose: () => void;
-  /** Whether the debate is currently listed in the public /explore feed.
-   *  If undefined, the public-listing toggle is hidden entirely (e.g.
-   *  anonymous viewers can't change visibility, all-refused debates
-   *  shouldn't be promoted). */
+  /** Whether the debate is currently listed in the public debates feed
+   *  (/journal/debates). If undefined, the public-listing toggle is
+   *  hidden entirely (e.g. anonymous viewers can't change visibility,
+   *  all-refused debates shouldn't be promoted). */
   isPublic?: boolean;
   /** Called when the user toggles the public listing. */
   onTogglePublic?: (next: boolean) => void;
@@ -95,12 +95,12 @@ export default function ShareModal({
           <div className={`${styles.publicRow} ${!isPublic ? styles.publicRowOff : ''}`}>
             <div className={styles.publicText}>
               <span className={styles.publicLabel}>
-                {isPublic ? 'Listed on /explore' : 'Also publish to /explore'}
+                {isPublic ? 'Listed in the public feed' : 'Also publish to the public feed'}
               </span>
               <span className={styles.publicDescription}>
                 {isPublic
-                  ? 'Anyone browsing the explore feed can find this debate.'
-                  : 'Let anyone browsing /explore discover it, not just people with the link.'}
+                  ? 'Anyone browsing the public debates feed can find this one.'
+                  : 'Let anyone browsing public debates discover it, not just people with the link.'}
               </span>
             </div>
             <button

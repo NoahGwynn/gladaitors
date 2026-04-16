@@ -35,7 +35,7 @@ export default function NotFound() {
           Home
         </Link>
         <Link
-          href="/explore"
+          href="/journal/debates"
           style={{
             fontSize: "14px",
             fontWeight: 600,
@@ -46,7 +46,7 @@ export default function NotFound() {
             textDecoration: "none",
           }}
         >
-          Explore Debates
+          Browse Debates
         </Link>
         <Link
           href="/journal/debate"

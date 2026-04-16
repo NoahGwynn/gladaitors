@@ -267,7 +267,7 @@ export default function Home() {
         <Link href="/journal/debate" className={styles.ctaPrimary}>
           Start a Free Debate
         </Link>
-        <Link href="/explore" className={styles.ctaSecondary}>
+        <Link href="/journal/debates" className={styles.ctaSecondary}>
           or browse public debates →
         </Link>
       </section>

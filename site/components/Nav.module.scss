@@ -9,9 +9,12 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 $space-lg;
-  background: rgba($bg-void, 0.9);
+  // Nav stays on the dark palette regardless of which page sits
+  // beneath it (Arena dark / Journal light). Using a literal so it
+  // doesn't pick up the .theme-light override.
+  background: rgba(10, 10, 15, 0.9);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid $border;
+  border-bottom: 1px solid #2a2a3a;
 }
 
 .logo {

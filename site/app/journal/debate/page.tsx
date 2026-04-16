@@ -1174,7 +1174,7 @@ function DebateArenaContent() {
         <p className={styles.privacyNote}>
           {isLoggedIn ? (
             <>
-              Your debates are <strong>private by default</strong> — only you can see them, even with the URL. After it finishes you can choose to publish to /explore.
+              Your debates are <strong>private by default</strong> — only you can see them, even with the URL. After it finishes you can choose to publish to the public feed.
             </>
           ) : (
             <>
@@ -1337,7 +1337,7 @@ function DebateArenaContent() {
                 {activeDebate.isPublic ? (
                   <>
                     <span className={styles.privacyBadgeDot} data-state="public" />
-                    Public · listed on /explore
+                    Public · listed on the public feed
                   </>
                 ) : (
                   <>
@@ -1583,20 +1583,20 @@ function DebateArenaContent() {
                     <div className={styles.publicToggleText}>
                       <span className={styles.publicToggleLabel}>
                         {activeDebate.isPublic
-                          ? 'Public — listed on /explore'
+                          ? 'Public — listed in the public feed'
                           : 'Private — only you can see this'}
                       </span>
                       <span className={styles.publicToggleDescription}>
                         {activeDebate.isPublic
-                          ? 'Anyone browsing the explore feed can find it. Flip the switch off to unlist.'
-                          : 'Debates are private by default. Flip the switch on to publish to /explore.'}
+                          ? 'Anyone browsing the public debates feed can find it. Flip the switch off to unlist.'
+                          : 'Debates are private by default. Flip the switch on to publish to the public feed.'}
                       </span>
                     </div>
                     <button
                       type="button"
                       className={`${styles.switch} ${activeDebate.isPublic ? styles.switchOn : ''}`}
                       onClick={() => toggleDebateVisibility(!activeDebate.isPublic)}
-                      aria-label={activeDebate.isPublic ? 'Unlist from /explore' : 'Publish to /explore'}
+                      aria-label={activeDebate.isPublic ? 'Unlist from the public feed' : 'Publish to the public feed'}
                     >
                       <span className={styles.switchKnob} />
                     </button>

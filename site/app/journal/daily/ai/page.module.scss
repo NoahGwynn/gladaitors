@@ -654,7 +654,7 @@
   padding: $space-md;
   background: $bg-surface;
   border-radius: $radius-sm;
-  border: 1px solid rgba($border, 0.5);
+  border: 1px solid var(--border-translucent);
 }
 
 // ============================================================================
@@ -855,7 +855,7 @@
   justify-content: space-between;
   padding: $space-xs 0;
   font-size: $size-sm;
-  border-bottom: 1px solid rgba($border, 0.5);
+  border-bottom: 1px solid var(--border-translucent);
 
   &:last-child {
     border-bottom: none;
@@ -1172,7 +1172,7 @@
 .heldBannerFindings {
   margin: $space-md 0;
   padding: $space-md $space-lg;
-  background: rgba($bg-elevated, 0.6);
+  background: var(--bg-elevated-translucent);
   border: 1px solid $border;
   border-radius: $radius-sm;
 
@@ -1195,7 +1195,7 @@
 
   li {
     padding: $space-sm $space-md;
-    background: rgba($bg-card, 0.4);
+    background: var(--bg-card-translucent);
     border-left: 2px solid $ui-accent;
     border-radius: $radius-sm;
   }

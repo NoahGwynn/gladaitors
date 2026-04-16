@@ -4,24 +4,30 @@
 // Same brand colours as the producer tool, adapted for a public-facing site.
 // ============================================================================
 
-// Background palette — dark cinematic
-$bg-void: #0a0a0f;
-$bg-surface: #12121a;
-$bg-elevated: #1a1a26;
-$bg-card: #16161f;
-$border: #2a2a3a;
+// Background + text + border tokens are wired through CSS custom
+// properties so a `.theme-light` wrapper (Journal Lab) can flip the
+// whole palette in one place. The default (dark) values for these
+// vars live in styles/globals.scss alongside the .theme-light
+// override block. Anywhere you used to call `rgba($bg-card, 0.5)` use
+// the matching `var(--bg-X-translucent)` token instead — Sass can't
+// mix alpha into a `var()` reference.
+$bg-void: var(--bg-void);
+$bg-surface: var(--bg-surface);
+$bg-elevated: var(--bg-elevated);
+$bg-card: var(--bg-card);
+$border: var(--border);
 
-// Model identity colours
-// Model identity colours — must match FAMILY_COLOURS in lib/models.ts
+// Model identity colours — must match FAMILY_COLOURS in lib/models.ts.
+// These don't flip per theme.
 $model-claude: #d97757; // Anthropic orange
 $model-gpt: #10a37f; // ChatGPT teal
 $model-gemini: #4285f4; // Google blue
 $model-grok: #f59e0b;
 
-// Text
-$text-primary: #f0f0f5;
-$text-secondary: #b8b8d0; // was #9A9AB8 — bumped for stronger contrast
-$text-muted: #8e8eae; // was #6A6A8A — bumped from failing AA to passing
+// Text — wired through theme tokens.
+$text-primary: var(--text-primary);
+$text-secondary: var(--text-secondary);
+$text-muted: var(--text-muted);
 
 // UI
 $ui-success: #22c55e;
@@ -33,6 +39,16 @@ $ui-accent: #e5253f; // brand red — middle ground: brighter than the original 
 // Typography
 $font-ui: "Inter", sans-serif;
 $font-mono: "JetBrains Mono", monospace;
+// Editorial serif used by the Journal Lab tone. Headings only — body
+// text and chrome stay on $font-ui for cohesion with the rest of the
+// system. Loaded via next/font in app/layout.tsx.
+$font-serif: var(--font-serif), "Lora", Georgia, serif;
+
+// Journal warm tone — the cream/parchment colour used as a hue
+// reference. The full Journal Lab now uses the `.theme-light` palette
+// in globals.scss; this constant is kept for one-off uses where a
+// component needs an explicit cream-tone literal.
+$journal-warm: #f4e8d0;
 
 // Sizes
 $size-xs: 11px;

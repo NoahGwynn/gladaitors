@@ -1,11 +1,15 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Lora } from "next/font/google";
 import "@/styles/globals.scss";
 import Nav from "@/components/Nav";
 import { DebateOrchestratorProvider } from "@/lib/orchestrator/DebateOrchestratorProvider";
 
 const inter = Inter({ variable: "--font-ui", subsets: ["latin"] });
 const mono = JetBrains_Mono({ variable: "--font-mono", subsets: ["latin"] });
+// Editorial serif used by the Journal Lab tone (headings only — body
+// stays sans-serif via $font-ui). Loaded site-wide so any Journal
+// subpage can pick it up without re-importing.
+const serif = Lora({ variable: "--font-serif", subsets: ["latin"], weight: ["500", "600", "700"] });
 
 export const metadata: Metadata = {
   title: {
@@ -46,7 +50,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${mono.variable}`}>
+    <html lang="en" className={`${inter.variable} ${mono.variable} ${serif.variable}`}>
       <body>
         <DebateOrchestratorProvider>
           <Nav />

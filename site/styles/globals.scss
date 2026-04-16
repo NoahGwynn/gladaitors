@@ -1,16 +1,68 @@
 @use 'variables' as *;
 
+// ============================================================================
+// Theme tokens — CSS custom properties so a wrapper class can swap them.
+// ============================================================================
+// :root holds the default (dark) values used everywhere on the site.
+// .theme-light overrides the same tokens to flip a contained scope to
+// the Journal Lab editorial palette. The Sass variables in
+// _variables.scss point at these custom properties, so any component
+// reading $bg-card etc. picks up the active theme automatically.
+//
+// Where a component used to reach for `rgba($bg-X, 0.5)` style Sass
+// color manipulation, we declare a separate translucent token here and
+// override it per theme — Sass can't mix alpha into a `var(--X)`.
+// ============================================================================
+
 :root {
-  --bg-void: #{$bg-void};
-  --bg-surface: #{$bg-surface};
-  --bg-elevated: #{$bg-elevated};
-  --border: #{$border};
-  --text-primary: #{$text-primary};
-  --text-secondary: #{$text-secondary};
+  // Surfaces (dark default)
+  --bg-void: #0a0a0f;
+  --bg-page: #0a0a0f;       // page background; same as bg-void in dark
+  --bg-surface: #12121a;
+  --bg-elevated: #1a1a26;
+  --bg-card: #16161f;
+
+  // Translucent variants used in places where Sass rgba($var, alpha)
+  // would have been called — those calls don't survive a `var()` rewrite.
+  --bg-card-translucent: rgba(22, 22, 31, 0.4);
+  --bg-elevated-translucent: rgba(26, 26, 38, 0.6);
+  --border-translucent: rgba(42, 42, 58, 0.5);
+
+  // Borders
+  --border: #2a2a3a;
+
+  // Text
+  --text-primary: #f0f0f5;
+  --text-secondary: #b8b8d0;
+  --text-muted: #8e8eae;
+
+  // Brand & semantic — same in both themes; declared here so anything
+  // using the var() reference works consistently.
   --ui-accent: #{$ui-accent};
   --claude: #{$model-claude};
   --gpt: #{$model-gpt};
   --gemini: #{$model-gemini};
+}
+
+// Journal Lab — light editorial theme. Applied via the
+// app/journal/layout.tsx wrapper so it scopes to /journal/* only.
+// Nav stays on the dark defaults because it lives outside this wrapper.
+.theme-light {
+  --bg-void: #faf7f0;
+  --bg-page: #faf7f0;       // warm cream — softer than pure white at night
+  --bg-surface: #ffffff;    // primary cards / modals
+  --bg-elevated: #f5f1e8;   // hover, inputs, subtle elevation
+  --bg-card: #ffffff;
+
+  --bg-card-translucent: rgba(255, 255, 255, 0.6);
+  --bg-elevated-translucent: rgba(245, 241, 232, 0.7);
+  --border-translucent: rgba(232, 224, 208, 0.6);
+
+  --border: #e8e0d0;        // warm cream border
+
+  --text-primary: #1a1a1a;
+  --text-secondary: #4a4a4a;
+  --text-muted: #7a7a7a;
 }
 
 *,
@@ -22,8 +74,10 @@
 }
 
 html {
-  background: $bg-void;
-  color: $text-primary;
+  // Use the CSS variable directly so a .theme-light wrapper inside the
+  // tree can reach the body background via var() inheritance.
+  background: var(--bg-page);
+  color: var(--text-primary);
   font-family: $font-ui;
   font-size: $size-base;
   line-height: 1.6;
@@ -37,12 +91,22 @@ body {
   // when scrolling past viewport height because the Nav's parent block
   // was only viewport-tall and sticky is bounded by its parent.
   min-height: 100vh;
-  background: $bg-void;
-  color: $text-primary;
+  background: var(--bg-page);
+  color: var(--text-primary);
   font-family: $font-ui;
   font-size: $size-base;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+}
+
+// Theme-light wrapper paints its own page background so navigating
+// from a dark page (e.g. Arena) into Journal flips the surface
+// underneath the existing dark Nav. The wrapper is min-height: 100vh
+// so it covers the body even on short pages.
+.theme-light {
+  background: var(--bg-page);
+  color: var(--text-primary);
+  min-height: calc(100vh - var(--nav-height, 0px));
 }
 
 a {
@@ -61,10 +125,10 @@ button {
 }
 
 ::-webkit-scrollbar-track {
-  background: $bg-void;
+  background: var(--bg-page);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: $border;
+  background: var(--border);
   border-radius: 3px;
 }

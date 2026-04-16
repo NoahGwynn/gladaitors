@@ -1,5 +1,12 @@
 // ============================================================================
-// /explore — public feed of debates that creators have opted to list
+// /journal/debates — public feed of debates that creators have opted to list
+// ============================================================================
+// Lives under /journal so it inherits the light editorial theme via the
+// Journal layout's `.theme-light` wrapper. Was previously /explore in
+// the top-level nav; moved here so the navigation reflects that browsing
+// public debates is a Journal-Lab activity, not a peer of Arena/Journal.
+// /explore still resolves via a redirect in next.config.ts so legacy
+// shared links don't break.
 // ============================================================================
 
 'use client';
@@ -56,7 +63,7 @@ function formatRelativeTime(iso: string): string {
 
 const PAGE_SIZE = 30;
 
-export default function ExplorePage() {
+export default function BrowseDebatesPage() {
   const [sort, setSort] = useState<SortMode>('recent');
   const [debates, setDebates] = useState<FeedDebate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,7 +117,7 @@ export default function ExplorePage() {
       <header className={styles.header}>
         <h1 className={styles.title}>Watch the models argue.</h1>
         <p className={styles.subtitle}>
-          Claude, GPT-4o, and Gemini take sides on your topics. Vote on who made the better case.
+          Claude, GPT-4o, and Gemini take sides on real questions. Vote on who made the better case.
         </p>
         <Link href="/journal/debate" className={styles.headerCta}>
           Start your own debate →

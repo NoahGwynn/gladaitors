@@ -1356,7 +1356,7 @@ details[open] > .optionalSummary > .detailsChevron {
   color: $text-muted;
   margin-bottom: $space-sm;
   padding: 4px 10px;
-  background: rgba($bg-elevated, 0.5);
+  background: var(--bg-elevated-translucent);
   border: 1px solid $border;
   border-radius: $radius-sm;
   width: fit-content;

@@ -1,12 +1,68 @@
 @use '../../styles/variables' as *;
 
+// ============================================================================
+// Lab hub pages — shared layout for /arena and /journal
+// ============================================================================
+// Both labs use this SCSS module. Arena renders with the default dark
+// surface (the system-wide treatment). Journal opts into a lighter
+// editorial tone via the `.labJournal` modifier on the outer wrapper —
+// just enough warm tint and breathing room to feel paper-like without
+// breaking the system. Subpages can apply the same modifier to inherit
+// the tone once we propagate it (Layer 3 of the lab redesign).
+// ============================================================================
+
 .page {
   display: flex;
   flex-direction: column;
   gap: $space-2xl;
-  max-width: 960px;
+  max-width: 1040px;
   margin: 0 auto;
   padding: $space-2xl $space-lg $space-3xl;
+}
+
+// ============================================================================
+// Journal Lab hub — typography + card treatment modifier
+// ============================================================================
+// Color theming is handled at a higher level by the .theme-light
+// wrapper (in app/journal/layout.tsx). This class layers two
+// orthogonal styling choices specific to the Journal Lab hub on top:
+//
+//   - Serif headlines (Lora) — editorial typography signal
+//   - Flat editorial cards with brand-red left rule (pull-quote feel)
+//
+// The Arena hub reuses this module but does NOT apply .labJournal, so
+// Arena keeps the sans-serif headlines and the gradient game cards.
+// ============================================================================
+.labJournal {
+  gap: $space-3xl;
+
+  // Serif headlines for the lab title and format names. Body text
+  // and chrome stay on $font-ui for cohesion with the rest of the
+  // system.
+  .title,
+  .formatName {
+    font-family: $font-serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .title {
+    font-weight: 700;
+  }
+
+  // Flat editorial cards with a brand-red left rule (pull-quote feel)
+  // instead of the Arena game-card gradient treatment.
+  .formatCard {
+    background: $bg-card;
+    border-left: 3px solid rgba(229, 37, 63, 0.55);
+    padding-left: calc(#{$space-lg} - 2px); // compensate for thicker left border
+
+    &:hover {
+      border-left-color: $ui-accent;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      transform: translateY(-2px);
+    }
+  }
 }
 
 .heading {
@@ -40,21 +96,39 @@
   margin: 0 auto;
 }
 
-.intro {
-  padding: $space-xl $space-lg;
-  background: $bg-card;
-  border: 1px solid $border;
-  border-radius: $radius-lg;
-  color: $text-secondary;
-  line-height: 1.7;
-  font-size: $size-md;
+// --- Primary CTA (one per lab — flagship action) ---
 
-  strong {
-    color: $text-primary;
+.primaryCtaRow {
+  display: flex;
+  justify-content: center;
+}
+
+.primaryCta {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: $space-md $space-xl;
+  background: $ui-accent;
+  color: white;
+  border: none;
+  border-radius: $radius-md;
+  font-size: $size-md;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: opacity 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 4px 14px rgba($ui-accent, 0.3);
+
+  &:hover {
+    opacity: 0.95;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba($ui-accent, 0.4);
   }
 }
 
-.formatsLabel {
+// --- Section labels ---
+
+.sectionLabel {
   font-family: $font-mono;
   font-size: $size-xs;
   text-transform: uppercase;
@@ -63,6 +137,119 @@
   margin: 0 0 $space-md;
   text-align: center;
 }
+
+// --- Recent activity (Journal hub only) ---
+//
+// Two-block strip below the primary CTA. Left block: today's dAIly per
+// active category. Right block: most recent public debates. Renders
+// gracefully if either slice is empty (block hides itself).
+
+.recentActivity {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: $space-xl;
+
+  @media (max-width: 760px) {
+    grid-template-columns: 1fr;
+    gap: $space-lg;
+  }
+}
+
+.recentBlock {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.recentBlockHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: $space-sm;
+
+  .sectionLabel {
+    margin: 0;
+    text-align: left;
+  }
+}
+
+.recentSeeMore {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  font-family: $font-mono;
+  font-size: $size-xs;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $ui-accent;
+  text-decoration: none;
+  font-weight: 700;
+
+  &:hover { text-decoration: none; opacity: 0.8; }
+}
+
+.recentDailyRow,
+.recentDebatesRow {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.recentDailyCard,
+.recentDebateCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: $space-sm $space-md;
+  background: $bg-surface;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 120ms ease, transform 120ms ease;
+
+  &, &:hover, &:focus, &:active { text-decoration: none; }
+  & * { text-decoration: inherit; }
+
+  &:hover {
+    border-color: $ui-accent;
+    transform: translateY(-1px);
+  }
+}
+
+.recentDailyCategory,
+.recentDebateModels {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: $ui-accent;
+  font-weight: 700;
+}
+
+.recentDailyTopic,
+.recentDebateTopic {
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-primary;
+  line-height: 1.4;
+  // Clamp to 2 lines so cards stay rectangular even with long topics.
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.recentDailyDate,
+.recentDebateDate {
+  font-family: $font-mono;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: $text-muted;
+  text-transform: uppercase;
+}
+
+// --- Live formats grid ---
 
 .formats {
   display: grid;
@@ -73,31 +260,68 @@
 .formatCard {
   display: flex;
   flex-direction: column;
-  gap: $space-sm;
+  gap: $space-md;
   padding: $space-xl $space-lg;
   background: linear-gradient(180deg, $bg-card 0%, $bg-surface 100%);
   border: 1px solid $border;
   border-radius: $radius-lg;
   text-decoration: none;
   color: inherit;
-  transition: border-color 120ms ease, transform 120ms ease;
+  transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+
+  // Belt-and-braces underline kill — some browsers re-apply the
+  // underline on :hover for <a> elements regardless of the base
+  // text-decoration. Explicit none on hover + inherit on descendants
+  // means the card never grows a hover underline anywhere inside.
+  &, &:hover, &:focus, &:active {
+    text-decoration: none;
+  }
+
+  & * {
+    text-decoration: inherit;
+  }
 
   &:hover {
     border-color: $ui-accent;
-    transform: translateY(-2px);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
   }
 }
 
-.formatCardInactive {
-  @extend .formatCard;
-  opacity: 0.55;
-  cursor: default;
-  pointer-events: none;
+// Image / icon slot at the top of each format card. Image is the
+// future-state — once the user has artwork it slots in here. Until
+// then, a Lucide icon in a brand-tinted circle stands in.
+.formatVisual {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba($ui-accent, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: $ui-accent;
+  flex-shrink: 0;
+  overflow: hidden;
 
-  &:hover {
-    border-color: $border;
-    transform: none;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
   }
+}
+
+.formatHeader {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+}
+
+.formatHeaderText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .formatName {
@@ -136,4 +360,75 @@
   color: $text-muted;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+// --- Roadmap section (inactive / coming-later formats) ---
+//
+// Lighter visual treatment so they don't compete with the live formats
+// above. A user scanning the page should see the live stuff first and
+// the roadmap last — "look what we have" beats "look what we plan".
+
+.roadmapSection {
+  margin-top: $space-xl;
+  padding-top: $space-xl;
+  border-top: 1px solid $border;
+}
+
+.roadmapGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: $space-md;
+}
+
+.roadmapCard {
+  display: flex;
+  align-items: flex-start;
+  gap: $space-sm;
+  padding: $space-md;
+  background: $bg-surface;
+  border: 1px dashed $border;
+  border-radius: $radius-md;
+  opacity: 0.75;
+}
+
+.roadmapVisual {
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-sm;
+  background: $bg-elevated;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: $text-muted;
+  flex-shrink: 0;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: $radius-sm;
+  }
+}
+
+.roadmapBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.roadmapName {
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-secondary;
+  margin: 0;
+}
+
+.roadmapStatus {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: $text-muted;
 }
