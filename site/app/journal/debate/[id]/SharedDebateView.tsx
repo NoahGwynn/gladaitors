@@ -10,6 +10,7 @@ import { ChevronLeft, EyeOff } from 'lucide-react';
 import ShareMenu from '@/components/ShareMenu';
 import VotingPanel, { type VoteOption } from '@/components/VotingPanel';
 import { findModel, getModelColour, getModelName } from '@/lib/models';
+import { getTemplateBySlug } from '@/lib/debate-templates';
 import type { Debate } from '@/lib/types';
 import styles from '../page.module.scss';
 
@@ -134,6 +135,19 @@ export default function SharedDebateView({ debate }: { debate: Debate | null }) 
           </div>
         )}
       </div>
+
+      {/* Per-template disclaimer (e.g. hiring). Shown above the thread
+          on the shared view too so anyone reading via a permalink sees
+          the same framing the original creator did. */}
+      {(() => {
+        const template = getTemplateBySlug(debate.template_slug ?? null);
+        if (!template?.disclaimer) return null;
+        return (
+          <div className={styles.templateDisclaimer} role="note">
+            <strong>Heads up:</strong> {template.disclaimer}
+          </div>
+        );
+      })()}
 
       {/* Debate thread */}
       <div className={styles.debateThread}>

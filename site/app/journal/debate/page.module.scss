@@ -14,10 +14,15 @@
   }
 }
 
-// --- Left panel: form ---
+// --- Left sidebar: New debate button + history list ---
+//
+// The sidebar is narrow (260px) and only holds navigation. The debate
+// configuration form lives in a centred modal opened by the "New debate"
+// button — this gives the form much more width for template-specific
+// layouts (product URLs, candidate lists, etc).
 
-.formPanel {
-  width: 360px;
+.sidebar {
+  width: 260px;
   flex-shrink: 0;
   border-right: 1px solid $border;
   background: $bg-surface;
@@ -25,22 +30,293 @@
   padding: $space-lg;
   display: flex;
   flex-direction: column;
-  gap: $space-md;
+  gap: $space-lg;
 
   @media (max-width: 900px) {
     width: 100%;
     border-right: none;
     border-bottom: 1px solid $border;
-    overflow-y: auto;
-    flex-shrink: 1;
   }
 }
 
-// On mobile, hide form when debate is active
-.formPanelHidden {
+// On mobile, hide sidebar when debate is active so the thread takes the
+// full screen. Users return via the mobile "New debate" back button.
+.sidebarHidden {
   @media (max-width: 900px) {
     display: none;
   }
+}
+
+.newDebateCta {
+  width: 100%;
+  padding: $space-md $space-lg;
+  border-radius: $radius-md;
+  border: none;
+  background: $ui-accent;
+  color: white;
+  font-size: $size-sm;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+
+  &:hover { opacity: 0.9; }
+}
+
+// --- Form modal overlay ---
+//
+// Opens on mount (if no active debate) and whenever the user clicks "New
+// debate". Width is generous to fit the future template-specific layouts:
+// product positioning gets URL fields, hiring gets a candidate list, etc.
+
+.formModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: $space-xl $space-lg;
+  overflow-y: auto;
+  z-index: 1000;
+
+  @media (max-width: 900px) {
+    padding: $space-md;
+    align-items: stretch;
+  }
+}
+
+.formModal {
+  position: relative;
+  background: $bg-surface;
+  border: 1px solid $border;
+  border-radius: $radius-lg;
+  width: 100%;
+  max-width: 860px;
+  max-height: calc(100vh - #{$space-xl} * 2);
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+
+  @media (max-width: 900px) {
+    max-height: none;
+  }
+}
+
+.formModalClose {
+  position: absolute;
+  top: $space-md;
+  right: $space-md;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: $radius-sm;
+  color: $text-muted;
+  cursor: pointer;
+  z-index: 2;
+
+  &:hover {
+    color: $text-primary;
+    background: $bg-elevated;
+  }
+}
+
+// --- Form body (inside the modal) ---
+//
+// Renamed from .formPanel — the form no longer lives in a fixed left
+// panel, it lives inside the centred modal. All the field-level classes
+// (.field, .label, .debaterCards, etc.) still apply unchanged.
+
+.formPanel {
+  padding: $space-xl;
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+
+  @media (max-width: 900px) {
+    padding: $space-lg;
+  }
+}
+
+// Legacy class retained so any stale references compile; no behaviour.
+.formPanelHidden {
+  display: none;
+}
+
+// --- Modal heading ---
+.modalHeader {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+  padding-right: $space-2xl; // leave room for the close X
+  margin-bottom: $space-sm;
+  padding-bottom: $space-md;
+  border-bottom: 1px solid $border;
+}
+
+.modalHeaderRow {
+  display: flex;
+  align-items: flex-start;
+  gap: $space-md;
+}
+
+.modalHeaderText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modalTitle {
+  font-size: $size-xl;
+  font-weight: 800;
+  color: $text-primary;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.modalSubtitle {
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.changeTemplateLink {
+  flex-shrink: 0;
+  padding: $space-xs $space-sm;
+  background: transparent;
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+  font-size: $size-xs;
+  font-weight: 600;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+
+  &:hover {
+    color: $ui-accent;
+    border-color: rgba($ui-accent, 0.5);
+  }
+}
+
+// --- Per-template disclaimer (hiring, etc) ---
+//
+// Renders between the debate header and the first round on the live
+// debate view. Same class is reused on the shared /[id] view. Distinct
+// visual treatment from regular notes — a soft warning tone that says
+// "be thoughtful about this output" without screaming.
+.templateDisclaimer {
+  margin: $space-md 0;
+  padding: $space-md $space-lg;
+  background: rgba($ui-warning, 0.08);
+  border: 1px solid rgba($ui-warning, 0.3);
+  border-left: 3px solid $ui-warning;
+  border-radius: $radius-md;
+  font-size: $size-sm;
+  color: $text-secondary;
+  line-height: 1.55;
+
+  strong {
+    color: $text-primary;
+    font-weight: 700;
+  }
+}
+
+// ============================================================================
+// Collapsible debate config — "Customize" panel
+// Sits below the template content. Default-closed: a single summary row
+// shows the current setup and toggles the panel open. Default-open
+// would re-introduce the wall of controls we're trying to escape.
+// ============================================================================
+
+.configSection {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+  background: $bg-elevated;
+  overflow: hidden;
+}
+
+.configSummary {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  padding: $space-sm $space-md;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: $text-primary;
+
+  &:hover { background: rgba($ui-accent, 0.04); }
+  &:focus-visible { outline: 2px solid $ui-accent; outline-offset: -2px; }
+}
+
+.configChevron {
+  flex-shrink: 0;
+  color: $text-muted;
+  transition: transform 150ms ease;
+}
+
+.configChevronOpen {
+  transform: rotate(90deg);
+  color: $ui-accent;
+}
+
+.configSummaryLabel {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+  color: $ui-accent;
+  flex-shrink: 0;
+}
+
+.configSummaryValue {
+  flex: 1;
+  font-size: $size-sm;
+  color: $text-secondary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.configSummarySep {
+  color: $text-muted;
+}
+
+.configSummaryAction {
+  flex-shrink: 0;
+  font-size: $size-xs;
+  font-weight: 600;
+  color: $ui-accent;
+}
+
+.configBody {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+  padding: $space-md;
+  border-top: 1px solid $border;
+  background: $bg-surface;
+}
+
+// Three small selectors share a row when the modal is wide enough,
+// stack on narrow screens.
+.configRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: $space-md;
 }
 
 .formHeading {
@@ -100,31 +376,15 @@
   border-bottom: 1px solid $border;
 }
 
-.templatesHeader {
-  display: flex;
-  flex-direction: column;
-  gap: $space-xs;
-}
-
-.templatesLabel {
-  font-family: $font-mono;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: $ui-accent;
-  font-weight: 700;
-}
-
-.templatesSubhead {
-  font-size: $size-sm;
-  color: $text-secondary;
-  line-height: 1.5;
-}
+// ---------------------------------------------------------------------------
+// Template cards — gateway to the product. Treat them as catalogue items,
+// not checklist rows. Vertical layout, generous padding, prominent icon.
+// ---------------------------------------------------------------------------
 
 .templatesGrid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: $space-sm;
+  gap: $space-md;
 
   @media (max-width: 600px) {
     grid-template-columns: 1fr;
@@ -133,22 +393,25 @@
 
 .templateCard {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
   gap: $space-sm;
-  padding: $space-md;
+  padding: $space-lg;
+  min-height: 140px;
   background: $bg-elevated;
   border: 1px solid $border;
-  border-radius: $radius-md;
+  border-radius: $radius-lg;
   text-align: left;
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
   font-family: inherit;
   color: inherit;
 
   &:hover {
     border-color: $ui-accent;
-    background: rgba($ui-accent, 0.04);
-    transform: translateY(-1px);
+    background: rgba($ui-accent, 0.05);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
   }
 
   &:focus-visible {
@@ -157,86 +420,49 @@
   }
 }
 
+// Icon used inside the modal HEADER (template selected state). Keeps a
+// quieter look so the title takes the lead.
 .templateIcon {
-  font-size: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
-  line-height: 1;
+  color: $ui-accent;
   margin-top: 2px;
+}
+
+// Icon used inside the template GRID cards. Round badge with brand
+// tint so it reads as a feature glyph, not a list marker.
+.templateCardIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba($ui-accent, 0.12);
+  color: $ui-accent;
+  flex-shrink: 0;
 }
 
 .templateBody {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: $space-xs;
   min-width: 0;
 }
 
 .templateName {
-  font-size: $size-sm;
-  font-weight: 600;
+  font-size: $size-md;
+  font-weight: 700;
   color: $text-primary;
+  line-height: 1.25;
 }
 
 .templateTagline {
-  font-size: $size-xs;
-  color: $text-muted;
-  line-height: 1.4;
-}
-
-.templatesSelectedBanner {
-  display: flex;
-  align-items: flex-start;
-  gap: $space-md;
-  padding: $space-md $space-lg;
-  margin-bottom: $space-lg;
-  background: linear-gradient(180deg, rgba($ui-accent, 0.06) 0%, rgba($ui-accent, 0.02) 100%);
-  border: 1px solid rgba($ui-accent, 0.3);
-  border-left: 3px solid $ui-accent;
-  border-radius: $radius-md;
-}
-
-.templatesSelectedContent {
-  display: flex;
-  align-items: flex-start;
-  gap: $space-sm;
-  flex: 1;
-}
-
-.templatesSelectedLabel {
   font-size: $size-sm;
   color: $text-secondary;
-  margin-bottom: 2px;
-
-  strong {
-    color: $text-primary;
-    font-weight: 700;
-  }
-}
-
-.templatesSelectedDescription {
-  font-size: $size-xs;
-  color: $text-muted;
-  line-height: 1.5;
-}
-
-.templatesClear {
-  font-family: $font-mono;
-  font-size: $size-xs;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: $text-muted;
-  background: transparent;
-  border: 1px solid $border;
-  border-radius: $radius-sm;
-  padding: 4px 10px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: color 120ms ease, border-color 120ms ease;
-
-  &:hover {
-    color: $ui-accent;
-    border-color: $ui-accent;
-  }
+  line-height: 1.45;
 }
 
 .field {
@@ -486,6 +712,42 @@ details[open] > .optionalSummary > .detailsChevron {
   align-items: stretch;
 }
 
+// Shown when a template prescribes the debater's position. Muted
+// caption treatment makes it feel like structure, not an input. The
+// "Edit" link next to it lets the user opt into overriding the
+// template for that one slot.
+.positionLocked {
+  display: flex;
+  align-items: flex-start;
+  gap: $space-sm;
+  padding: $space-xs $space-sm;
+  background: rgba($ui-accent, 0.04);
+  border: 1px dashed $border;
+  border-radius: $radius-sm;
+}
+
+.positionLockedText {
+  flex: 1;
+  min-width: 0;
+  font-size: $size-xs;
+  color: $text-secondary;
+  line-height: 1.5;
+}
+
+.positionEditLink {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: $size-xs;
+  font-weight: 600;
+  color: $ui-accent;
+  cursor: pointer;
+
+  &:hover { text-decoration: underline; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
 .autoToggle {
   font-family: $font-ui;
   font-size: $size-xs;
@@ -667,6 +929,16 @@ details[open] > .optionalSummary > .detailsChevron {
   margin-top: $space-sm;
 }
 
+// Stack of meta info (token balance + missing-fields hint) above the
+// submit button. Centered text, small font — supporting info, not the
+// CTA itself.
+.submitMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $space-xs;
+}
+
 .tokenBalance {
   display: flex;
   align-items: center;
@@ -675,6 +947,14 @@ details[open] > .optionalSummary > .detailsChevron {
   font-family: $font-mono;
   font-size: $size-sm;
   color: $text-muted;
+}
+
+// Specific guidance shown when the submit button is disabled.
+// Replaces the dead-end disabled state with a "do this next" nudge.
+.missingHint {
+  font-size: $size-xs;
+  color: $text-muted;
+  font-style: italic;
 }
 
 .tokenCount {
@@ -704,6 +984,17 @@ details[open] > .optionalSummary > .detailsChevron {
     color: $text-secondary;
     font-weight: 600;
   }
+}
+
+// Site-wide "thinking tool, not advice" disclaimer. Sits beneath the
+// privacy note in the modal so the user sees both before submitting.
+.adviceNote {
+  font-size: $size-xs;
+  color: $text-muted;
+  text-align: center;
+  margin: $space-xs 0 0;
+  line-height: 1.5;
+  font-style: italic;
 }
 
 .privacyNoteLink {
@@ -857,6 +1148,19 @@ details[open] > .optionalSummary > .detailsChevron {
   color: $text-secondary;
   line-height: 1.55;
   margin: 0;
+}
+
+.heroStartLink {
+  display: inline;
+  padding: 0;
+  background: none;
+  border: none;
+  color: $ui-accent;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  &:hover { opacity: 0.85; }
 }
 
 // --- Sample debate rendered as "Example" ---

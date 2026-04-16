@@ -30,6 +30,7 @@ import OpenAI from 'openai';
 import { GoogleGenAI } from '@google/genai';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { findModel, type ModelDefinition } from '@/lib/models';
+import { getTemplateBySlug } from '@/lib/debate-templates';
 
 interface DebaterInput {
   modelId: string;
@@ -51,6 +52,12 @@ interface DebateRequest {
   /** 'concise' or 'detailed' (default). Modifies the system prompt's
    *  body-format section so models produce shorter or longer arguments. */
   responseLength?: 'concise' | 'detailed';
+  /** v3 utility pivot: which template the debate was created from.
+   *  When present and known, the template's systemPromptAddendum is
+   *  injected into each debater's system prompt — telling the model
+   *  the *kind* of argument the user is asking for (red-team, hiring,
+   *  etc) on top of the position they're assigned. */
+  templateSlug?: string | null;
 }
 
 interface DebateArgument {
@@ -92,6 +99,7 @@ function buildSystemPrompt(
   revealIdentities: boolean,
   context?: string,
   responseLength: 'concise' | 'detailed' = 'detailed',
+  templateAddendum?: string,
 ): string {
   const opponents = allDebaters
     .map((d, i) => ({ debater: d, name: displayNames[i], index: i }))
@@ -174,6 +182,14 @@ REFUSAL HANDLING
 
 Reference and respond to other debaters' arguments when they exist. Build on what came before.
 Each round should advance the case, not just restate the previous round's points.`;
+
+  if (templateAddendum) {
+    // Per-template guidance about the *kind* of argument the user
+    // wants — distinct from the position itself. Sits above the
+    // user's free-text context so it frames how the model interprets
+    // any rules they added.
+    prompt += `\n\nDEBATE FRAMING: ${templateAddendum}`;
+  }
 
   if (context) {
     prompt += `\n\nADDITIONAL RULES FROM THE USER: ${context}`;
@@ -775,7 +791,11 @@ export async function POST(request: NextRequest) {
   }
 
   const body: DebateRequest = await request.json();
-  const { topic, debaters, rounds, currentRound, context, revealIdentities = true, existingArguments, debateId, responseLength = 'detailed' } = body;
+  const { topic, debaters, rounds, currentRound, context, revealIdentities = true, existingArguments, debateId, responseLength = 'detailed', templateSlug = null } = body;
+  // v3: look up the template once per request so its
+  // systemPromptAddendum can be applied to every debater this round.
+  const template = getTemplateBySlug(templateSlug);
+  const templateAddendum = template?.systemPromptAddendum;
 
   // Validate
   if (!topic || topic.length > 200) {
@@ -1065,6 +1085,7 @@ export async function POST(request: NextRequest) {
           const systemPrompt = buildSystemPrompt(
             displayName, debater.position, topic, rounds,
             di, debaters, displayNames, revealIdentities, context, responseLength,
+            templateAddendum,
           );
           const chatMessages = buildMessages(
             currentRound, rounds, di, allArguments, displayNames, revealIdentities,

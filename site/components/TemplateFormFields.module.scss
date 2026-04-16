@@ -1,0 +1,187 @@
+@use '../styles/variables' as *;
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: $space-lg;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: $space-xs;
+  font-size: $size-sm;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.required {
+  color: $ui-accent;
+  font-weight: 700;
+}
+
+.lockedBadge {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  padding: 2px $space-xs;
+  border-radius: $radius-sm;
+  background: $bg-elevated;
+  color: $text-muted;
+  border: 1px solid $border;
+}
+
+.hint {
+  font-size: $size-xs;
+  color: $text-muted;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.input {
+  width: 100%;
+  padding: $space-sm $space-md;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+  color: $text-primary;
+  font-family: inherit;
+  font-size: $size-sm;
+  &:focus { outline: none; border-color: $ui-accent; }
+  &::placeholder { color: $text-muted; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.textarea {
+  width: 100%;
+  padding: $space-sm $space-md;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+  color: $text-primary;
+  font-family: inherit;
+  font-size: $size-sm;
+  line-height: 1.55;
+  resize: vertical;
+  min-height: 60px;
+  &:focus { outline: none; border-color: $ui-accent; }
+  &::placeholder { color: $text-muted; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.urlList {
+  display: flex;
+  flex-direction: column;
+  gap: $space-xs;
+}
+
+.urlRow {
+  display: flex;
+  align-items: center;
+  gap: $space-xs;
+}
+
+.removeButton {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid $border;
+  border-radius: $radius-sm;
+  color: $text-muted;
+  cursor: pointer;
+  &:hover { color: $ui-danger; border-color: rgba($ui-danger, 0.4); }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+.addButton {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xs;
+  padding: $space-xs $space-md;
+  background: $bg-elevated;
+  border: 1px dashed $border;
+  border-radius: $radius-sm;
+  color: $text-secondary;
+  font-size: $size-xs;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+  &:hover {
+    color: $ui-accent;
+    border-color: rgba($ui-accent, 0.5);
+    border-style: solid;
+  }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.candidateList {
+  display: flex;
+  flex-direction: column;
+  gap: $space-md;
+}
+
+.candidateCard {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+  padding: $space-md;
+  background: $bg-elevated;
+  border: 1px solid $border;
+  border-radius: $radius-md;
+}
+
+.candidateHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.candidateLabel {
+  font-family: $font-mono;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: $ui-accent;
+  font-weight: 700;
+}
+
+.loginNudge {
+  align-self: flex-start;
+  padding: $space-xs $space-md;
+  background: $bg-elevated;
+  border: 1px dashed $border;
+  border-radius: $radius-sm;
+  color: $text-secondary;
+  font-size: $size-xs;
+  cursor: pointer;
+  &:hover {
+    color: $ui-accent;
+    border-color: rgba($ui-accent, 0.5);
+  }
+}
+
+.loginNudgeInline {
+  align-self: flex-start;
+  padding: $space-xs $space-sm;
+  background: transparent;
+  border: none;
+  color: $text-muted;
+  font-size: $size-xs;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  cursor: pointer;
+  &:hover { color: $ui-accent; }
+}

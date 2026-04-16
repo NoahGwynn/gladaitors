@@ -108,6 +108,10 @@ export interface ActiveDebate {
   isComplete: boolean;
   isPublic?: boolean;
   responseLength?: 'concise' | 'detailed';
+  /** v3 utility pivot: which template this debate was created from.
+   *  Used by the per-round /api/debate route to apply the matching
+   *  systemPromptAddendum. Null for free-form/legacy debates. */
+  templateSlug?: string | null;
 }
 
 export interface LiveArgument extends DebateArgument {
@@ -714,6 +718,10 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
           context: config.context || undefined,
           revealIdentities: config.revealIdentities,
           responseLength: config.responseLength,
+          // Phase B: tells the server which template's system-prompt
+          // addendum to apply (e.g. "this is a strategy red-team").
+          // Optional — open/free-form debates send null.
+          templateSlug: config.templateSlug ?? null,
           existingArguments,
           debateId: debateIdRef.current || undefined,
         }),
@@ -934,6 +942,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
         context: config.context,
         isComplete: false,
         responseLength: config.responseLength,
+        templateSlug: config.templateSlug ?? null,
       });
       setLiveArguments([]);
       setError(null);
@@ -1013,6 +1022,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
       context: activeDebate.context || "",
       revealIdentities: true,
       responseLength: activeDebate.responseLength ?? 'detailed',
+      templateSlug: activeDebate.templateSlug ?? null,
       initialArgs: existingArgs,
       startRound: resumeRound,
       isNewDebate: false,
@@ -1074,6 +1084,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
         context: activeDebate.context || "",
         revealIdentities: true,
         responseLength: activeDebate.responseLength ?? 'detailed',
+        templateSlug: activeDebate.templateSlug ?? null,
         initialArgs: existingArgs,
         startRound: firstNewRound,
         isNewDebate: false,
@@ -1106,6 +1117,7 @@ export function DebateOrchestratorProvider({ children }: { children: ReactNode }
         isComplete: debate.is_complete,
         isPublic: debate.is_public ?? false,
         responseLength: (debate.response_length as 'concise' | 'detailed') ?? 'detailed',
+        templateSlug: debate.template_slug ?? null,
       });
       debateIdRef.current = debate.id;
 

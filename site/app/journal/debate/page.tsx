@@ -42,7 +42,16 @@ import VotingPanel, { type VoteOption } from '@/components/VotingPanel';
 import UserTurnInput from '@/components/UserTurnInput';
 import ExtendDebateModal from '@/components/ExtendDebateModal';
 import { STARTER_TOPICS } from '@/lib/starter-topics';
-import { DEBATE_TEMPLATES, getTemplateBySlug, type DebateTemplate } from '@/lib/debate-templates';
+import {
+  DEBATE_TEMPLATES,
+  getTemplateBySlug,
+  makeEmptyTemplateValues,
+  serialiseTemplateValues,
+  templateFieldsFilled,
+  type DebateTemplate,
+  type TemplateFieldValues,
+} from '@/lib/debate-templates';
+import TemplateFormFields from '@/components/TemplateFormFields';
 import DecisionSynthesis from './[id]/DecisionSynthesis';
 import { MODELS, findModel, getModelColour, getModelName, getModelTokenCost } from '@/lib/models';
 import { X, LockKeyhole, ChevronRight, ChevronLeft, Loader2 } from 'lucide-react';
@@ -137,6 +146,16 @@ function DebateArenaContent() {
     getTemplateBySlug(searchParams.get('template')),
   );
 
+  // Per-template form field values (Phase B). Each template carries its
+  // own form schema; this bag holds the answers, keyed by field id. Reset
+  // when the template changes — a fresh template starts from empty
+  // defaults derived from the schema (one URL slot, two candidate cards,
+  // etc).
+  const [templateFieldValues, setTemplateFieldValues] = useState<TemplateFieldValues>(() => {
+    const initial = getTemplateBySlug(searchParams.get('template'));
+    return initial ? makeEmptyTemplateValues(initial) : {};
+  });
+
   // --- Debate state (sourced from the layout-mounted orchestrator provider) ---
   // Lifting this state out of the page is what allows in-app navigation
   // (history sidebar, /explore, etc.) without killing the running debate.
@@ -162,6 +181,33 @@ function DebateArenaContent() {
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   const [showBuyTokens, setShowBuyTokens] = useState(false);
   const [showExtendModal, setShowExtendModal] = useState(false);
+
+  // Form lives in a modal overlay. Auto-open is intentionally narrow
+  // (avoid the "popup ad" feeling for returning users):
+  //
+  //   - Deep-link (?template= / ?topic=) → open. Signals explicit intent.
+  //   - Logged-in user with empty history → open once it loads. First-
+  //     time experience nudge — they just signed up, give them the
+  //     action immediately rather than making them scan the hero.
+  //   - Otherwise → closed. Hero / sample / history acts as the marketing
+  //     surface, and the user opens via "New debate" / hero CTA.
+  const [isFormOpen, setIsFormOpen] = useState(
+    !!searchParams.get('template') || !!searchParams.get('topic'),
+  );
+  // Run the empty-history auto-open exactly once per page load — without
+  // this guard, dismissing the modal would re-trigger it next render.
+  const autoOpenedForFirstTimeUser = useRef(false);
+
+  // Debate config (debaters, rounds, length, anonymity) sits behind a
+  // "Settings" toggle so the modal isn't a wall of controls. Sensible
+  // defaults handle most cases; the user opens this when they care.
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+
+  // Per-debater override: when a template prescribes a position, we hide
+  // the position input and show the prescribed text as a caption. The
+  // user can click "Edit position" to reveal the input for that one slot
+  // — opting out of the template's framing for that debater only.
+  const [editingPositionFor, setEditingPositionFor] = useState<Set<number>>(new Set());
 
   // --- Keyboard shortcut (Ctrl/Cmd+Enter to start) ---
   const generateRef = useRef<(() => void) | undefined>(undefined);
@@ -208,10 +254,52 @@ function DebateArenaContent() {
   const totalDebateCost = effectiveRounds * tokensPerRound;
   const canAffordFull = tokenBalance === null || tokenBalance >= totalDebateCost;
   const canAffordAny = tokenBalance === null || tokenBalance >= 1;
-  // A debater is valid if they have a position OR they're set to auto-assign
+  // A debater is valid if they have a position OR they're set to auto-assign.
+  // When a template is selected, also require its `required: true` fields.
+  const templateValid = selectedTemplate
+    ? templateFieldsFilled(selectedTemplate, templateFieldValues)
+    : true;
   const isValid = topic.trim().length > 0 &&
     debaters.every(d => d.assignmentMode === 'auto' || d.position.trim().length > 0) &&
-    debaters.length >= 2;
+    debaters.length >= 2 &&
+    templateValid;
+
+  // True when the active template prescribes positions for both seats.
+  // In that case, the per-debater position input and Auto toggle are
+  // template-driven and should not be edited by the user — they'd be
+  // overriding the template's framing.
+  const templateLocksPositions = !!selectedTemplate
+    && selectedTemplate.positions[0].trim().length > 0
+    && selectedTemplate.positions[1].trim().length > 0;
+
+  // Specific message for what's missing — surfaced beside/under the
+  // submit button so a disabled CTA isn't a dead end.
+  function getMissingMessage(): string | null {
+    if (!topic.trim()) return 'Add a topic first.';
+    if (selectedTemplate && !templateValid) {
+      const missing = selectedTemplate.formFields.find((f) => {
+        if (!f.required) return false;
+        const v = templateFieldValues[f.id];
+        if (f.kind === 'textarea') return !String(v ?? '').trim();
+        if (f.kind === 'urlList') return !(Array.isArray(v) && (v as string[]).some((u) => u.trim()));
+        if (f.kind === 'candidateList') {
+          const min = f.minCandidates ?? 2;
+          const filled = Array.isArray(v)
+            ? (v as { name: string; summary: string }[]).filter((c) => c.name.trim() || c.summary.trim())
+            : [];
+          return filled.length < min;
+        }
+        return false;
+      });
+      if (missing) return `Add ${missing.label.toLowerCase()} first.`;
+    }
+    if (!templateLocksPositions
+        && debaters.some((d) => d.assignmentMode !== 'auto' && !d.position.trim())) {
+      return 'Add a position for each debater first.';
+    }
+    return null;
+  }
+  const missingMessage = !generating && !isValid ? getMissingMessage() : null;
   const hasDebate = activeDebate !== null;
 
   // ========================================================================
@@ -374,14 +462,17 @@ function DebateArenaContent() {
     ]);
     setRounds(isLoggedIn ? 5 : 3);
     setSelectedTemplate(null);
+    setTemplateFieldValues({});
   }
 
-  // Apply a template to the form. Pre-fills positions, context, and
-  // rounds. Does NOT pre-fill the topic — that's the user's input, the
-  // placeholder changes to hint at what they might type. Free-form
-  // debates still work — templates are just shortcuts.
+  // Apply a template to the form. Pre-fills positions, suggested rounds,
+  // and resets the template-form values to empty defaults from the
+  // template's schema. Does NOT pre-fill the topic — that's the user's
+  // input, the placeholder changes to hint at what they might type.
   function applyTemplate(template: DebateTemplate) {
     setSelectedTemplate(template);
+    setTemplateFieldValues(makeEmptyTemplateValues(template));
+    setEditingPositionFor(new Set());
     setDebaters((prev) => {
       const next = [...prev];
       // Ensure at least 2 debater slots exist — templates are all 2-sided
@@ -392,12 +483,20 @@ function DebateArenaContent() {
       next[1] = { ...next[1], position: template.positions[1], assignmentMode: 'manual' };
       return next;
     });
-    setContext(template.contextHint);
-    setRounds(template.suggestedRounds);
+    // Legacy free-text context lives separately; reset it so the
+    // template's structured fields are the source of truth.
+    setContext('');
+    // Logged-out users are capped at 3 rounds — clamp the template's
+    // suggestion so the form can't end up in a "5 selected, but locked"
+    // state that silently submits at 5. Logged-in users get the full
+    // template suggestion (3 / 5 / 7).
+    setRounds(isLoggedIn ? template.suggestedRounds : Math.min(template.suggestedRounds, 3));
   }
 
   function clearTemplate() {
     setSelectedTemplate(null);
+    setTemplateFieldValues({});
+    setEditingPositionFor(new Set());
     setContext('');
     setDebaters((prev) => prev.map((d) => ({ ...d, position: '' })));
   }
@@ -415,12 +514,69 @@ function DebateArenaContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // First-time-user auto-open: once the history finishes loading for a
+  // logged-in user, if they have no past debates and no active debate,
+  // open the form modal. Runs at most once per page load — dismissing
+  // the modal won't re-trigger it.
+  useEffect(() => {
+    if (autoOpenedForFirstTimeUser.current) return;
+    if (!isLoggedIn) return;
+    if (historyLoading) return;
+    if (history.length > 0) {
+      // Mark as "checked" so we don't keep watching for empty.
+      autoOpenedForFirstTimeUser.current = true;
+      return;
+    }
+    if (activeDebate) return;
+    autoOpenedForFirstTimeUser.current = true;
+    setIsFormOpen(true);
+  }, [isLoggedIn, historyLoading, history.length, activeDebate]);
+
+  // Hiring template: keep the debaters array in sync with the
+  // candidate list. Each candidate maps to one debater seat — that's
+  // the whole structural conceit of the hiring template (one model
+  // arguing per candidate). Without this, a user could add 4
+  // candidates and only 2 would actually be debated.
+  useEffect(() => {
+    if (selectedTemplate?.slug !== 'hiring-decision') return;
+    const candidates = templateFieldValues.candidates as
+      | Array<{ name: string; summary: string; url: string }>
+      | undefined;
+    if (!Array.isArray(candidates)) return;
+    // Cap at 3 — current platform limit on debaters.
+    const targetCount = Math.min(Math.max(candidates.length, 2), 3);
+    setDebaters((prev) => {
+      let next = [...prev];
+      // Grow / shrink to match candidate count.
+      while (next.length < targetCount) {
+        next.push({ modelId: 'claude-sonnet', position: '', assignmentMode: 'manual' });
+      }
+      if (next.length > targetCount) {
+        next = next.slice(0, targetCount);
+      }
+      // Refresh each debater's position from the matching candidate.
+      // Format mirrors the serialiser ("Argue the case for Alex: ...")
+      // so the model's prompt cleanly says what it's arguing.
+      return next.map((d, i) => {
+        const c = candidates[i];
+        if (!c) return d;
+        const label = c.name.trim() || `Candidate ${i + 1}`;
+        const brief = c.summary.trim();
+        const position = brief
+          ? `Argue the case for ${label}: ${brief}`
+          : `Argue the case for ${label}`;
+        return { ...d, position, assignmentMode: 'manual' };
+      });
+    });
+  }, [selectedTemplate, templateFieldValues.candidates]);
+
   // ========================================================================
   // View a saved debate (from history)
   // ========================================================================
 
   function viewSavedDebate(debate: Debate) {
     loadDebate(debate);
+    setIsFormOpen(false);
     isNearBottomRef.current = false;
     setTimeout(() => {
       if (debatePanelRef.current) debatePanelRef.current.scrollTop = 0;
@@ -463,13 +619,25 @@ function DebateArenaContent() {
     const debateTopic = topic;
     const debateDebaters = [...debaters];
     const debateRounds = effectiveRounds;
-    const debateContext = context;
+    // Compose the final context the models will see: template-form
+    // values (Phase B) get serialised into a Markdown block, then the
+    // legacy free-text context appended below for users who want to add
+    // a note. Either may be empty.
+    const serialisedTemplate = selectedTemplate
+      ? serialiseTemplateValues(selectedTemplate, templateFieldValues)
+      : '';
+    const debateContext = [serialisedTemplate, context.trim()]
+      .filter(Boolean)
+      .join('\n\n');
     const debateReveal = revealIdentities;
     const debateResponseLength = responseLength;
 
     isNearBottomRef.current = true;
     argCountRef.current = 0;
     clearForm();
+    // Close the form modal immediately — the debate panel behind it
+    // will stream the first arguments within a second or two.
+    setIsFormOpen(false);
 
     await startDebate({
       topic: debateTopic,
@@ -517,6 +685,11 @@ function DebateArenaContent() {
   // ========================================================================
 
   const maxRound = liveArguments.length > 0 ? Math.max(...liveArguments.map(a => a.round)) : 0;
+  // Look up the active debate's template (if any) so we can render
+  // its per-template disclaimer above the arguments.
+  const activeTemplate = activeDebate
+    ? getTemplateBySlug(activeDebate.templateSlug ?? null)
+    : null;
   const shareUrl = activeDebate?.id ? `${typeof window !== 'undefined' ? window.location.origin : ''}/journal/debate/${activeDebate.id}` : '';
   const activeDisplayNames = activeDebate ? getDisplayNames(activeDebate.debaters) : [];
   // The next debater needed if the debate is incomplete (used to adapt the
@@ -529,305 +702,17 @@ function DebateArenaContent() {
   return (
     <div className={styles.page}>
       {/* ================================================================ */}
-      {/* LEFT PANEL: Form                                                 */}
+      {/* LEFT SIDEBAR: New debate button + history                        */}
       {/* ================================================================ */}
-      <div className={`${styles.formPanel} ${hasDebate ? styles.formPanelHidden : ''}`}>
-        {/* ============================================================ */}
-        {/* DECISION TEMPLATES — v3 utility pivot entry points.          */}
-        {/* Clicking a card pre-fills positions, context, and rounds.   */}
-        {/* User can still edit the form after selecting a template, or  */}
-        {/* skip templates entirely and configure free-form.             */}
-        {/* ============================================================ */}
-        {!selectedTemplate && !generating && (
-          <div className={styles.templatesSection}>
-            <div className={styles.templatesHeader}>
-              <span className={styles.templatesLabel}>Decision templates</span>
-              <span className={styles.templatesSubhead}>
-                Stress-test a decision by having two models argue opposite sides. Pick a template or scroll down to configure free-form.
-              </span>
-            </div>
-            <div className={styles.templatesGrid}>
-              {DEBATE_TEMPLATES.map((t) => (
-                <button
-                  key={t.slug}
-                  type="button"
-                  className={styles.templateCard}
-                  onClick={() => applyTemplate(t)}
-                >
-                  <span className={styles.templateIcon}>{t.icon}</span>
-                  <div className={styles.templateBody}>
-                    <div className={styles.templateName}>{t.name}</div>
-                    <div className={styles.templateTagline}>{t.tagline}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {selectedTemplate && !generating && (
-          <div className={styles.templatesSelectedBanner}>
-            <div className={styles.templatesSelectedContent}>
-              <span className={styles.templateIcon}>{selectedTemplate.icon}</span>
-              <div>
-                <div className={styles.templatesSelectedLabel}>
-                  Using template: <strong>{selectedTemplate.name}</strong>
-                </div>
-                <div className={styles.templatesSelectedDescription}>
-                  {selectedTemplate.description}
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              className={styles.templatesClear}
-              onClick={clearTemplate}
-              aria-label="Clear template"
-            >
-              Clear
-            </button>
-          </div>
-        )}
-
-        <div className={styles.field}>
-          <label className={styles.label}>What should they debate?</label>
-          <input
-            className={styles.topicInput}
-            type="text"
-            placeholder={selectedTemplate?.topicPlaceholder || "e.g. Is a banana a berry?"}
-            maxLength={config.maxTopicLength}
-            value={topic}
-            onChange={e => setTopic(e.target.value)}
-            disabled={generating}
-          />
-          {/* Starter topic chips — shown when the topic input is empty
-              so the user doesn't have to think of a question from scratch.
-              Clicking a chip populates the input. */}
-          {!topic && !generating && (
-            <div className={styles.starterChips}>
-              {STARTER_TOPICS.map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  className={styles.starterChip}
-                  onClick={() => setTopic(t)}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className={styles.field}>
-          <label className={styles.label}>Who argues what?</label>
-          <div className={styles.debaterCards}>
-            {debaters.map((debater, i) => (
-              <div
-                key={i}
-                className={styles.debaterCard}
-                style={{ '--debater-colour': getModelColour(debater.modelId) } as React.CSSProperties}
-              >
-                <div className={styles.debaterHeader}>
-                  <div className={styles.modelDot} style={{ background: getModelColour(debater.modelId) }} />
-                  <ModelSelect
-                    value={debater.modelId}
-                    onChange={id => updateDebater(i, 'modelId', id)}
-                    disabled={generating}
-                    isLoggedIn={isLoggedIn}
-                    onPremiumLocked={() => setShowAuth(true)}
-                  />
-                  {debaters.length > 2 && !generating && (
-                    <button className={styles.removeButton} onClick={() => removeDebater(i)}>
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-                <div className={styles.positionRow}>
-                  <input
-                    className={styles.positionInput}
-                    type="text"
-                    placeholder={
-                      findModel(debater.modelId)?.family === 'user'
-                        ? 'Your position...'
-                        : debater.assignmentMode === 'auto'
-                          ? 'AI will pick its own stance'
-                          : 'Their position...'
-                    }
-                    maxLength={config.maxPositionLength}
-                    value={debater.assignmentMode === 'auto' ? '' : debater.position}
-                    onChange={e => updateDebater(i, 'position', e.target.value)}
-                    disabled={generating || debater.assignmentMode === 'auto'}
-                  />
-                  {findModel(debater.modelId)?.family !== 'user' && (
-                    <button
-                      type="button"
-                      className={`${styles.autoToggle} ${debater.assignmentMode === 'auto' ? styles.autoToggleOn : ''}`}
-                      onClick={() => {
-                        if (generating) return;
-                        setDebaters(prev => {
-                          const updated = [...prev];
-                          const newMode = updated[i].assignmentMode === 'auto' ? 'manual' : 'auto';
-                          updated[i] = {
-                            ...updated[i],
-                            assignmentMode: newMode,
-                            position: newMode === 'auto' ? '' : updated[i].position,
-                          };
-                          return updated;
-                        });
-                      }}
-                      disabled={generating}
-                      title="Let the AI pick its own stance"
-                    >
-                      Auto
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-            {canAddModel && !generating && (
-              isLoggedIn ? (
-                <button className={styles.addModel} onClick={addDebater}>+ Add model</button>
-              ) : (
-                <button className={styles.lockedOption} onClick={() => setShowAuth(true)}>
-                  + Add model <span className={styles.lockedBadge}>Sign up</span>
-                </button>
-              )
-            )}
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.label}>Opponents</label>
-            <div className={styles.roundSelector}>
-              {(['named', 'anonymous'] as const).map(mode => (
-                <button
-                  key={mode}
-                  className={`${styles.roundOption} ${
-                    (mode === 'named' ? revealIdentities : !revealIdentities)
-                      ? styles.roundOptionActive : ''
-                  }`}
-                  onClick={() => !generating && setRevealIdentities(mode === 'named')}
-                  disabled={generating}
-                >
-                  {mode === 'named' ? 'Named' : 'Anonymous'}
-                </button>
-              ))}
-            </div>
-            <span className={styles.toggleDescription}>
-              {revealIdentities
-                ? 'Models know who they\'re debating.'
-                : 'Models don\'t know their opponents — even if it\'s themselves.'}
-            </span>
-          </div>
-        </div>
-
-        <div className={styles.field}>
-          <label className={styles.label}>Response length</label>
-          <div className={styles.roundSelector}>
-            {(['concise', 'detailed'] as const).map(len => (
-              <button
-                key={len}
-                className={`${styles.roundOption} ${responseLength === len ? styles.roundOptionActive : ''}`}
-                onClick={() => setResponseLength(len)}
-                disabled={generating}
-              >
-                {len === 'concise' ? 'Concise' : 'Detailed'}
-              </button>
-            ))}
-          </div>
-          <span className={styles.toggleDescription}>
-            {responseLength === 'concise'
-              ? 'Short and punchy — 2-3 sentences per argument.'
-              : 'Substantive paragraphs — full reasoning and evidence.'}
-          </span>
-        </div>
-
-        {hasUserDebater ? (
-          <div className={styles.field}>
-            <label className={styles.label}>Rounds</label>
-            <p className={styles.humanRoundsNote}>
-              Up to {HUMAN_DEBATE_MAX_ROUNDS} rounds — end the debate any time on your turn.
-            </p>
-          </div>
-        ) : (
-          <div className={styles.field}>
-            <label className={styles.label}>Rounds</label>
-            <div className={styles.roundSelector}>
-              {[3, 5, 7].map(n => {
-                const locked = !isLoggedIn && n > 3;
-                return (
-                  <button
-                    key={n}
-                    className={`${styles.roundOption} ${rounds === n ? styles.roundOptionActive : ''} ${locked ? styles.roundOptionLocked : ''}`}
-                    onClick={() => locked ? setShowAuth(true) : setRounds(n)}
-                    disabled={generating}
-                  >
-                    {n}
-                    {locked && <LockKeyhole size={12} className={styles.lockIcon} />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <details className={styles.optionalSection}>
-          <summary className={styles.optionalSummary}>
-            <ChevronRight size={14} className={styles.detailsChevron} />
-            Additional rules (optional)
-          </summary>
-          <div className={styles.optionalContent}>
-            <textarea
-              className={styles.textarea}
-              placeholder="Rules or context, e.g. Scientific evidence only"
-              maxLength={config.maxContextLength}
-              value={context}
-              onChange={e => setContext(e.target.value)}
-              disabled={generating}
-            />
-          </div>
-        </details>
-
-        <div className={styles.submitRow}>
-          {tokenBalance !== null && (
-            <span className={styles.tokenBalance}>
-              <span className={styles.tokenCount}>{tokenBalance}</span> tokens
-              {!canAffordAny && (
-                <button
-                  className={styles.buyLink}
-                  onClick={() => isLoggedIn ? setShowBuyTokens(true) : setShowAuth(true)}
-                >
-                  {isLoggedIn ? 'Top up' : `Sign up for ${config.startingTokens} free`}
-                </button>
-              )}
-            </span>
-          )}
-          <button
-            className={styles.submitButton}
-            disabled={!isValid || generating || !canAffordAny}
-            onClick={generateDebate}
-          >
-            {generating ? 'Debating...' : `Start Debate (${totalDebateCost} ${totalDebateCost === 1 ? 'token' : 'tokens'})`}
-          </button>
-        </div>
-        <p className={styles.privacyNote}>
-          {isLoggedIn ? (
-            <>
-              Your debates are <strong>private by default</strong> — only you can see them, even with the URL. After it finishes you can choose to publish to /explore.
-            </>
-          ) : (
-            <>
-              Anonymous debates are <strong>shareable by link</strong> — anyone with the URL can view. <button type="button" className={styles.privacyNoteLink} onClick={() => setShowAuth(true)}>Sign in</button> for private debates (owner-only, even with the URL).
-            </>
-          )}
-        </p>
-        {isValid && canAffordAny && !canAffordFull && (
-          <p className={styles.tokenWarning}>
-            This debate costs {totalDebateCost} tokens but you have {tokenBalance}. It will stop when your tokens run out.
-          </p>
-        )}
-
-        {error && <p className={styles.error}>{error}</p>}
+      <div className={`${styles.sidebar} ${hasDebate ? styles.sidebarHidden : ''}`}>
+        <button
+          type="button"
+          className={styles.newDebateCta}
+          onClick={() => setIsFormOpen(true)}
+          disabled={generating}
+        >
+          + New debate
+        </button>
 
         {/* Debate history */}
         {isLoggedIn && (historyLoading || history.length > 0) && (
@@ -903,6 +788,418 @@ function DebateArenaContent() {
       </div>
 
       {/* ================================================================ */}
+      {/* FORM MODAL: overlays the page when open                          */}
+      {/* ================================================================ */}
+      {isFormOpen && (
+      <div
+        className={styles.formModalOverlay}
+        onClick={() => { if (!generating) setIsFormOpen(false); }}
+      >
+      <div
+        className={styles.formModal}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
+        <button
+          type="button"
+          className={styles.formModalClose}
+          onClick={() => setIsFormOpen(false)}
+          aria-label="Close"
+          disabled={generating}
+        >
+          <X size={18} />
+        </button>
+      <div className={styles.formPanel}>
+        {/* Modal header.
+            - No template: "Start a debate" + helper line above the
+              template grid.
+            - Template selected: template icon + name + tagline acts as
+              the heading, with a slim "Change template" affordance. */}
+        {selectedTemplate ? (
+          <div className={styles.modalHeader}>
+            <div className={styles.modalHeaderRow}>
+              <span className={styles.templateIcon}>
+                <selectedTemplate.icon size={24} />
+              </span>
+              <div className={styles.modalHeaderText}>
+                <h2 className={styles.modalTitle}>{selectedTemplate.name}</h2>
+                <p className={styles.modalSubtitle}>{selectedTemplate.tagline}</p>
+              </div>
+              <button
+                type="button"
+                className={styles.changeTemplateLink}
+                onClick={clearTemplate}
+              >
+                Change template
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className={styles.modalHeader}>
+            <h2 className={styles.modalTitle}>What kind of debate?</h2>
+            <p className={styles.modalSubtitle}>
+              Pick a template — that decides what the form looks like next. Use Open debate for free-form.
+            </p>
+          </div>
+        )}
+
+        {/* Step 1: templates grid. Selecting a template swaps the
+            modal into step 2 (the form). Until then we show ONLY the
+            grid — no half-visible form to clutter the choice. */}
+        {!selectedTemplate && !generating && (
+          <div className={styles.templatesSection}>
+            <div className={styles.templatesGrid}>
+              {DEBATE_TEMPLATES.map((t) => (
+                <button
+                  key={t.slug}
+                  type="button"
+                  className={styles.templateCard}
+                  onClick={() => applyTemplate(t)}
+                >
+                  <span className={styles.templateCardIcon}>
+                    <t.icon size={24} />
+                  </span>
+                  <div className={styles.templateBody}>
+                    <div className={styles.templateName}>{t.name}</div>
+                    <div className={styles.templateTagline}>{t.tagline}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: the form. Only rendered once a template is in play
+            so the user makes the framing choice up front. */}
+        {selectedTemplate && (
+        <>
+        <div className={styles.field}>
+          <label className={styles.label}>
+            {selectedTemplate?.topicLabel ?? 'What should they debate?'}
+          </label>
+          <input
+            className={styles.topicInput}
+            type="text"
+            placeholder={selectedTemplate?.topicPlaceholder || "e.g. Is a banana a berry?"}
+            maxLength={config.maxTopicLength}
+            value={topic}
+            onChange={e => setTopic(e.target.value)}
+            disabled={generating}
+          />
+          {/* Starter topic chips — only useful for the open-debate
+              template, where the user might be browsing for inspiration.
+              Structured templates already have a precise placeholder
+              that does this job. */}
+          {!topic && !generating && selectedTemplate?.slug === 'open' && (
+            <div className={styles.starterChips}>
+              {STARTER_TOPICS.map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  className={styles.starterChip}
+                  onClick={() => setTopic(t)}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Template-driven form fields (Phase B). When a template is
+            selected, render the structured fields it asks for —
+            product description, supporting URLs, candidate list, etc.
+            Sits directly under the topic so the user fills the meat
+            of their question first. The "Additional rules" textarea
+            is the fallback when no template is selected. */}
+        {selectedTemplate ? (
+          <TemplateFormFields
+            template={selectedTemplate}
+            values={templateFieldValues}
+            onChange={setTemplateFieldValues}
+            isLoggedIn={isLoggedIn}
+            onLoginRequired={() => setShowAuth(true)}
+            disabled={generating}
+          />
+        ) : (
+          <details className={styles.optionalSection}>
+            <summary className={styles.optionalSummary}>
+              <ChevronRight size={14} className={styles.detailsChevron} />
+              Additional rules (optional)
+            </summary>
+            <div className={styles.optionalContent}>
+              <textarea
+                className={styles.textarea}
+                placeholder="Rules or context, e.g. Scientific evidence only"
+                maxLength={config.maxContextLength}
+                value={context}
+                onChange={e => setContext(e.target.value)}
+                disabled={generating}
+              />
+            </div>
+          </details>
+        )}
+
+        {/* ============================================================ */}
+        {/* Debaters — visible. The model picker is too central a       */}
+        {/* choice to hide behind a collapsible.                         */}
+        {/* ============================================================ */}
+        <div className={styles.field}>
+          <label className={styles.label}>Who argues?</label>
+          <div className={styles.debaterCards}>
+            {debaters.map((debater, i) => (
+              <div
+                key={i}
+                className={styles.debaterCard}
+                style={{ '--debater-colour': getModelColour(debater.modelId) } as React.CSSProperties}
+              >
+                <div className={styles.debaterHeader}>
+                  <div className={styles.modelDot} style={{ background: getModelColour(debater.modelId) }} />
+                  <ModelSelect
+                    value={debater.modelId}
+                    onChange={id => updateDebater(i, 'modelId', id)}
+                    disabled={generating}
+                    isLoggedIn={isLoggedIn}
+                    onPremiumLocked={() => setShowAuth(true)}
+                  />
+                  {debaters.length > 2 && !generating && (
+                    <button className={styles.removeButton} onClick={() => removeDebater(i)}>
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                {/* Position area. Three modes:
+                    - Template locks positions AND user hasn't asked to
+                      edit this one → show the prescribed position as a
+                      muted caption with an "Edit" affordance.
+                    - Otherwise → show the editable input + Auto toggle
+                      (Auto only for AI debaters, never for user/template-
+                      locked seats since those wouldn't make sense). */}
+                {templateLocksPositions && !editingPositionFor.has(i) ? (
+                  <div className={styles.positionLocked}>
+                    <span className={styles.positionLockedText}>{debater.position}</span>
+                    <button
+                      type="button"
+                      className={styles.positionEditLink}
+                      onClick={() => setEditingPositionFor((prev) => new Set(prev).add(i))}
+                      disabled={generating}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ) : (
+                  <div className={styles.positionRow}>
+                    <input
+                      className={styles.positionInput}
+                      type="text"
+                      placeholder={
+                        findModel(debater.modelId)?.family === 'user'
+                          ? 'Your position...'
+                          : debater.assignmentMode === 'auto'
+                            ? 'AI will pick its own stance'
+                            : 'Their position...'
+                      }
+                      maxLength={config.maxPositionLength}
+                      value={debater.assignmentMode === 'auto' ? '' : debater.position}
+                      onChange={e => updateDebater(i, 'position', e.target.value)}
+                      disabled={generating || debater.assignmentMode === 'auto'}
+                    />
+                    {findModel(debater.modelId)?.family !== 'user' && !templateLocksPositions && (
+                      <button
+                        type="button"
+                        className={`${styles.autoToggle} ${debater.assignmentMode === 'auto' ? styles.autoToggleOn : ''}`}
+                        onClick={() => {
+                          if (generating) return;
+                          setDebaters(prev => {
+                            const updated = [...prev];
+                            const newMode = updated[i].assignmentMode === 'auto' ? 'manual' : 'auto';
+                            updated[i] = {
+                              ...updated[i],
+                              assignmentMode: newMode,
+                              position: newMode === 'auto' ? '' : updated[i].position,
+                            };
+                            return updated;
+                          });
+                        }}
+                        disabled={generating}
+                        title="Let the AI pick its own stance"
+                      >
+                        Auto
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            {canAddModel && !generating && (
+              isLoggedIn ? (
+                <button className={styles.addModel} onClick={addDebater}>+ Add model</button>
+              ) : (
+                <button className={styles.lockedOption} onClick={() => setShowAuth(true)}>
+                  + Add model <span className={styles.lockedBadge}>Sign up</span>
+                </button>
+              )
+            )}
+          </div>
+        </div>
+
+        {/* ============================================================ */}
+        {/* Advanced settings — collapsed. Holds rounds, response       */}
+        {/* length, anonymity. Sensible defaults so most users never    */}
+        {/* need to open this.                                           */}
+        {/* ============================================================ */}
+        <div className={styles.configSection}>
+          <button
+            type="button"
+            className={styles.configSummary}
+            onClick={() => setIsConfigOpen((v) => !v)}
+            aria-expanded={isConfigOpen}
+          >
+            <ChevronRight
+              size={14}
+              className={`${styles.configChevron} ${isConfigOpen ? styles.configChevronOpen : ''}`}
+            />
+            <span className={styles.configSummaryLabel}>Advanced</span>
+            <span className={styles.configSummaryValue}>
+              {hasUserDebater ? `up to ${HUMAN_DEBATE_MAX_ROUNDS} rounds` : `${rounds} rounds`}
+              <span className={styles.configSummarySep}> · </span>
+              {responseLength}
+              <span className={styles.configSummarySep}> · </span>
+              {revealIdentities ? 'named' : 'anonymous'}
+            </span>
+            <span className={styles.configSummaryAction}>
+              {isConfigOpen ? 'Done' : 'Edit'}
+            </span>
+          </button>
+
+          {isConfigOpen && (
+            <div className={styles.configBody}>
+              <div className={styles.configRow}>
+                {hasUserDebater ? (
+                  <div className={styles.field}>
+                    <label className={styles.label}>Rounds</label>
+                    <p className={styles.humanRoundsNote}>
+                      Up to {HUMAN_DEBATE_MAX_ROUNDS} — end any time on your turn.
+                    </p>
+                  </div>
+                ) : (
+                  <div className={styles.field}>
+                    <label className={styles.label}>Rounds</label>
+                    <div className={styles.roundSelector}>
+                      {[3, 5, 7].map(n => {
+                        const locked = !isLoggedIn && n > 3;
+                        return (
+                          <button
+                            key={n}
+                            className={`${styles.roundOption} ${rounds === n ? styles.roundOptionActive : ''} ${locked ? styles.roundOptionLocked : ''}`}
+                            onClick={() => locked ? setShowAuth(true) : setRounds(n)}
+                            disabled={generating}
+                          >
+                            {n}
+                            {locked && <LockKeyhole size={12} className={styles.lockIcon} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Response length</label>
+                  <div className={styles.roundSelector}>
+                    {(['concise', 'detailed'] as const).map(len => (
+                      <button
+                        key={len}
+                        className={`${styles.roundOption} ${responseLength === len ? styles.roundOptionActive : ''}`}
+                        onClick={() => setResponseLength(len)}
+                        disabled={generating}
+                      >
+                        {len === 'concise' ? 'Concise' : 'Detailed'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Opponents</label>
+                  <div className={styles.roundSelector}>
+                    {(['named', 'anonymous'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        className={`${styles.roundOption} ${
+                          (mode === 'named' ? revealIdentities : !revealIdentities)
+                            ? styles.roundOptionActive : ''
+                        }`}
+                        onClick={() => !generating && setRevealIdentities(mode === 'named')}
+                        disabled={generating}
+                      >
+                        {mode === 'named' ? 'Named' : 'Anonymous'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className={styles.submitRow}>
+          <div className={styles.submitMeta}>
+            {tokenBalance !== null && (
+              <span className={styles.tokenBalance}>
+                <span className={styles.tokenCount}>{tokenBalance}</span> tokens · this debate {totalDebateCost}
+                {!canAffordAny && (
+                  <button
+                    className={styles.buyLink}
+                    onClick={() => isLoggedIn ? setShowBuyTokens(true) : setShowAuth(true)}
+                  >
+                    {isLoggedIn ? 'Top up' : `Sign up for ${config.startingTokens} free`}
+                  </button>
+                )}
+              </span>
+            )}
+            {missingMessage && (
+              <span className={styles.missingHint}>{missingMessage}</span>
+            )}
+          </div>
+          <button
+            className={styles.submitButton}
+            disabled={!isValid || generating || !canAffordAny}
+            onClick={generateDebate}
+          >
+            {generating ? 'Debating…' : 'Start debate'}
+          </button>
+        </div>
+        <p className={styles.privacyNote}>
+          {isLoggedIn ? (
+            <>
+              Your debates are <strong>private by default</strong> — only you can see them, even with the URL. After it finishes you can choose to publish to /explore.
+            </>
+          ) : (
+            <>
+              Anonymous debates are <strong>shareable by link</strong> — anyone with the URL can view. <button type="button" className={styles.privacyNoteLink} onClick={() => setShowAuth(true)}>Sign in</button> for private debates (owner-only, even with the URL).
+            </>
+          )}
+        </p>
+        <p className={styles.adviceNote}>
+          Debates are AI-generated and a thinking tool, not professional advice. Decisions are yours. See <a href="/terms" target="_blank" rel="noopener noreferrer" className={styles.privacyNoteLink}>Terms</a>.
+        </p>
+        {isValid && canAffordAny && !canAffordFull && (
+          <p className={styles.tokenWarning}>
+            This debate costs {totalDebateCost} tokens but you have {tokenBalance}. It will stop when your tokens run out.
+          </p>
+        )}
+
+        {error && <p className={styles.error}>{error}</p>}
+        </>
+        )}
+      </div>
+      </div>
+      </div>
+      )}
+
+      {/* ================================================================ */}
       {/* RIGHT PANEL: Debate thread                                       */}
       {/* ================================================================ */}
       <div className={styles.debatePanel} ref={debatePanelRef}>
@@ -910,7 +1207,7 @@ function DebateArenaContent() {
         {hasDebate && !generating && (
           <button
             className={styles.mobileBackButton}
-            onClick={() => resetDebate()}
+            onClick={() => { resetDebate(); setIsFormOpen(true); }}
           >
             <ChevronLeft size={16} /> New debate
           </button>
@@ -923,7 +1220,14 @@ function DebateArenaContent() {
                 Watch the models argue.
               </h2>
               <p className={styles.heroSubtitle}>
-                Pick a topic on the left to start — or read this example to see how it works.
+                <button
+                  type="button"
+                  className={styles.heroStartLink}
+                  onClick={() => setIsFormOpen(true)}
+                >
+                  Start a debate
+                </button>{' '}
+                — or read this example to see how it works.
               </p>
             </div>
 
@@ -1059,6 +1363,15 @@ function DebateArenaContent() {
                 })}
               </div>
             </div>
+
+            {/* Per-template disclaimer (e.g. hiring). Sits between the
+                debate header and the first round so the reader sees the
+                framing before the arguments. */}
+            {activeTemplate?.disclaimer && (
+              <div className={styles.templateDisclaimer} role="note">
+                <strong>Heads up:</strong> {activeTemplate.disclaimer}
+              </div>
+            )}
 
             {/* Arguments by round */}
             {Array.from(new Set(liveArguments.map(a => a.round))).map(roundNum => (

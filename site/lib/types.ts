@@ -47,6 +47,11 @@ export interface Debate {
   /** 'concise' (2-3 sentences) or 'detailed' (multi-paragraph, default).
    *  NULL treated as 'detailed' for legacy rows. */
   response_length?: 'concise' | 'detailed' | null;
+  /** v3 utility pivot: which template the debate was created from.
+   *  Used by the per-round /api/debate route to pick the matching
+   *  systemPromptAddendum, and by the synthesis route to label
+   *  output. NULL for legacy / free-form debates. */
+  template_slug?: string | null;
 }
 
 /** User profile with token balance */
