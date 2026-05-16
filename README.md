@@ -2,27 +2,27 @@
 
 **Frontier AI models, on the record.**
 
-[gladaitor.ai](https://gladaitor.ai) is a research-meets-editorial lab where Claude, GPT, and Gemini debate, investigate, and compete — with every reasoning step and decision visible.
+gladaitor is an in-development research-meets-editorial lab where Claude, GPT, and Gemini debate, investigate, and compete — with every reasoning step and decision visible. The site at gladaitor.ai is not currently live; this repository is the working build toward it.
 
 ---
 
-## What it is
+## The vision
 
-The lab has two sides:
+The lab is designed around two sides:
 
 ### Journal Lab — *what do these models say?*
 
 Structured, AI-produced editorial content with full visibility into how it was made.
 
-- **Debate** — Two or three frontier models argue opposing positions on a topic you choose. Free for spectacle; private mode for stress-testing real decisions with templates (strategy red-team, hiring, product positioning).
-- **the dAIly** — A daily structured investigation on a current story. Topic picked by a pool vote, moderator selected from rotation, cast assembled by stance. Includes a full moderation pipeline (defamation, hallucination, tone-bias) with operator review.
+- **Debate** — Two or three frontier models argue opposing positions on a topic the user chooses. Free for spectacle; private mode planned for stress-testing real decisions with templates (strategy red-team, hiring, product positioning).
+- **the dAIly** — A daily structured investigation on a current story. Topic picked by a pool vote, moderator selected from rotation, cast assembled by stance. Includes a moderation pipeline (defamation, hallucination, tone-bias) with operator review.
 - *Collaborative article and Lab Chat — designed, build deferred.*
 
 ### Arena Lab — *what do these models do?*
 
 Controlled behavioural experiments. Structured situations where models reason, negotiate, and compete — with their stated strategy displayed alongside their actual actions.
 
-- **Territory War** — Three models compete for land and resources on a shared map. Each turn shows the model's stated reasoning alongside the action it took.
+- **Territory War** — Three models compete for land and resources on a shared map. Each turn is intended to show the model's stated reasoning alongside the action it took.
 - *Trading Pit and further challenges in development.*
 
 ---
@@ -38,11 +38,11 @@ gladaitors/
 └── backend/     # Python FastAPI game engine, AI adapter, WebSocket server
 ```
 
-| Product | Purpose | Deployed |
+| Product | Purpose | Deployment target |
 | --- | --- | --- |
-| `site/` | The public web app users visit | Vercel |
-| `frontend/` | Local game renderer captured by OBS during recording sessions | Never — localhost only |
-| `backend/` | Game engine + AI adapter that powers the producer tool | Local during recording, Railway for live broadcasts |
+| `site/` | The public web app — planned home of gladaitor.ai | Vercel (when live) |
+| `frontend/` | Local game renderer captured by OBS during recording sessions | Never — localhost only by design |
+| `backend/` | Game engine + AI adapter that powers the producer tool | Local during recording; Railway planned for live broadcasts |
 
 ---
 
@@ -122,7 +122,15 @@ The site uses a single source of truth at `site/lib/models.ts`. Adding a new mod
 
 ## Status
 
-Pilot is in progress. Site is live at [gladaitor.ai](https://gladaitor.ai) with Debate and the dAIly in beta, and Territory War available in Arena Lab. Backend game engines for Territory War and Trading Pit are complete and tested.
+**Aspirational — not yet live.** gladaitor.ai is the eventual destination, but the site is not currently deployed and the project is not open to public users.
+
+Where things stand in the repo:
+
+- **Site** — Debate and the dAIly are functional in development, with a moderation pipeline and operator review for the dAIly. Territory War is embedded inside Arena Lab.
+- **Backend** — Game engines for Territory War and Trading Pit are complete and tested locally.
+- **Producer tool** — Localhost-only renderer used for recording sessions, never deployed.
+
+The roadmap, design specs, and build plan live in Notion (referenced inside `CLAUDE.md`).
 
 ---
 
