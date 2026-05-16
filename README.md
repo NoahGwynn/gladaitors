@@ -48,7 +48,7 @@ gladaitors/
 
 ## Tech stack
 
-**Site** — Next.js 16 (App Router) · React 19 · TypeScript · SCSS Modules · Supabase (auth, Postgres, RLS) · Stripe (token payments) · Phaser 4 (Arena Lab embeds) · Anthropic SDK · OpenAI SDK · Google GenAI · Tavily (web search) · node-cron
+**Site** — Next.js 16 (App Router) · React 19 · TypeScript · SCSS Modules · Supabase (auth, Postgres, RLS) · Stripe (token payments) · Phaser 4 (Arena Lab embeds) · Claude SDK · OpenAI SDK · Google GenAI · Tavily (web search) · node-cron
 
 **Producer tool** — Next.js · TypeScript · Phaser.js · WebSocket client. Designed for 1920×1080 OBS Browser Source capture.
 
@@ -62,7 +62,7 @@ gladaitors/
 
 - Node.js 20+ and npm
 - Python 3.11+
-- API keys for Anthropic, OpenAI, Google AI Studio
+- API keys for Claude, OpenAI, and Google AI Studio
 - A Supabase project (for `site/`) and Stripe account (for token purchases)
 
 ### Public site (`site/`)
@@ -103,7 +103,7 @@ The site uses a single source of truth at `site/lib/models.ts`. Adding a new mod
 
 | Model family | Colour |
 | --- | --- |
-| Claude | `#D97757` (Anthropic orange) |
+| Claude | `#D97757` (Claude orange) |
 | GPT | `#10A37F` (ChatGPT teal) |
 | Gemini | `#4285F4` (Google blue) |
 
