@@ -121,11 +121,11 @@ export default function Nav() {
               Series
             </Link>
           )}
-          <Link href="/arena" className={linkClass('/arena', styles.link)}>
-            Arena
+          <Link href="/arena/territory-war" className={linkClass('/arena', styles.link)}>
+            Territory Wars
           </Link>
-          <Link href="/journal" className={linkClass('/journal', styles.link)}>
-            Journal
+          <Link href="/journal/debate" className={linkClass('/journal/debate', styles.link)}>
+            Debate
           </Link>
 
           {user ? (
@@ -191,11 +191,11 @@ export default function Nav() {
               </div>
             )}
 
-            <Link href="/arena" className={linkClass('/arena', styles.mobileLink)} onClick={closeMobileMenu}>
-              Arena
+            <Link href="/arena/territory-war" className={linkClass('/arena', styles.mobileLink)} onClick={closeMobileMenu}>
+              Territory Wars
             </Link>
-            <Link href="/journal" className={linkClass('/journal', styles.mobileLink)} onClick={closeMobileMenu}>
-              Journal
+            <Link href="/journal/debate" className={linkClass('/journal/debate', styles.mobileLink)} onClick={closeMobileMenu}>
+              Debate
             </Link>
             {config.seriesEnabled && (
               <Link href="/series" className={styles.mobileLink} onClick={closeMobileMenu}>

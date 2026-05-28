@@ -710,6 +710,9 @@ function DebateArenaContent() {
       {/* LEFT SIDEBAR: New debate button + history                        */}
       {/* ================================================================ */}
       <div className={`${styles.sidebar} ${hasDebate ? styles.sidebarHidden : ''}`}>
+        <Link href="/journal/debates" className={styles.browseDebatesCta}>
+          Browse debates
+        </Link>
         <button
           type="button"
           className={styles.newDebateCta}

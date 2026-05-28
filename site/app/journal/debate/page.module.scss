@@ -62,6 +62,31 @@
   &:hover { opacity: 0.9; }
 }
 
+// Secondary (ghost) sidebar link to the public debates feed. Sits above the
+// primary "New debate" CTA — outlined rather than filled so the New debate
+// button stays the dominant action.
+.browseDebatesCta {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: $space-md $space-lg;
+  border-radius: $radius-md;
+  border: 1px solid $border;
+  background: transparent;
+  color: inherit;
+  font-size: $size-sm;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+
+  &:hover {
+    border-color: $ui-accent;
+    color: $ui-accent;
+  }
+}
+
 // --- Form modal overlay ---
 //
 // Opens on mount (if no active debate) and whenever the user clicks "New
