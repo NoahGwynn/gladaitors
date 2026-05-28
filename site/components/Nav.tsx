@@ -157,7 +157,7 @@ export default function Nav() {
                 )}
               </div>
             </>
-          ) : (
+          ) : config.openAccess ? null : (
             <button className={styles.authButton} onClick={() => setShowAuth(true)}>
               Sign In
             </button>
@@ -222,7 +222,7 @@ export default function Nav() {
                   Sign Out
                 </button>
               </>
-            ) : (
+            ) : config.openAccess ? null : (
               <button
                 className={styles.mobileSignIn}
                 onClick={() => {

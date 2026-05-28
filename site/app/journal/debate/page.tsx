@@ -240,6 +240,10 @@ function DebateArenaContent() {
   const argCountRef = useRef(0);
 
   // --- Derived ---
+  // Open-access mode treats every visitor as logged-in for the purpose of
+  // unlocking gated controls (rounds, extra debaters, premium models). The
+  // account UI itself is hidden separately via config.openAccess.
+  const effLoggedIn = isLoggedIn || config.openAccess;
   const canAddModel = debaters.length < 3;
   // True when at least one slot is a human player. Human debates run open-ended
   // up to 15 rounds; the user decides when to stop. AI-only debates use a fixed
@@ -252,8 +256,9 @@ function DebateArenaContent() {
   // (user slots have tokenCost: 0, so they don't contribute)
   const tokensPerRound = debaters.reduce((sum, d) => sum + getModelTokenCost(d.modelId), 0);
   const totalDebateCost = effectiveRounds * tokensPerRound;
-  const canAffordFull = tokenBalance === null || tokenBalance >= totalDebateCost;
-  const canAffordAny = tokenBalance === null || tokenBalance >= 1;
+  // Open-access mode disables token billing, so affordability never blocks.
+  const canAffordFull = config.openAccess || tokenBalance === null || tokenBalance >= totalDebateCost;
+  const canAffordAny = config.openAccess || tokenBalance === null || tokenBalance >= 1;
   // A debater is valid if they have a position OR they're set to auto-assign.
   // When a template is selected, also require its `required: true` fields.
   const templateValid = selectedTemplate
@@ -918,7 +923,7 @@ function DebateArenaContent() {
             template={selectedTemplate}
             values={templateFieldValues}
             onChange={setTemplateFieldValues}
-            isLoggedIn={isLoggedIn}
+            isLoggedIn={effLoggedIn}
             onLoginRequired={() => setShowAuth(true)}
             disabled={generating}
           />
@@ -960,7 +965,7 @@ function DebateArenaContent() {
                     value={debater.modelId}
                     onChange={id => updateDebater(i, 'modelId', id)}
                     disabled={generating}
-                    isLoggedIn={isLoggedIn}
+                    isLoggedIn={effLoggedIn}
                     onPremiumLocked={() => setShowAuth(true)}
                   />
                   {debaters.length > 2 && !generating && (
@@ -1033,7 +1038,7 @@ function DebateArenaContent() {
               </div>
             ))}
             {canAddModel && !generating && (
-              isLoggedIn ? (
+              effLoggedIn ? (
                 <button className={styles.addModel} onClick={addDebater}>+ Add model</button>
               ) : (
                 <button className={styles.lockedOption} onClick={() => setShowAuth(true)}>
@@ -1088,7 +1093,7 @@ function DebateArenaContent() {
                     <label className={styles.label}>Rounds</label>
                     <div className={styles.roundSelector}>
                       {[3, 5, 7].map(n => {
-                        const locked = !isLoggedIn && n > 3;
+                        const locked = !effLoggedIn && n > 3;
                         return (
                           <button
                             key={n}
@@ -1146,7 +1151,7 @@ function DebateArenaContent() {
 
         <div className={styles.submitRow}>
           <div className={styles.submitMeta}>
-            {tokenBalance !== null && (
+            {!config.openAccess && tokenBalance !== null && (
               <span className={styles.tokenBalance}>
                 <span className={styles.tokenCount}>{tokenBalance}</span> tokens · this debate {totalDebateCost}
                 {!canAffordAny && (
@@ -1172,7 +1177,11 @@ function DebateArenaContent() {
           </button>
         </div>
         <p className={styles.privacyNote}>
-          {isLoggedIn ? (
+          {config.openAccess ? (
+            <>
+              Debates are <strong>shareable by link</strong> — anyone with the URL can view.
+            </>
+          ) : isLoggedIn ? (
             <>
               Your debates are <strong>private by default</strong> — only you can see them, even with the URL. After it finishes you can choose to publish to the public feed.
             </>
@@ -1307,7 +1316,7 @@ function DebateArenaContent() {
               </p>
             )}
 
-            {!isLoggedIn && (
+            {!isLoggedIn && !config.openAccess && (
               <div className={styles.heroSignup}>
                 <button
                   className={styles.heroSignupButton}
@@ -1537,7 +1546,7 @@ function DebateArenaContent() {
                     : `Debate complete — ${maxRound} rounds, ${liveArguments.length} arguments`}
                 </span>
 
-                {!isLoggedIn && (
+                {!isLoggedIn && !config.openAccess && (
                   <div className={styles.signupPrompt}>
                     <span className={styles.signupPromptTitle}>
                       Sign up to save debates and get {config.startingTokens} free tokens

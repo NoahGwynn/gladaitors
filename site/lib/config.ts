@@ -3,6 +3,14 @@
 // ============================================================================
 
 export const config = {
+  /** TEMP open-access mode. When true, hides all account/login/sign-up UI and
+   *  disables every login-gated restriction (round caps, debater count, premium
+   *  model gating) AND the server-side token/auth gates in /api/debate, so the
+   *  debate feature is fully open to anonymous users with no caps. The per-IP
+   *  rate limit is intentionally kept as abuse insurance. Set back to false to
+   *  restore accounts, token billing, and limits. */
+  openAccess: true,
+
   /** Show the series/episodes section of the site. Disable before episodes are ready. */
   seriesEnabled: false,
 

@@ -31,6 +31,7 @@ import { GoogleGenAI } from '@google/genai';
 import { createServerSupabase } from '@/lib/supabase-server';
 import { findModel, type ModelDefinition } from '@/lib/models';
 import { getTemplateBySlug } from '@/lib/debate-templates';
+import { config } from '@/lib/config';
 
 interface DebaterInput {
   modelId: string;
@@ -772,22 +773,25 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const sessionId = request.headers.get('x-session-id');
 
-  if (!user && !sessionId) {
-    return new Response(JSON.stringify({ error: 'Authentication required' }), {
-      status: 401, headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  // Open-access mode disables auth + token gating entirely (see config.openAccess).
+  if (!config.openAccess) {
+    if (!user && !sessionId) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
+        status: 401, headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
-  // Check initial balance — at least 1 token to start.
-  // Per-argument deduction enforces the actual variable cost of each debater.
-  const { data: balance } = await supabase.rpc('get_token_balance', {
-    p_user_id: user?.id ?? null,
-    p_session_id: user ? null : sessionId,
-  });
-  if ((balance ?? 0) < 1) {
-    return new Response(JSON.stringify({ error: 'Insufficient tokens' }), {
-      status: 402, headers: { 'Content-Type': 'application/json' },
+    // Check initial balance — at least 1 token to start.
+    // Per-argument deduction enforces the actual variable cost of each debater.
+    const { data: balance } = await supabase.rpc('get_token_balance', {
+      p_user_id: user?.id ?? null,
+      p_session_id: user ? null : sessionId,
     });
+    if ((balance ?? 0) < 1) {
+      return new Response(JSON.stringify({ error: 'Insufficient tokens' }), {
+        status: 402, headers: { 'Content-Type': 'application/json' },
+      });
+    }
   }
 
   const body: DebateRequest = await request.json();
@@ -848,7 +852,7 @@ export async function POST(request: NextRequest) {
   // users can only run debates with standard-tier models. The client-side
   // ModelSelect already prevents picking locked premium options visually,
   // but we re-enforce here so a crafted request can't bypass the UI.
-  if (!user) {
+  if (!config.openAccess && !user) {
     const premiumDebater = debaterModels.find(m => m.tier === 'premium');
     if (premiumDebater) {
       return new Response(JSON.stringify({
@@ -1100,7 +1104,8 @@ export async function POST(request: NextRequest) {
           //
           // If the model then refuses or errors, we refund via refundTokens
           // below — refusals are rare so the refund path is cheap.
-          const deducted = await deductTokens(model.tokenCost);
+          // Open-access mode disables token billing — never deduct, never block.
+          const deducted = config.openAccess ? true : await deductTokens(model.tokenCost);
           if (!deducted) {
             // Out of tokens — stop the round here. No model call, no argument.
             controller.enqueue(encoder.encode(sseEvent('insufficient_tokens', {
@@ -1147,7 +1152,7 @@ export async function POST(request: NextRequest) {
           // refund the pre-deducted tokens — the user shouldn't pay for an
           // argument the model declined to engage with.
           const refused = !modelSucceeded || isRefusal(fullContent);
-          if (refused) {
+          if (refused && !config.openAccess) {
             await refundTokens(model.tokenCost);
           }
 
